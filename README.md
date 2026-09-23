@@ -65,6 +65,29 @@ starší ano. Kdyby diagnostika hlásila odběr v pořádku, ale žádná událo
 nechodila, zkontrolujte v aplikaci Tapo, že je detekce zapnutá, a verzi
 firmwaru.
 
+### Síť, která nepustí WebRTC: obraz přes HTTPS
+
+Obraz jde normálně WebRTC na port 8555 VPS (UDP). Firemní sítě to často
+blokují: stránka se načte, kamera „posílá obraz“, ale v prohlížeči je
+černá plocha, zatímco přes mobilní data jde vše. Přehrávač to pozná sám:
+když po navázání spojení nepřijde WebRTC ani jeden paket, zapíše do logu
+„přes WebRTC nepřišla žádná data … přepínám na náhradní cestu přes HTTPS“
+a obraz si vezme přes náš server, stejnou cestou jako stránku
+(`/api/stream.mp4` pro Chrome, Edge a Firefox, `/api/stream.m3u8` + `/api/hls/…`
+pro Safari; server je jen předává z go2rtc, průběžně a jen přihlášeným).
+Karta pak říká „Přehrávám (náhradní cesta přes HTTPS, bez zvuku)“: obraz
+je o sekundu až dvě pozadu a **bez zvuku**, protože zvuk kamery (G.711)
+prohlížeč v MP4 ani HLS neumí. Nahrávání, analýza i drátěný model fungují
+stejně. Prohlížeč si náhradní cestu pamatuje 12 hodin, aby při každém
+otevření neztrácel čas na WebRTC; „Zkusit znovu“ po neúspěchu začíná zase
+od WebRTC.
+
+Caddy odpovědi bez délky (chunked) posílá průběžně, nic dalšího se v něm
+nastavovat nemusí. Ověřeno v Electronu s go2rtc, který nabízel jen
+nedostupnou adresu: přepnutí za ~20 s, obraz 1280×720, nahrávka i analýza
+přes HTTPS, po obnovení stránky start rovnou přes HTTPS. HLS v Safari
+zatím jen podle dokumentace go2rtc, ne naostro.
+
 ### Když obraz vypadne
 
 Živý přenos hlídá počet skutečně dekódovaných snímků, ne čas přehrávání –
@@ -244,9 +267,12 @@ založil `node scripts/init-db.mjs`.
 ## Vývoj a testy
 
 ```
-npm test          # server, přihlášení, go2rtc klient, kamery, plány, analýza, ONVIF
+npm test          # server, přihlášení, go2rtc klient, kamery, plány, analýza, ONVIF, obraz přes HTTPS
 ```
 
+`test/server.test.mjs` spouští skutečný `server.mjs` proti falešnému go2rtc
+a ověřuje, že obraz přes HTTPS prochází průběžně (první kousek do sekundy,
+ne až po konci) a že se odběr z go2rtc ukončí, když prohlížeč odejde.
 Události kamery se testují proti falešné kameře ONVIF (`test/fake-onvif.mjs`):
 ověřuje digest WS-Security i s hodinami o minuty jinak, hlásí témata jako
 C210/C220 nebo C200, svou adresu uvádí v místní síti (aby se ověřilo

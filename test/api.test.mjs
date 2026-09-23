@@ -349,3 +349,25 @@ test('nastavení událostí kamery se ukládá spolu s analýzou', async () => {
   assert.deepEqual(store.data.watch.tapoc2020['cam-motion'], { enabled: false, from: '', to: '' });
   assert.equal((await put({ 'cam-motion': { from: '22:00', to: '' } })).status, 400);
 });
+
+/* ---------- obraz přes HTTPS ---------- */
+
+test('obraz přes HTTPS: jen známá kamera, jen obraz, díly HLS jen podle id', async () => {
+  const proxied = [];
+  const go2rtc = { ...fakeGo2rtc(), async proxy(p, { signal } = {}) { proxied.push({ p, signal: !!signal }); return new Response('x', { headers: { 'Content-Type': 'video/mp4' } }); } };
+  const { h } = handler({ go2rtc });
+  assert.equal((await h(req('GET', '/api/stream.mp4?deviceId=tapoc2020'))).status, 401);
+  assert.equal((await h(req('GET', '/api/stream.mp4?deviceId=cizi', { cookies: cookie() }))).status, 404);
+  assert.equal((await h(req('GET', '/api/stream.mp4?deviceId=../x', { cookies: cookie() }))).status, 400);
+  const r = await h(req('GET', '/api/stream.mp4?deviceId=tapoc2020', { cookies: cookie() }));
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'video/mp4');
+  assert.equal((await h(req('GET', '/api/stream.m3u8?deviceId=tapoc2020', { cookies: cookie() }))).status, 200);
+  assert.equal((await h(req('GET', '/api/hls/playlist.m3u8?id=Ab-9_x', { cookies: cookie() }))).status, 200);
+  assert.equal((await h(req('GET', '/api/hls/segment.m4s?id=Ab-9_x&n=12', { cookies: cookie() }))).status, 200);
+  assert.equal((await h(req('GET', '/api/hls/segment.m4s?id=Ab-9_x&n=x', { cookies: cookie() }))).status, 400);
+  assert.equal((await h(req('GET', '/api/hls/../config?id=a', { cookies: cookie() }))).status, 404);
+  assert.deepEqual(proxied.map((x) => x.p), [
+    '/api/stream.mp4?src=tapoc2020&video=h264', '/api/stream.m3u8?src=tapoc2020&video=h264',
+    '/api/hls/playlist.m3u8?id=Ab-9_x', '/api/hls/segment.m4s?id=Ab-9_x&n=12']);
+});

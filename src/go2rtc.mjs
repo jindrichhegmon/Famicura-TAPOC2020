@@ -7,6 +7,8 @@
  *   GET  /api/streams                    → { název: { producers, consumers } }
  *   POST /api/webrtc?src=název           → tělo SDP offer (application/sdp), 201 + SDP answer
  *   GET  /api/stream.mp4?src=název       → 200 jakmile kamera posílá, 500 když neodpovídá
+ *   GET  /api/stream.mp4?src=X&video=h264 → fMP4 jen s obrazem (Chrome, Edge); zvuk G.711 prohlížeč v MP4 neumí
+ *   GET  /api/stream.m3u8?src=X&video=h264 → HLS pro Safari; odkazuje na hls/playlist.m3u8?id=, hls/init.mp4, hls/segment.m4s?id=&n=
  */
 export class Go2rtcError extends Error {
   /** retry: false when trying again cannot help (the browser lacks the codec). */
@@ -55,6 +57,22 @@ export function createGo2rtc({ url = process.env.GO2RTC_URL || 'http://127.0.0.1
         throw new Go2rtcError('Tento prohlížeč neumí obraz H.264 z kamery. Použijte Chrome, Edge nebo Safari.', 502, body.slice(0, 300), { retry: false });
       }
       throw new Go2rtcError('Kamera neodpovídá – zkontrolujte tunel WireGuard a kameru.', 502, body.slice(0, 300));
+    },
+
+    /**
+     * Proud z go2rtc (MP4 nebo HLS) tak, jak přichází, pro prohlížeč, který se
+     * k WebRTC nedostane. Nic se neukládá do paměti; skončí, když odejde klient
+     * (signal). Chyba go2rtc (kamera neposílá) se vrátí jako u WebRTC.
+     */
+    async proxy(pathWithQuery, { signal } = {}) {
+      let res;
+      try { res = await fetchImpl(api(pathWithQuery), { signal }); }
+      catch (e) { throw new Go2rtcError('Převodník go2rtc na serveru neodpovídá.', 502, e.message); }
+      if (!res.ok) {
+        throw new Go2rtcError('Kamera neodpovídá – zkontrolujte tunel WireGuard a kameru.', 502, (await res.text().catch(() => '')).slice(0, 300));
+      }
+      return new Response(res.body, { status: 200, headers: {
+        'Content-Type': res.headers.get('content-type') || 'application/octet-stream', 'Cache-Control': 'no-store' } });
     },
 
     /** Posílá kamera obraz? Stačí hlavička odpovědi; spojení se hned zavře. */

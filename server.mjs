@@ -4,6 +4,8 @@
  *   node server.mjs            (čte .env ve složce aplikace; PORT, HOST viz .env.example)
  */
 import http from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,9 +70,15 @@ const server = http.createServer(async (req, res) => {
         if (size > MAX_BODY) { res.writeHead(413, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Příliš velký požadavek'); return; }
         chunks.push(c);
       }
-      const r = await handle(new Request(url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }));
+      // A live picture over HTTPS is one long answer: it is passed on as it
+      // comes and cut off when the viewer leaves, never gathered in memory.
+      const ctrl = new AbortController();
+      res.on('close', () => ctrl.abort());
+      const r = await handle(new Request(url, { method: req.method, headers: req.headers, signal: ctrl.signal,
+        body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }));
       res.writeHead(r.status, Object.fromEntries(r.headers));
-      res.end(Buffer.from(await r.arrayBuffer()));
+      if (!r.body) { res.end(); return; }
+      await pipeline(Readable.fromWeb(r.body), res).catch(() => res.destroy());
       return;
     }
     const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');

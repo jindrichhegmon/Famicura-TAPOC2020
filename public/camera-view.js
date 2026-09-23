@@ -42,6 +42,26 @@ function saveSkeletonPref(on) {
   try { localStorage.setItem(SKELETON_KEY, on ? '1' : '0'); } catch { /* private mode */ }
 }
 
+/*
+ * Some networks drop WebRTC (UDP to port 8555) while HTTPS passes. Once the
+ * picture had to go over HTTPS on this device, it starts that way for a while
+ * instead of losing ten seconds to WebRTC on every open.
+ */
+const PATH_KEY = 'famicura.cesta';
+const PATH_MEMORY_MS = 12 * 3600e3;
+function loadPathPref() {
+  try {
+    const t = Number(localStorage.getItem(PATH_KEY));
+    return t && Date.now() - t < PATH_MEMORY_MS ? 'https' : 'webrtc';
+  } catch { return 'webrtc'; }
+}
+function savePathPref(path) {
+  try {
+    if (path === 'https') localStorage.setItem(PATH_KEY, String(Date.now()));
+    else localStorage.removeItem(PATH_KEY);
+  } catch { /* private mode */ }
+}
+
 function fmtGap(ms) {
   const min = Math.round(ms / 60000);
   if (ms < 60000) return `${Math.round(ms / 1000)} s`;
@@ -139,6 +159,8 @@ export class CameraView {
     this.sessionUrl = null;
     this.soundOn = false;             // the viewer's wish; survives a reconnect
     this.playFailureLogged = false;
+    this.transport = 'webrtc';        // or 'https' when WebRTC gets no data through
+    this.httpsLogged = false;
     this.wantStream = false;          // the stream stays wanted until Ukončit
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
@@ -216,7 +238,16 @@ export class CameraView {
     e.analyze.onclick = () => (this.analyzing ? this.stopAnalysis() : this.startAnalysis());
     e.sound.onclick = () => this.setMuted(!e.video.muted);
     // "Klepněte na obraz": a real gesture, which is what a refused play() needs.
-    const tap = () => { if (e.video.srcObject && e.video.paused) this.play(); };
+    const tap = () => { if (this.hasSource() && e.video.paused) this.play(); };
+    // Over HTTPS the element reports a broken or ended download itself.
+    e.video.addEventListener('error', () => {
+      if (this.transport === 'https' && this.wantStream && this.hasSource()) {
+        this.reconnect(`Obraz přes HTTPS selhal (${e.video.error?.message || e.video.error?.code || '?'})`);
+      }
+    });
+    e.video.addEventListener('ended', () => {
+      if (this.transport === 'https' && this.wantStream && this.hasSource()) this.reconnect('Obraz přes HTTPS skončil');
+    });
     e.video.addEventListener('click', tap);
     e.canvas.addEventListener('click', tap);
     e.retry.onclick = () => this.retry();
@@ -232,8 +263,13 @@ export class CameraView {
 
   /** Frames are flowing, so a recording would not come out black. */
   hasPicture() {
+    return this.hasSource() && this.el.video.readyState >= 2;
+  }
+
+  /** Something is assigned to the player: a WebRTC stream or an HTTPS address. */
+  hasSource() {
     const v = this.el.video;
-    return !!v.srcObject && v.readyState >= 2;
+    return !!v.srcObject || v.hasAttribute('src');
   }
 
   setMsg(text, bad) {
@@ -256,8 +292,10 @@ export class CameraView {
     await this.teardown({ keepIntent: true });
     this.wantStream = true;
 
-    this.setMsg(isReconnect ? 'Obnovuji spojení…' : 'Navazuji spojení…');
     if (scroll) this.card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (loadPathPref() === 'https') { this.startHttps({ isReconnect }); return; }
+    this.transport = 'webrtc';
+    this.setMsg(isReconnect ? 'Obnovuji spojení…' : 'Navazuji spojení…');
 
     try {
       const pc = new RTCPeerConnection({ iceServers: ICE });
@@ -283,7 +321,7 @@ export class CameraView {
       pc.addEventListener('connectionstatechange', () => {
         if (this.pc !== pc) return;
         // "disconnected" often recovers by itself; the watchdog catches it if not.
-        if (pc.connectionState === 'failed') this.reconnect('Spojení selhalo');
+        if (pc.connectionState === 'failed') this.streamStats().then((st) => this.reconnect('Spojení selhalo', st));
         else if (pc.connectionState === 'disconnected') this.setMsg('Spojení kolísá…');
       });
 
@@ -340,7 +378,7 @@ export class CameraView {
     try {
       await v.play();
     } catch (e) {
-      if (!v.srcObject) return;               // torn down meanwhile
+      if (!this.hasSource()) return;          // torn down meanwhile
       this.setMsg(`Prohlížeč obraz nespustil (${e.name}). Klepněte na obraz.`, true);
       if (!this.playFailureLogged) {
         this.playFailureLogged = true;
@@ -349,10 +387,47 @@ export class CameraView {
       return;
     }
     this.playFailureLogged = false;
-    this.setMsg(this.reconnectAttempt ? 'Spojení obnoveno, přehrávám.' : 'Přehrávám.');
+    const https = this.transport === 'https' ? ' (náhradní cesta přes HTTPS, bez zvuku)' : '';
+    this.setMsg((this.reconnectAttempt ? 'Spojení obnoveno, přehrávám' : 'Přehrávám') + https + '.');
     this.reconnectAttempt = 0;
-    this.el.sound.classList.remove('hide');
-    if (wantSound) this.setMuted(false);
+    if (this.transport === 'webrtc') {
+      this.el.sound.classList.remove('hide');
+      if (wantSound) this.setMuted(false);
+    }
+  }
+
+  /*
+   * The picture over HTTPS, the way the page itself comes: for a network that
+   * drops WebRTC. go2rtc gives fragmented MP4 to Chrome, Edge and Firefox and
+   * HLS to Safari, both passed through our server. Video only - browsers play
+   * the camera's G.711 audio in neither container - and a second or two behind.
+   */
+  startHttps({ isReconnect = false } = {}) {
+    const v = this.el.video;
+    this.transport = 'https';
+    // HLS only where WebKit plays it natively (Safari, every iOS browser);
+    // Chromium claims "maybe" for it and then shows nothing usable.
+    const hls = navigator.vendor === 'Apple Computer, Inc.' && !!v.canPlayType('application/vnd.apple.mpegurl');
+    v.srcObject = null;
+    v.src = `/api/${hls ? 'stream.m3u8' : 'stream.mp4'}?deviceId=${encodeURIComponent(this.device.id)}&t=${Date.now()}`;
+    this.setMsg(isReconnect ? 'Obnovuji spojení (HTTPS)…' : 'Navazuji spojení (HTTPS)…');
+    this.play();
+    this.startWatchdog();
+    this.updateRender();
+    this.hooks.onChange();
+  }
+
+  /** WebRTC connected (or failed) without a single packet: the network is in the way, not the camera. */
+  switchToHttps(reason, stats) {
+    savePathPref('https');
+    if (!this.httpsLogged) {
+      this.httpsLogged = true;
+      this.log({ t: this.analyzing ? (Date.now() - this.analysisStartedAt) / 1000 : 0, kind: 'stream', level: 'warn',
+                 text: `${reason} – přes WebRTC nepřišla žádná data (${CameraView.describeStats(stats)}). ` +
+                       'Tahle síť nejspíš blokuje UDP na port 8555; přepínám na náhradní cestu přes HTTPS (bez zvuku).' });
+    }
+    this.reconnectAttempt = 0;
+    this.teardown({ keepIntent: true }).then(() => { if (this.wantStream) this.start({ isReconnect: true }); });
   }
 
   retry() {
@@ -369,8 +444,13 @@ export class CameraView {
    */
   async streamStats() {
     const pc = this.pc;
-    const out = { frames: null, bytes: 0, lost: 0, packets: 0, state: pc?.connectionState || '-', path: '' };
-    if (!pc) return out;
+    const out = { frames: null, bytes: 0, lost: 0, packets: 0, state: pc ? pc.connectionState : this.transport, path: pc ? '' : this.transport };
+    if (!pc) {
+      // Over HTTPS the element itself counts frames (Safari and Chrome both have it).
+      const q = this.el.video.getVideoPlaybackQuality?.();
+      out.frames = q ? q.totalVideoFrames : this.el.video.currentTime;
+      return out;
+    }
     try {
       const all = await pc.getStats();
       for (const s of all.values()) {
@@ -397,7 +477,7 @@ export class CameraView {
     this.watchTime = -1;
     this.stalledFor = 0;
     const id = setInterval(async () => {
-      if (!this.wantStream || !this.pc) return;
+      if (!this.wantStream || !this.hasSource()) return;
       const stats = await this.streamStats();
       if (this.watchdogId !== id) return;      // torn down while the stats were on their way
       if (stats.frames !== this.watchTime) {
@@ -427,6 +507,12 @@ export class CameraView {
   reconnect(reason, stats = null) {
     if (!this.wantStream || this.reconnectTimer !== null) return;
     this.stopWatchdog();
+    // Nothing at all came through WebRTC: trying the same way again would
+    // only repeat the black picture, so take the other way.
+    if (this.transport === 'webrtc' && stats && stats.packets === 0 && stats.bytes === 0) {
+      this.switchToHttps(reason, stats);
+      return;
+    }
 
     if (this.reconnectAttempt >= MAX_RECONNECTS) { this.giveUp(reason); return; }
 
@@ -453,6 +539,7 @@ export class CameraView {
 
   giveUp(reason) {
     this.wantStream = false;
+    if (this.transport === 'https') savePathPref('webrtc');   // Zkusit znovu starts from WebRTC again
     this.setMsg(`${reason}. Spojení se nepodařilo obnovit.`, true);
     this.log({ t: this.analyzing ? (Date.now() - this.analysisStartedAt) / 1000 : 0, kind: 'stream', level: 'warn',
                text: `${reason} – spojení se po ${MAX_RECONNECTS} pokusech nepodařilo obnovit.` });
@@ -490,6 +577,7 @@ export class CameraView {
 
     const v = this.el.video;
     v.srcObject = null;
+    if (v.hasAttribute('src')) { v.removeAttribute('src'); v.load(); }   // stop the HTTPS download too
     v.muted = true;
     this.updateRender();
     this.setSoundIcon(true);
@@ -516,9 +604,9 @@ export class CameraView {
    */
   onPageVisible() {
     if (!this.wantStream) return;
-    if (!this.pc) { this.reconnectAttempt = 0; this.start({ isReconnect: true }); return; }
+    if (!this.pc && !this.hasSource()) { this.reconnectAttempt = 0; this.start({ isReconnect: true }); return; }
     const v = this.el.video;
-    if (v.srcObject && v.paused) this.play();
+    if (this.hasSource() && v.paused) this.play();
   }
 
   /* ---------- sound ---------- */
@@ -601,7 +689,7 @@ export class CameraView {
   }
 
   updateRender() {
-    const on = this.needsCanvas() && !!this.el.video.srcObject;
+    const on = this.needsCanvas() && this.hasSource();
     // Only the canvas is toggled. The video stays rendered underneath, because a
     // video that is not rendered can stop decoding - and then the picture we draw
     // from, and the watchdog that checks it, both go stale.
@@ -624,7 +712,7 @@ export class CameraView {
   renderLoop() {
     this.rafId = null;
     const v = this.el.video;
-    if (!v.srcObject || !this.needsCanvas()) { this.updateRender(); return; }
+    if (!this.hasSource() || !this.needsCanvas()) { this.updateRender(); return; }
 
     this.fitCanvas();
     if (v.readyState >= 2 && v.currentTime !== this.lastFrameTime) {

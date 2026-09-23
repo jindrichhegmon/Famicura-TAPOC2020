@@ -6,6 +6,8 @@
  *   GET  /api/status            → přihlášen?, co chybí v .env, go2rtc a kamery
  *   GET  /api/devices           → kamery z go2rtc
  *   POST /api/stream            { deviceId, sdpOffer } → { sdpAnswer } (WebRTC přes go2rtc)
+ *   GET  /api/stream.mp4?deviceId=  obraz přes HTTPS (fMP4, Chrome/Edge), když síť nepustí WebRTC
+ *   GET  /api/stream.m3u8?deviceId= totéž jako HLS (Safari); díly pod /api/hls/…
  *   GET|PUT /api/schedules      plány nahrávání
  *   GET|PUT /api/watch          sledované události analýzy i kamery
  *   GET  /api/events?since=ms   události, které nahlásila kamera (odebírá server)
@@ -126,6 +128,26 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         // Only a stream go2rtc knows: the id goes into its URL.
         if (!(await go2rtc.streams()).includes(deviceId)) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         return json({ ok: true, sdpAnswer: await go2rtc.webrtc(deviceId, sdpOffer), sessionUrl: null });
+      }
+
+      // The picture over HTTPS for a network that drops WebRTC: go2rtc's MP4
+      // (Chrome, Edge) or HLS (Safari), passed through as it comes. Video only:
+      // browsers play the camera's G.711 audio in neither container.
+      if (m === 'GET' && (path === '/api/stream.mp4' || path === '/api/stream.m3u8')) {
+        const id = url.searchParams.get('deviceId') || '';
+        if (!isDeviceId(id)) return json({ ok: false, error: 'Chybí nebo je neplatné deviceId.' }, 400);
+        if (!(await go2rtc.streams()).includes(id)) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        return go2rtc.proxy(`${path}?src=${encodeURIComponent(id)}&video=h264`, { signal: req.signal });
+      }
+      if (m === 'GET' && path.startsWith('/api/hls/')) {
+        // Playlist and segments under the id the master playlist handed out;
+        // only those names and only an id and a segment number go through.
+        const file = path.slice('/api/hls/'.length);
+        const id = url.searchParams.get('id') || '';
+        const n = url.searchParams.get('n');
+        if (!['playlist.m3u8', 'init.mp4', 'segment.m4s', 'segment.ts'].includes(file)) return json({ ok: false, error: 'Neznámá adresa.' }, 404);
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || (n !== null && !/^\d{1,9}$/.test(n))) return json({ ok: false, error: 'Neplatný odkaz.' }, 400);
+        return go2rtc.proxy(`${path}?id=${id}${n === null ? '' : `&n=${n}`}`, { signal: req.signal });
       }
 
       if (path === '/api/schedules') {
