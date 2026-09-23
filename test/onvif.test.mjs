@@ -127,3 +127,27 @@ test('co kamera hlásí mimo katalog, se neztratí (pro log serveru)', () => {
   assert.deepEqual(udalostiZeZprav(doc, Date.now, jine), []);
   assert.deepEqual(jine, [{ topic: 'RuleEngine/AreaDetector/AreaLeave', item: 'Token' }, { topic: 'VideoSource/ImageTooDark', item: 'State' }]);
 });
+
+test('diagnostika: model a firmware, všechna témata kamery, zprávy tak, jak přišly', async () => {
+  const cam = await startFakeOnvif();
+  try {
+    const c = createOnvif({ host: '127.0.0.1', port: cam.port, user: cam.user, pass: cam.pass });
+    await c.syncClock();
+    const info = await c.deviceInfo();
+    assert.equal(info.model, 'C210');
+    assert.match(info.firmware, /^1\.3\.11/);
+    const temata = await c.topics();
+    assert.ok(temata.some((t) => t.topic === 'RuleEngine/CellMotionDetector/Motion' && t.items.includes('IsMotion')));
+    assert.ok(temata.some((t) => t.topic === 'VideoSource/ImageTooDark'), 'i mimo katalog');
+    const adresa = await c.subscribe();
+    cam.initialized(); cam.motion(false); cam.tooDark();
+    const vse = [];
+    const ev = await c.pull(adresa, { timeoutS: 1, vse });
+    assert.deepEqual(ev, []);
+    assert.deepEqual(vse.map((m) => [m.topic, m.op, m.data]), [
+      ['RuleEngine/CellMotionDetector/Motion', 'Initialized', { IsMotion: 'true' }],
+      ['RuleEngine/CellMotionDetector/Motion', 'Changed', { IsMotion: 'false' }],
+      ['VideoSource/ImageTooDark', 'Changed', { State: 'true' }]]);
+    await c.unsubscribe(adresa);
+  } finally { await cam.close(); }
+});

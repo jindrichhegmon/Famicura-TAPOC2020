@@ -89,7 +89,7 @@ export async function startFakeOnvif({ user = 'famicura', pass = 'Tajne:heslo/1'
     req.on('data', (c) => chunks.push(c));
     req.on('end', async () => {
       const xml = Buffer.concat(chunks).toString('utf8');
-      const op = (xml.match(/<(?:\w+:)?(GetSystemDateAndTime|GetCapabilities|GetEventProperties|CreatePullPointSubscription|PullMessages|Renew|Unsubscribe)\b/) || [])[1] || '?';
+      const op = (xml.match(/<(?:\w+:)?(GetSystemDateAndTime|GetDeviceInformation|GetCapabilities|GetEventProperties|CreatePullPointSubscription|PullMessages|Renew|Unsubscribe)\b/) || [])[1] || '?';
       const to = (xml.match(/<[^>]*:To[^>]*>([^<]*)</) || [])[1] || null;
       const auth = /UsernameToken/.test(xml) ? overDigest(xml) : null;
       calls.push({ op, auth, to, url: req.url });
@@ -104,6 +104,10 @@ export async function startFakeOnvif({ user = 'famicura', pass = 'Tajne:heslo/1'
       }
       if (!auth || !auth.ok) return send(fault('ter:NotAuthorized', 'Sender not authorized', 400));
 
+      if (op === 'GetDeviceInformation') {
+        return send({ status: 200, body: env(`<tds:GetDeviceInformationResponse><tds:Manufacturer>tp-link</tds:Manufacturer><tds:Model>${model.toUpperCase()}</tds:Model>
+          <tds:FirmwareVersion>1.3.11 Build 240521 Rel.65442n</tds:FirmwareVersion><tds:SerialNumber>0000</tds:SerialNumber><tds:HardwareId>1.0</tds:HardwareId></tds:GetDeviceInformationResponse>`) });
+      }
       if (op === 'GetCapabilities') {
         return send({ status: 200, body: env(`<tds:GetCapabilitiesResponse><tds:Capabilities><tt:Events><tt:XAddr>${LAN}/onvif/service</tt:XAddr>
           <tt:WSSubscriptionPolicySupport>false</tt:WSSubscriptionPolicySupport><tt:WSPullPointSupport>true</tt:WSPullPointSupport></tt:Events></tds:Capabilities></tds:GetCapabilitiesResponse>`) });

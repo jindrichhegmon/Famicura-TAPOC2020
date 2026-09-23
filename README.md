@@ -64,8 +64,11 @@ zóny, a doplnit to do katalogu v `src/onvif.mjs`. Když kamera na portu 2020
 neodpovídá (starší skript na Windows serveru předával jen 554), obraz jde
 dál, jen události chybí – stav to řekne.
 
-Firmware Tapo 1.3.4 a 1.3.5 (jaro 2023) události ONVIF neposílal; novější i
-starší ano. Kdyby diagnostika hlásila odběr v pořádku, ale žádná událost
+Když kamera nic nehlásí, `./deploy/vps-diag.sh` (z Macu; na VPS spustí
+`scripts/onvif-diag.mjs`) vypíše model a firmware, všechna témata ONVIF,
+jak je kamera pojmenovala, a minutu každou zprávu tak, jak přišla –
+i takovou, kterou katalog nezná. Firmware Tapo 1.3.4 a 1.3.5 (jaro 2023)
+události ONVIF neposílal; novější i starší ano. Kdyby diagnostika hlásila odběr v pořádku, ale žádná událost
 nechodila, zkontrolujte v aplikaci Tapo, že je detekce zapnutá, a verzi
 firmwaru.
 

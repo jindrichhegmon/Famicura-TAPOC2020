@@ -74,6 +74,20 @@ export function druhDetekce(topic, item) {
   return kind.length > 4 ? { kind, label: `${jmeno} (hlásí kamera)` } : null;
 }
 
+/** Všechna témata z TopicSet tak, jak je kamera pojmenovala: [{ topic, items }] – pro diagnostiku. */
+export function temataZTopicSet(topicSet) {
+  const out = [];
+  const projdi = (node, cesta) => {
+    for (const c of node.children) {
+      const p = cesta ? `${cesta}/${c.name}` : c.name;
+      if (c.attrs.topic === 'true') out.push({ topic: p, items: vsechny(c, 'SimpleItemDescription').map((it) => it.attrs.Name || '') });
+      projdi(c, p);
+    }
+  };
+  projdi(topicSet, '');
+  return out;
+}
+
 /** Témata z TopicSet (GetEventProperties) → [{ kind, label }] bez duplicit. */
 export function detekceZTopicSet(topicSet) {
   const out = new Map();
@@ -98,14 +112,19 @@ export function detekceZTopicSet(topicSet) {
  * „true“. Co se do katalogu nevešlo (jiné téma, jiná položka), přijde do
  * `nezarazene`, aby šlo z logu serveru zjistit, co kamera vlastně posílá.
  */
-export function udalostiZeZprav(doc, now = Date.now, nezarazene = []) {
+export function udalostiZeZprav(doc, now = Date.now, nezarazene = [], vse = null) {
   const out = [];
   for (const nm of vsechny(doc, 'NotificationMessage')) {
     const topic = textUzlu(najdi(nm, 'Topic'));
     const msg = najdi(nm, 'Message', 'Message') || najdi(nm, 'Message');
     if (!topic || !msg) continue;
-    if (msg.attrs.PropertyOperation === 'Initialized') continue;     // stav při založení odběru, ne událost
     const data = najdi(msg, 'Data');
+    // Every message as it came, for the diagnostic script.
+    if (vse) {
+      vse.push({ topic: topic.replace(/^.*?:/, ''), op: msg.attrs.PropertyOperation || '', time: msg.attrs.UtcTime || '',
+        data: Object.fromEntries(vsechny(data, 'SimpleItem').map((it) => [it.attrs.Name, it.attrs.Value])) });
+    }
+    if (msg.attrs.PropertyOperation === 'Initialized') continue;     // stav při založení odběru, ne událost
     if (!data) continue;
     // Některé firmwary mají UtcTime zaseknutý na 1970: pak platí náš čas.
     const t = Date.parse(msg.attrs.UtcTime || '');
@@ -208,10 +227,24 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
     },
 
     /** Čeká až timeoutS na události; vrací [{ kind, label, at }]. */
-    async pull(adresa, { timeoutS = 60, limit = 100, nezarazene } = {}) {
+    async pull(adresa, { timeoutS = 60, limit = 100, nezarazene, vse } = {}) {
       const doc = await soap(adresa, { action: AKCE.pull, to: adresa, timeoutMs: (timeoutS + 15) * 1000,
         body: `<tev:PullMessages><tev:Timeout>PT${timeoutS}S</tev:Timeout><tev:MessageLimit>${limit}</tev:MessageLimit></tev:PullMessages>` });
-      return udalostiZeZprav(doc, now, nezarazene);
+      return udalostiZeZprav(doc, now, nezarazene, vse);
+    },
+
+    /** Výrobce, model a firmware – pro diagnostiku (některé firmwary události neposílají). */
+    async deviceInfo() {
+      const doc = await soap(`${base}/onvif/device_service`, { body: '<tds:GetDeviceInformation/>' });
+      const t = (n) => textUzlu(najdi(doc, n));
+      return { manufacturer: t('Manufacturer'), model: t('Model'), firmware: t('FirmwareVersion'), serial: t('SerialNumber') };
+    },
+
+    /** Všechna témata, jak je kamera pojmenovala (i mimo katalog). */
+    async topics() {
+      if (!eventsUrl) await this.capabilities();
+      const props = await soap(eventsUrl, { body: '<tev:GetEventProperties/>' });
+      return temataZTopicSet(najdi(props, 'TopicSet') || { children: [] });
     },
 
     async renew(adresa, termS = 600) {
