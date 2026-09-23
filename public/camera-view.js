@@ -32,6 +32,16 @@ const GAP_MS = 10000;
 // Frames in a row that the pose model may fail on before analysis gives up.
 const DETECT_FAILURES_MAX = 20;
 
+// Whether to draw the pose skeleton is a viewer's preference; remember it in
+// this browser, and survive a storage that refuses to answer.
+const SKELETON_KEY = 'famicura.kostra';
+function loadSkeletonPref() {
+  try { return localStorage.getItem(SKELETON_KEY) === '1'; } catch { return false; }
+}
+function saveSkeletonPref(on) {
+  try { localStorage.setItem(SKELETON_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+}
+
 function fmtGap(ms) {
   const min = Math.round(ms / 60000);
   if (ms < 60000) return `${Math.round(ms / 1000)} s`;
@@ -149,6 +159,9 @@ export class CameraView {
     this.pauseTimer = null;
 
     this.analyzing = false;
+    this.skeleton = loadSkeletonPref();   // draw the pose over the picture
+    this.detectFailures = 0;
+    this.detectOff = false;               // set when the pose model keeps failing
     this.landmarker = null;
     this.connections = [];
     this.analysisStartedAt = 0;
@@ -161,7 +174,7 @@ export class CameraView {
       name: q('.name'), video: q('video'), canvas: q('canvas.draw'), small: q('canvas.small'),
       modes: q('.modes'), record: q('.record'), analyze: q('.analyze'), sound: q('.sound'),
       retry: q('.retry'), recBar: q('.recBar'), timer: q('.timer'), stop: q('.stop'), msg: q('.msg'),
-      watchInfo: q('.watchInfo'),
+      watchInfo: q('.watchInfo'), skeleton: q('input.skeleton'),
     };
     this.cctx = this.el.canvas.getContext('2d');
     this.sctx = this.el.small.getContext('2d');
@@ -170,6 +183,10 @@ export class CameraView {
     this.setSoundIcon(true);
     this.setWatch(defaultWatch());
     this.bind();
+    this.renderSkeleton();
+    if (this.showSkeleton()) this.ensureLandmarker('Načítám model pro drátěný model…').then((ok) => {
+      if (!ok) { this.skeleton = false; this.renderSkeleton(); this.updateRender(); }
+    });
   }
 
   /** Which events this camera reports; takes effect at once, even mid-analysis. */
@@ -185,9 +202,13 @@ export class CameraView {
       b.onclick = () => {
         this.displayMode = b.dataset.mode;
         e.modes.querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+        this.renderSkeleton();
+        // The privacy modes apply at once; the model for the skeleton follows.
         this.updateRender();
+        if (this.displayMode === 'black') this.ensureLandmarker('Načítám model pro drátěný model…');
       };
     });
+    e.skeleton.onchange = () => this.setSkeleton(e.skeleton.checked);
     e.record.onclick = () => (this.recording ? this.stopRecording() : this.startRecording());
     e.analyze.onclick = () => (this.analyzing ? this.stopAnalysis() : this.startAnalysis());
     e.sound.onclick = () => this.setMuted(!e.video.muted);
@@ -434,7 +455,55 @@ export class CameraView {
   // being altered, recorded or analysed; otherwise the raw video is cheaper and
   // keeps the native iOS controls.
   needsCanvas() {
-    return this.displayMode !== 'normal' || this.analyzing || this.recording;
+    return this.displayMode !== 'normal' || this.analyzing || this.recording || this.showSkeleton();
+  }
+
+  /* ---------- drátěný model (pose skeleton over the picture) ---------- */
+
+  /** Drawn when asked for, and always in Černé pozadí, which is the skeleton alone. */
+  showSkeleton() {
+    return this.skeleton || this.displayMode === 'black';
+  }
+
+  renderSkeleton() {
+    const box = this.el.skeleton;
+    box.checked = this.showSkeleton();
+    box.disabled = this.displayMode === 'black';
+    box.parentElement.title = box.disabled
+      ? 'V režimu Černé pozadí je drátěný model vždy.'
+      : 'Kostra postavy přes obraz';
+  }
+
+  async setSkeleton(on) {
+    if (on && !(await this.ensureLandmarker('Načítám model pro drátěný model…'))) {
+      this.skeleton = false;
+      this.renderSkeleton();
+      return;
+    }
+    this.skeleton = on;
+    this.detectFailures = 0;
+    this.detectOff = false;
+    saveSkeletonPref(on);
+    this.renderSkeleton();
+    this.updateRender();
+    if (on && !this.analyzing) this.setMsg('Drátěný model zapnutý.');
+  }
+
+  /** Loads the pose model once per camera; says why when it cannot. */
+  async ensureLandmarker(loadingText) {
+    if (this.landmarker) return true;
+    if (!this.landmarkerLoading) {
+      this.setMsg(loadingText);
+      this.landmarkerLoading = createLandmarker().then(({ landmarker, connections }) => {
+        this.landmarker = landmarker;
+        this.connections = connections;
+        return true;
+      }, (e) => {
+        this.setMsg(`Model se nepodařilo načíst: ${e.message}`, true);
+        return false;
+      }).finally(() => { this.landmarkerLoading = null; });
+    }
+    return this.landmarkerLoading;
   }
 
   updateRender() {
@@ -468,7 +537,7 @@ export class CameraView {
       this.lastFrameTime = v.currentTime;
       this.noteFrame(Date.now());
       drawBackground(this.cctx, this.el.canvas, v, this.displayMode, this.el.small, this.sctx);
-      if (this.analyzing) this.detectPose(v);
+      if ((this.analyzing || this.showSkeleton()) && !this.detectOff) this.detectPose(v);
     }
     this.rafId = requestAnimationFrame(() => this.renderLoop());
   }
@@ -614,19 +683,14 @@ export class CameraView {
   async startAnalysis() {
     const btn = this.el.analyze;
     btn.disabled = true;
-    try {
-      if (!this.landmarker) {
-        this.setMsg('Načítám model pro analýzu…');
-        ({ landmarker: this.landmarker, connections: this.connections } = await createLandmarker());
-      }
-    } catch (e) {
-      this.setMsg(`Model se nepodařilo načíst: ${e.message}`, true);
+    if (!(await this.ensureLandmarker('Načítám model pro analýzu…'))) {
       btn.disabled = false;
       return;
     }
     this.analyzer.reset();
     this.resetGap();
     this.detectFailures = 0;
+    this.detectOff = false;
     this.analysisStartedAt = Date.now();
     this.analyzing = true;
     btn.textContent = 'Zastavit analýzu';
@@ -662,13 +726,23 @@ export class CameraView {
     } catch (e) {
       // One bad frame is noise; a run of them means nothing is being analysed.
       // A fall detector must never read as running then, so it stops and says so.
-      if (++this.detectFailures >= DETECT_FAILURES_MAX) this.analysisFailed(e);
+      if (++this.detectFailures >= DETECT_FAILURES_MAX) this.detectionFailed(e);
       return;
     }
 
-    const t = (Date.now() - this.analysisStartedAt) / 1000;
     const lm = result.landmarks?.[0] || null;
-    if (lm) drawSkeleton(this.cctx, this.el.canvas, lm, this.connections);
-    this.analyzer.push(t, lm);
+    if (lm && this.showSkeleton()) drawSkeleton(this.cctx, this.el.canvas, lm, this.connections);
+    if (this.analyzing) this.analyzer.push((Date.now() - this.analysisStartedAt) / 1000, lm);
+  }
+
+  /** The pose model keeps failing: stop using it rather than pretend. */
+  detectionFailed(e) {
+    this.detectOff = true;
+    if (this.analyzing) { this.analysisFailed(e); return; }
+    const why = String(e?.message || e).slice(0, 200);
+    this.skeleton = false;
+    this.renderSkeleton();
+    this.updateRender();
+    this.setMsg(`Drátěný model nejde kreslit: snímky z kamery nejde vyhodnotit (${why}).`, true);
   }
 }

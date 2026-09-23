@@ -40,6 +40,17 @@ iPhonu. Prohlížeč bez H.264 (např. Chromium v některých Linuxech) dostane
 hlášku „Tento prohlížeč neumí obraz H.264 z kamery“. Znovu se pak
 nepřipojuje, protože by to nepomohlo.
 
+### Drátěný model
+
+Zaškrtávátko **Drátěný model** na řádku Zobrazení kreslí kostru postavy přes
+obraz, i bez spuštěné analýzy; při nahrávání je pak i ve videu. Bez něj se
+kostra nekreslí ani při analýze, ta ale běží a zapisuje dál. Režim
+**Černé pozadí** kostru ukazuje vždy, protože bez ní by byla jen černá
+plocha; režimy soukromí se uplatní hned, model pro kostru se načítá až
+po nich. Volbu si prohlížeč pamatuje. Ověřeno na fotce postavy: se
+zapnutým modelem je kostra přes ruce, trup i nohy, s vypnutým je na
+plátně přesně tolik bílých bodů jako na samotné fotce.
+
 Analýza (MediaPipe) potřebuje v prohlížeči **WebGL**, tedy grafickou
 akceleraci. Bez něj, třeba přes vzdálenou plochu nebo ve virtuálu, řekne
 hned při spuštění, proč neběží. Když by detekce za běhu opakovaně

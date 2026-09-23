@@ -166,6 +166,10 @@
                    border-radius:12px;background:#fff}
   .watchRow.off .opt{opacity:.45}
   .view .watchInfo{margin:10px 0 0;font-size:.85rem}
+  .view .viewHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0 2px}
+  .view .skel{display:flex;align-items:center;gap:8px;min-height:44px;font-size:.9rem;cursor:pointer}
+  .view .skel input{width:22px;height:22px;min-height:22px;margin:0}
+  .view .skel:has(input:disabled){opacity:.6;cursor:default}
 
   #folderBox{border-bottom:1px solid #eef2f6;padding-bottom:12px}
   #recordings{list-style:none;margin:0;padding:0}
@@ -275,7 +279,12 @@
           <canvas class="small"></canvas>
         </div>
 
-        <p class="muted" style="margin:14px 0 6px">Zobrazení</p>
+        <div class="viewHead">
+          <span class="muted">Zobrazení</span>
+          <label class="skel" title="Kostra postavy přes obraz">
+            <input type="checkbox" class="skeleton"> Drátěný model
+          </label>
+        </div>
         <div class="seg modes">
           <button data-mode="normal" aria-pressed="true">Normální</button>
           <button data-mode="blur" aria-pressed="false">Rozmazaný</button>
