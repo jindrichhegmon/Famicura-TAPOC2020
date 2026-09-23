@@ -35,8 +35,16 @@ esac
 
 read -r -p "ID kamery [tapoc2020]: " ID;            ID="${ID:-tapoc2020}"; platne_id "$ID"
 read -r -p "Název v aplikaci [Tapo C2020]: " NAZEV;  NAZEV="${NAZEV:-Tapo C2020}"
-read -r -p "IP adresa kamery v místní síti: " IP
-[[ "$IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "IP adresa musí vypadat jako 192.168.1.50."; exit 1; }
+# Přes Windows server go2rtc nechodí na kameru, ale na server v tunelu:
+# ten předává svůj port 554 kameře (u-kamery-windows.ps1).
+REZIM=$($SSH "$VPS" "cat /etc/wireguard/famicura-rezim 2>/dev/null" || true)
+if [ "$REZIM" = windows ]; then
+  IP=10.77.0.2
+  echo "Kamera je za Windows serverem – obraz půjde přes něj ($IP). IP kamery zná server."
+else
+  read -r -p "IP adresa kamery v místní síti: " IP
+  [[ "$IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "IP adresa musí vypadat jako 192.168.1.50."; exit 1; }
+fi
 read -r -p "Uživatel účtu kamery: " UZIV
 read -rs -p "Heslo účtu kamery: " HESLO; echo
 read -r -p "Kvalita – 1 = plné rozlišení, 2 = nízké [1]: " Q
@@ -60,6 +68,7 @@ else
   echo "Kamera $ID neodpovídá (go2rtc vrátil ${KOD:-nic}). Zkontrolujte:"
   echo "  tunel:  ssh -i $KEY $VPS \"wg show wg-famicura && ping -c 2 $IP\""
   echo "  go2rtc: ssh -i $KEY $VPS \"su - jhnapps -c 'pm2 logs famicura-go2rtc --lines 20 --nostream'\""
+  [ "$REZIM" = windows ] && echo "  Windows server: PowerShell jako správce → netsh interface portproxy show v4tov4"
   echo "  a v aplikaci Tapo, že účet kamery a heslo sedí."
   exit 1
 fi

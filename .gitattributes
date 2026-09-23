@@ -1,0 +1,2 @@
+# Windows PowerShell 5.1 needs the BOM and CRLF as they are; git must not convert them.
+*.ps1 -text

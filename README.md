@@ -11,16 +11,21 @@ Tapo nemá cloudové API jako Ring, běží všechno na VPS.
 ## Jak to funguje
 
 ```
-kamera Tapo ──RTSP──▶ zařízení u kamery ══ WireGuard ══▶ VPS: go2rtc ──WebRTC──▶ prohlížeč
- (místní síť)          (Raspberry Pi…)      (šifrovaně)        server.mjs ──HTTPS──▶ (kdekoli)
+kamera Tapo ──RTSP──▶ Windows server ══ WireGuard ══▶ VPS: go2rtc ──WebRTC──▶ prohlížeč
+ (místní síť)          (nebo Raspberry Pi)  (šifrovaně)      server.mjs ──HTTPS──▶ (kdekoli)
 ```
 
 * **Kamera** vydává obraz jen v místní síti (RTSP). Do internetu se
   neotevírá nic.
-* **Zařízení u kamery** (Raspberry Pi nebo mini PC s Linuxem) se samo
-  připojí tunelem WireGuard k VPS. Tunelem pustí **jen RTSP kamery**
-  (TCP 554) a ping. Na ostatní zařízení v místní síti ani na sebe samo
-  VPS nepustí (`deploy/wireguard/brana.sh`).
+* **Zařízení u kamery** je trvale zapnutý počítač ve stejné síti jako kamera.
+  Samo se tunelem WireGuard připojí k VPS a obraz z kamery mu předá. Na
+  routeru se nic neotevírá. Ke kameře se VPS jinak dostat nemůže, protože
+  router zvenku dovnitř nic nepustí a Tapo nemá cloud.
+  * **Windows server** (tahle instalace): předává jen svůj port 554 na
+    kameru (`netsh interface portproxy`). VPS kameru ani nic jiného v síti
+    nevidí (`deploy/wireguard/u-kamery-windows.ps1`).
+  * **Raspberry Pi / Linux**: pouští z tunelu jen RTSP kamery a ping
+    (`deploy/wireguard/brana.sh`).
 * **go2rtc** na VPS převádí RTSP na WebRTC. Kamera posílá H.264 a G.711,
   obojí prohlížeč umí přímo, takže se nic nepřekódovává. API go2rtc
   poslouchá jen na `127.0.0.1`. Veřejný je jen port 8555 pro šifrovaná
@@ -54,29 +59,44 @@ uvedeno jinak.
    **zarezervujte ji v routeru** (DHCP rezervace). Kdyby se změnila, tunel
    i go2rtc by kameru ztratily.
 
-### 2. Tunel k VPS
+### 2. Tunel k VPS přes Windows server
+
+Windows server musí být ve stejné síti jako kamera a trvale zapnutý.
+Na Macu:
 
 ```
-./deploy/wireguard-vps.sh 192.168.1.50          # IP kamery
+./deploy/wireguard-vps.sh 192.168.1.50 --windows     # IP kamery
 ```
 
 Na VPS nastaví rozhraní `wg-famicura` (UDP 51821) a sem uloží
-`famicura-wg-u-kamery.conf`. Skript vypíše i příkazy pro zařízení u kamery:
+`famicura-wg-u-kamery.conf`. Pak na **Windows serveru**:
 
-```
-scp famicura-wg-u-kamery.conf deploy/wireguard/u-kamery.sh deploy/wireguard/brana.sh pi@ZARIZENI:~/
-ssh pi@ZARIZENI 'sudo ./u-kamery.sh famicura-wg-u-kamery.conf brana.sh && rm famicura-wg-u-kamery.conf'
-rm famicura-wg-u-kamery.conf
-```
+1. Nainstalujte **WireGuard pro Windows** z https://www.wireguard.com/install/.
+2. Zkopírujte na server `famicura-wg-u-kamery.conf` a
+   `deploy/wireguard/u-kamery-windows.ps1`, třeba přes vzdálenou plochu.
+3. Ve složce s nimi otevřete **PowerShell jako správce** a spusťte:
+   ```
+   powershell -ExecutionPolicy Bypass -File .\u-kamery-windows.ps1 -Konfigurace .\famicura-wg-u-kamery.conf
+   ```
+4. Soubor `famicura-wg-u-kamery.conf` smažte na serveru i na Macu.
+   Obsahuje soukromý klíč a je v `.gitignore`.
 
-Soubor `.conf` obsahuje soukromý klíč zařízení. Je v `.gitignore` a po
-instalaci ho smažte. Na routeru se nic neotevírá, protože zařízení se
-připojuje ven samo.
+Na serveru se nastaví jen tři věci:
 
-**Router místo Raspberry Pi:** pokud váš router umí klienta WireGuard,
-zadejte do něj údaje z `famicura-wg-u-kamery.conf`. Router musí provoz
-z tunelu (10.77.0.1) na kameru překládat (NAT/masquerade) a pouštět jen
-TCP 554. Postup se liší podle výrobce.
+| | |
+|---|---|
+| služba WireGuard `wg-famicura` | tunel k VPS, naběhne i po restartu. Tunelem jde jen provoz pro VPS (10.77.0.1), běžný provoz serveru do internetu se nemění. |
+| `netsh interface portproxy` 0.0.0.0:554 → kamera | předává obraz z kamery |
+| firewall „Famicura Tapo“ | port 554 a ping povolené **jen z VPS** (10.77.0.1) |
+
+Změna IP kamery: `.\u-kamery-windows.ps1 -Kamera 192.168.1.60`.
+Odebrání všeho: `.\u-kamery-windows.ps1 -Odebrat` (obojí jako správce,
+s `powershell -ExecutionPolicy Bypass -File`).
+
+**Místo Windows serveru Raspberry Pi nebo jiný Linux:** vynechte
+`--windows`. Skript pak vypíše příkazy pro `deploy/wireguard/u-kamery.sh`.
+Router, který umí klienta WireGuard, to zvládne také, ale nastavuje se
+u každého výrobce jinak.
 
 ### 3. Aplikace a go2rtc na VPS
 
@@ -86,7 +106,9 @@ TCP 554. Postup se liší podle výrobce.
 ./deploy/vps-kamera.sh      # IP kamery, účet kamery (heslo skrytě), název
 ```
 
-`vps-kamera.sh` na konci ověří, že kamera posílá obraz. Přihlášení ke
+`vps-kamera.sh` na konci ověří, že kamera posílá obraz. S Windows
+serverem se na IP kamery neptá: go2rtc chodí na server v tunelu
+(10.77.0.2) a IP kamery zná jen server. Přihlášení ke
 kameře je na VPS jen v `cameras.json` a `go2rtc.yaml`, oba s právy 600.
 `go2rtc.yaml` se z `cameras.json` vždy generuje, ručně se needituje.
 
@@ -145,9 +167,11 @@ založil `node scripts/init-db.mjs`.
   WebRTC. Média jsou šifrovaná (DTLS-SRTP).
 * go2rtc má vypnuté vlastní servery RTSP, RTMP a SRTP a jeho API je
   jen na localhostu.
-* Z tunelu je dostupná jen kamera, jen na RTSP a ping. Ověřeno testem
-  na modelu sítě: jiný port kamery, jiný počítač i zařízení samotné jsou
-  zablokované.
+* Z tunelu je dostupná jen kamera, jen na RTSP a ping. U Windows serveru
+  jen jeho port 554, přesměrovaný na kameru. Ověřeno testy na modelu sítě:
+  u Linuxu jsou jiný port kamery, jiný počítač i zařízení samotné
+  zablokované. U Windows přišel obraz přes předávání TCP, i když VPS
+  kameru napřímo vůbec neviděl.
 
 ## Vývoj a testy
 
@@ -160,5 +184,8 @@ s heslem, H.264 Main + G.711), dál go2rtc 1.9.14 s konfigurací z
 `scripts/set-camera.mjs`, pak `server.mjs` a nakonec prohlížeč s H.264
 (Electron/Chrome 152). Test zahrnoval přihlášení, diagnostiku, živý obraz
 1280×720 se zvukem, nahrávání, analýzu, plán, sledované události a
-prohlížeč bez H.264 a bez WebGL. Pravidla brány na zařízení u kamery jsme
-ověřili na modelu sítě se síťovými jmennými prostory.
+prohlížeč bez H.264 a bez WebGL. Pravidla brány na Linuxu i předávání
+přes Windows server (prostá TCP proxy jako `netsh portproxy`) jsme ověřili
+na modelu sítě se síťovými jmennými prostory. Skript pro Windows prošel
+parserem PowerShellu 7.4. Na skutečném Windows ani se skutečnou kamerou
+Tapo zatím spuštěný nebyl.

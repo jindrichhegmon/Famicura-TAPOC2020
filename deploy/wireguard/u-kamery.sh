@@ -16,6 +16,8 @@ DRY="${DRY:-}"
 [ -f "$BRANA_IN" ] || { echo "Chybí brana.sh (je ve složce deploy/wireguard)."; exit 1; }
 [ -n "$DRY" ] || [ "$(id -u)" = 0 ] || { echo "Spusťte přes sudo."; exit 1; }
 
+# A config made for a Windows server has no NAT side; here it would half work.
+grep -q '^# REZIM=windows' "$CONF_IN" && { echo "Tahle konfigurace je pro Windows server (u-kamery-windows.ps1)."; exit 1; }
 KAMERA=$(sed -n 's/^# KAMERA=//p' "$CONF_IN")
 [[ "$KAMERA" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "V konfiguraci chybí řádek # KAMERA=<IP>."; exit 1; }
 
