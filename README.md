@@ -52,8 +52,12 @@ prohlížeči“ (pád, dlouhé ležení… – běží jen s otevřenou kamerou
 „Rozpozná kamera sama“ – tam je přesně to, co kamera nahlásila, že umí:
 C200 jen pohyb, C210/C220 i osobu, vozidlo a zvíře. Každou událost lze
 vypnout nebo omezit hodinami (v čase pečovatelů, Europe/Prague, ne serveru).
-Bez nastavení je vše zapnuté celý den. Stejná detekce do 5 s po sobě je
-jedna událost; „Initialized“ (stav při založení odběru) není událost.
+Bez nastavení je vše zapnuté celý den. Událost je přechod hodnoty na
+„true“: Tapo C220 (firmware 1.0.3) posílá během detekce „true“ každých
+~100 ms a všechno označuje „Initialized“, takže rozhoduje jen změna
+hodnoty, ne označení zprávy. Jedna detekce je jedna událost, ať přišla v
+jedné nebo ve sto zprávách; stejná detekce do 5 s po sobě se nepočítá
+dvakrát.
 
 Diagnostika ukazuje u každé kamery, zda odběr běží, co kamera umí, poslední
 událost a případnou chybu zápisu do CLB1. Co kamera pošle pod jménem, které

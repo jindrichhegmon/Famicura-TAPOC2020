@@ -108,11 +108,18 @@ export function detekceZTopicSet(topicSet) {
 }
 
 /**
- * Zprávy z PullMessages → události [{ kind, label, at }] – jen přechody na
- * „true“. Co se do katalogu nevešlo (jiné téma, jiná položka), přijde do
- * `nezarazene`, aby šlo z logu serveru zjistit, co kamera vlastně posílá.
+ * Zprávy z PullMessages → události [{ kind, label, at }].
+ *
+ * Událost je přechod hodnoty na „true“; `stavy` (téma|položka → poslední
+ * hodnota) drží stav mezi voláními. Podle ONVIF má „Initialized“ znamenat jen
+ * stav při založení odběru, ale Tapo C220 (firmware 1.0.3) tak označuje
+ * všechno a hlásí „true“ každých ~100 ms po celou dobu detekce, „false“ na
+ * jejím konci. Proto rozhoduje jen změna hodnoty, ne PropertyOperation: jedna
+ * detekce je jedna událost, ať přišla v jedné nebo ve sto zprávách. Co se do
+ * katalogu nevešlo, přijde do `nezarazene`, aby šlo z logu serveru zjistit, co
+ * kamera vlastně posílá.
  */
-export function udalostiZeZprav(doc, now = Date.now, nezarazene = [], vse = null) {
+export function udalostiZeZprav(doc, now = Date.now, nezarazene = [], vse = null, stavy = new Map()) {
   const out = [];
   for (const nm of vsechny(doc, 'NotificationMessage')) {
     const topic = textUzlu(najdi(nm, 'Topic'));
@@ -124,16 +131,21 @@ export function udalostiZeZprav(doc, now = Date.now, nezarazene = [], vse = null
       vse.push({ topic: topic.replace(/^.*?:/, ''), op: msg.attrs.PropertyOperation || '', time: msg.attrs.UtcTime || '',
         data: Object.fromEntries(vsechny(data, 'SimpleItem').map((it) => [it.attrs.Name, it.attrs.Value])) });
     }
-    if (msg.attrs.PropertyOperation === 'Initialized') continue;     // stav při založení odběru, ne událost
     if (!data) continue;
     // Některé firmwary mají UtcTime zaseknutý na 1970: pak platí náš čas.
     const t = Date.parse(msg.attrs.UtcTime || '');
     const at = Number.isFinite(t) && t > Date.UTC(2000, 0, 1) ? t : now();
     for (const it of vsechny(data, 'SimpleItem')) {
-      if (String(it.attrs.Value).toLowerCase() !== 'true') continue;
-      const d = druhDetekce(topic, it.attrs.Name || '');
+      const name = it.attrs.Name || '';
+      const val = String(it.attrs.Value).toLowerCase();
+      if (val !== 'true' && val !== 'false') continue;          // tokens and the like carry no state
+      const klic = `${topic}|${name}`;
+      const drive = stavy.get(klic);
+      stavy.set(klic, val);
+      if (val !== 'true' || drive === 'true') continue;          // still on, or switched off
+      const d = druhDetekce(topic, name);
       if (d) out.push({ kind: d.kind, label: d.label, at });
-      else nezarazene.push({ topic: topic.replace(/^.*?:/, ''), item: it.attrs.Name || '' });
+      else nezarazene.push({ topic: topic.replace(/^.*?:/, ''), item: name });
     }
   }
   return out;
@@ -191,6 +203,7 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
   }
 
   let eventsUrl = null;
+  let stavy = new Map();                // last value per topic|item, for one subscription
 
   return {
     /** Posun hodin kamery; bez něj by kamera digest s naším časem odmítla. */
@@ -223,6 +236,7 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
         body: `<tev:CreatePullPointSubscription><tev:InitialTerminationTime>PT${termS}S</tev:InitialTerminationTime></tev:CreatePullPointSubscription>` });
       const adresa = textUzlu(najdi(doc, 'SubscriptionReference', 'Address'));
       if (!adresa) throw new OnvifError('Kamera nevrátila adresu odběru událostí.');
+      stavy = new Map();
       return nase(adresa);
     },
 
@@ -230,7 +244,7 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
     async pull(adresa, { timeoutS = 60, limit = 100, nezarazene, vse } = {}) {
       const doc = await soap(adresa, { action: AKCE.pull, to: adresa, timeoutMs: (timeoutS + 15) * 1000,
         body: `<tev:PullMessages><tev:Timeout>PT${timeoutS}S</tev:Timeout><tev:MessageLimit>${limit}</tev:MessageLimit></tev:PullMessages>` });
-      return udalostiZeZprav(doc, now, nezarazene, vse);
+      return udalostiZeZprav(doc, now, nezarazene, vse, stavy);
     },
 
     /** Výrobce, model a firmware – pro diagnostiku (některé firmwary události neposílají). */

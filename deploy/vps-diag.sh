@@ -19,4 +19,4 @@ ssh -i "$KEY" "$VPS" "chown jhnapps:jhnapps $DIR/scripts/onvif-diag.mjs $DIR/src
 ssh -t -i "$KEY" "$VPS" "su - jhnapps -c 'cd $DIR && node scripts/onvif-diag.mjs $SEKUND'"
 echo
 echo "Log serveru (poslední řádky o událostech kamery):"
-ssh -i "$KEY" "$VPS" "su - jhnapps -c 'pm2 logs famicura-tapo --lines 200 --nostream'" | grep -E "události kamery|mimo katalog|CLB1" | tail -20 || true
+ssh -i "$KEY" "$VPS" "su - jhnapps -c 'pm2 logs famicura-tapo --lines 200 --nostream --timestamp'" | grep -E "události kamery|mimo katalog|CLB1" | tail -20 || true

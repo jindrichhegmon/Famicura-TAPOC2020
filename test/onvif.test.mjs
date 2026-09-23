@@ -81,15 +81,18 @@ test('odběr: adresa odběru vede na náš host, zprávy chodí, obnova a zruše
     assert.match(adresa, /\/onvif\/Subscription\?Idx=1$/);
 
     assert.deepEqual(await c.pull(adresa, { timeoutS: 1 }), []);        // nothing happened
-    cam.initialized();                                                   // state at subscription: not an event
-    cam.motion();
+    cam.initialized();                                                   // "Initialized" true counts as on (Tapo marks everything so)
+    cam.motion();                                                        // still on: nothing new
     cam.motion(false);
     cam.vehicle();
     cam.tooDark();                                                       // not a detection
     const ev = await c.pull(adresa, { timeoutS: 1 });
     assert.deepEqual(ev.map((e) => e.kind), ['cam-motion', 'cam-vehicle']);
+    cam.motion();                                                        // off → on again: a new event
+    assert.deepEqual((await c.pull(adresa, { timeoutS: 1 })).map((e) => e.kind), ['cam-motion']);
     assert.ok(Date.now() - ev[0].at < 5000);
 
+    cam.motion(false);
     cam.motion1970();                                                    // firmware with a stuck clock
     const [stuck] = await c.pull(adresa, { timeoutS: 1 });
     assert.ok(Date.now() - stuck.at < 5000, 'čas 1970 nahradí čas serveru');
@@ -143,11 +146,23 @@ test('diagnostika: model a firmware, všechna témata kamery, zprávy tak, jak p
     cam.initialized(); cam.motion(false); cam.tooDark();
     const vse = [];
     const ev = await c.pull(adresa, { timeoutS: 1, vse });
-    assert.deepEqual(ev, []);
+    assert.deepEqual(ev.map((e) => e.kind), ['cam-motion']);
     assert.deepEqual(vse.map((m) => [m.topic, m.op, m.data]), [
       ['RuleEngine/CellMotionDetector/Motion', 'Initialized', { IsMotion: 'true' }],
       ['RuleEngine/CellMotionDetector/Motion', 'Changed', { IsMotion: 'false' }],
       ['VideoSource/ImageTooDark', 'Changed', { State: 'true' }]]);
     await c.unsubscribe(adresa);
   } finally { await cam.close(); }
+});
+
+test('Tapo C220: každá zpráva „Initialized“, true každých 100 ms, false na konci → jedna událost na detekci', () => {
+  const zprava = (v, t) => `<wsnt:NotificationMessage><wsnt:Topic>tns1:RuleEngine/PeopleDetector/People</wsnt:Topic>
+    <wsnt:Message><tt:Message UtcTime="${t}" PropertyOperation="Initialized"><tt:Data><tt:SimpleItem Name="IsPeople" Value="${v}"/></tt:Data></tt:Message></wsnt:Message></wsnt:NotificationMessage>`;
+  const stavy = new Map();
+  const a = parseXml(`<r>${zprava(true, '2026-09-23T14:28:44Z')}${zprava(true, '2026-09-23T14:28:44Z')}${zprava(true, '2026-09-23T14:28:45Z')}</r>`);
+  assert.deepEqual(udalostiZeZprav(a, Date.now, [], null, stavy).map((e) => e.kind), ['cam-person']);
+  const b = parseXml(`<r>${zprava(true, '2026-09-23T14:28:46Z')}${zprava(false, '2026-09-23T14:28:51Z')}</r>`);
+  assert.deepEqual(udalostiZeZprav(b, Date.now, [], null, stavy), [], 'pokračování a konec nejsou nová událost');
+  const c = parseXml(`<r>${zprava(true, '2026-09-23T14:30:00Z')}</r>`);
+  assert.deepEqual(udalostiZeZprav(c, Date.now, [], null, stavy).map((e) => e.kind), ['cam-person'], 'další příchod je nová událost');
 });
