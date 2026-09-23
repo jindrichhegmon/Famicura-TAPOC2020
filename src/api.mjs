@@ -104,7 +104,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           out.cameras = out.cameras.map((c, i) => ({ ...c, online: probes[i].ok, detail: probes[i].detail,
             // null: the server does not subscribe at all (no cameras.json)
             eventsOk: st[c.id] ? st[c.id].ok : null, eventsError: st[c.id]?.error || null,
-            eventsLast: st[c.id]?.posledni || null, clbError: st[c.id]?.clbChyba || null }));
+            eventsLast: st[c.id]?.posledni || null, clbError: st[c.id]?.clbChyba || null,
+            eventsOther: st[c.id]?.nezarazene || [] }));
         } catch (e) {
           out.go2rtc = { ok: false, error: e.message };
         }

@@ -33,7 +33,7 @@ export function createCameraEvents({ kamery, store, dbs, onvif = createOnvif, lo
   const naposledy = new Map();      // `${id}:${kind}` → ms
 
   function zaznam(id, zmena) {
-    stav.set(id, { ok: false, error: null, events: [], posledni: null, clbChyba: null, ...(stav.get(id) || {}), ...zmena });
+    stav.set(id, { ok: false, error: null, events: [], posledni: null, clbChyba: null, nezarazene: [], ...(stav.get(id) || {}), ...zmena });
   }
 
   async function zpracuj(kam, ev) {
@@ -78,8 +78,16 @@ export function createCameraEvents({ kamery, store, dbs, onvif = createOnvif, lo
         let obnoveno = now();
         cekani = cekaniMs;
         while (!ctl.stop) {
-          const zpravy = await klient.pull(adresa, { timeoutS: pullS });
+          const jine = [];
+          const zpravy = await klient.pull(adresa, { timeoutS: pullS, nezarazene: jine });
           for (const ev of zpravy) await zpracuj(kam, ev);
+          // What the camera reports under a name the catalogue lacks goes to the
+          // server log and diagnostics, so a "zone left" that never shows up
+          // can be traced to the topic the camera actually used.
+          if (jine.length) {
+            log.log('[famicura-tapo] kamera', kam.id, 'hlásí mimo katalog:', JSON.stringify(jine));
+            zaznam(kam.id, { nezarazene: jine.slice(-5) });
+          }
           if (now() - obnoveno >= renewS * 1000) { await klient.renew(adresa); obnoveno = now(); }
         }
       } catch (e) {

@@ -56,7 +56,11 @@ Bez nastavení je vše zapnuté celý den. Stejná detekce do 5 s po sobě je
 jedna událost; „Initialized“ (stav při založení odběru) není událost.
 
 Diagnostika ukazuje u každé kamery, zda odběr běží, co kamera umí, poslední
-událost a případnou chybu zápisu do CLB1. Když kamera na portu 2020
+událost a případnou chybu zápisu do CLB1. Co kamera pošle pod jménem, které
+katalog nezná (jiný detektor, jiná položka), se neztratí: jde do logu
+serveru (`pm2 logs famicura-tapo`, řádek „hlásí mimo katalog“) a do
+Diagnostiky, aby šlo dohledat, jak kamera pojmenovala třeba opuštění
+zóny, a doplnit to do katalogu v `src/onvif.mjs`. Když kamera na portu 2020
 neodpovídá (starší skript na Windows serveru předával jen 554), obraz jde
 dál, jen události chybí – stav to řekne.
 
@@ -80,7 +84,9 @@ je o sekundu až dvě pozadu a **bez zvuku**, protože zvuk kamery (G.711)
 prohlížeč v MP4 ani HLS neumí. Nahrávání, analýza i drátěný model fungují
 stejně. Prohlížeč si náhradní cestu pamatuje 12 hodin, aby při každém
 otevření neztrácel čas na WebRTC; „Zkusit znovu“ po neúspěchu začíná zase
-od WebRTC.
+od WebRTC. Přepínač **Cesta obrazu** na kartě (Automaticky / WebRTC /
+HTTPS) to nechá zvolit ručně, třeba když WebRTC v dané síti sice projde,
+ale zadrhává; volba platí v tom prohlížeči, dokud se nezmění.
 
 Caddy odpovědi bez délky (chunked) posílá průběžně, nic dalšího se v něm
 nastavovat nemusí. Ověřeno v Electronu s go2rtc, který nabízel jen

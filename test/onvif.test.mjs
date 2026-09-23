@@ -115,3 +115,15 @@ test('zprávy: jen přechody na true, každá položka zvlášť', () => {
     </wsnt:NotificationMessage></r>`);
   assert.deepEqual(udalostiZeZprav(doc), [{ kind: 'cam-pet', label: null, at: Date.parse('2026-09-23T10:00:00Z') }]);
 });
+
+test('co kamera hlásí mimo katalog, se neztratí (pro log serveru)', () => {
+  const doc = parseXml(`<r><wsnt:NotificationMessage><wsnt:Topic>tns1:RuleEngine/AreaDetector/AreaLeave</wsnt:Topic>
+    <wsnt:Message><tt:Message UtcTime="2026-09-23T10:00:00Z" PropertyOperation="Changed"><tt:Data>
+    <tt:SimpleItem Name="Token" Value="true"/></tt:Data></tt:Message></wsnt:Message></wsnt:NotificationMessage>
+    <wsnt:NotificationMessage><wsnt:Topic>tns1:VideoSource/ImageTooDark</wsnt:Topic>
+    <wsnt:Message><tt:Message UtcTime="2026-09-23T10:00:00Z" PropertyOperation="Changed"><tt:Data>
+    <tt:SimpleItem Name="State" Value="true"/></tt:Data></tt:Message></wsnt:Message></wsnt:NotificationMessage></r>`);
+  const jine = [];
+  assert.deepEqual(udalostiZeZprav(doc, Date.now, jine), []);
+  assert.deepEqual(jine, [{ topic: 'RuleEngine/AreaDetector/AreaLeave', item: 'Token' }, { topic: 'VideoSource/ImageTooDark', item: 'State' }]);
+});

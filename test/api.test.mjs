@@ -220,7 +220,7 @@ test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
     assert.equal(b.go2rtc.ok, true);
     assert.equal(b.go2rtc.version, '1.9.14');
     assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', events: [], online: false, detail: 'dial tcp: i/o timeout',
-      eventsOk: null, eventsError: null, eventsLast: null, clbError: null }]);
+      eventsOk: null, eventsError: null, eventsLast: null, clbError: null, eventsOther: [] }]);
   } finally { delete process.env.CAMERA_NAMES; }
 });
 

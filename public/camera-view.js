@@ -43,23 +43,28 @@ function saveSkeletonPref(on) {
 }
 
 /*
- * Some networks drop WebRTC (UDP to port 8555) while HTTPS passes. Once the
- * picture had to go over HTTPS on this device, it starts that way for a while
- * instead of losing ten seconds to WebRTC on every open.
+ * Some networks drop WebRTC (UDP to port 8555) while HTTPS passes. The viewer
+ * can pin either way; "auto" tries WebRTC and, once it had to fall back on this
+ * device, starts on HTTPS for a while instead of losing ten seconds on every
+ * open. Stored as { mode, httpsUntil } in this browser.
  */
 const PATH_KEY = 'famicura.cesta';
 const PATH_MEMORY_MS = 12 * 3600e3;
+const PATH_MODES = ['auto', 'webrtc', 'https'];
 function loadPathPref() {
   try {
-    const t = Number(localStorage.getItem(PATH_KEY));
-    return t && Date.now() - t < PATH_MEMORY_MS ? 'https' : 'webrtc';
-  } catch { return 'webrtc'; }
+    const p = JSON.parse(localStorage.getItem(PATH_KEY) || '{}') || {};
+    return { mode: PATH_MODES.includes(p.mode) ? p.mode : 'auto', httpsUntil: Number(p.httpsUntil) || 0 };
+  } catch { return { mode: 'auto', httpsUntil: 0 }; }
 }
-function savePathPref(path) {
-  try {
-    if (path === 'https') localStorage.setItem(PATH_KEY, String(Date.now()));
-    else localStorage.removeItem(PATH_KEY);
-  } catch { /* private mode */ }
+function savePathPref(pref) {
+  try { localStorage.setItem(PATH_KEY, JSON.stringify(pref)); } catch { /* private mode */ }
+}
+/** Which way to start now: the pinned one, else HTTPS while the fallback is remembered. */
+function startingPath() {
+  const p = loadPathPref();
+  if (p.mode !== 'auto') return p.mode;
+  return Date.now() < p.httpsUntil ? 'https' : 'webrtc';
 }
 
 function fmtGap(ms) {
@@ -197,7 +202,7 @@ export class CameraView {
     const q = (sel) => this.card.querySelector(sel);
     this.el = {
       name: q('.name'), video: q('video'), canvas: q('canvas.draw'), small: q('canvas.small'),
-      modes: q('.modes'), record: q('.record'), analyze: q('.analyze'), sound: q('.sound'),
+      modes: q('.modes'), paths: q('.paths'), pathInfo: q('.pathInfo'), record: q('.record'), analyze: q('.analyze'), sound: q('.sound'),
       retry: q('.retry'), recBar: q('.recBar'), timer: q('.timer'), stop: q('.stop'), msg: q('.msg'),
       watchInfo: q('.watchInfo'), skeleton: q('input.skeleton'),
     };
@@ -233,6 +238,8 @@ export class CameraView {
         if (this.displayMode === 'black') this.ensureLandmarker('Načítám model pro drátěný model…');
       };
     });
+    e.paths.querySelectorAll('button').forEach((b) => { b.onclick = () => this.setPath(b.dataset.path); });
+    this.renderPath();
     e.skeleton.onchange = () => this.setSkeleton(e.skeleton.checked);
     e.record.onclick = () => (this.recording ? this.stopRecording() : this.startRecording());
     e.analyze.onclick = () => (this.analyzing ? this.stopAnalysis() : this.startAnalysis());
@@ -293,7 +300,7 @@ export class CameraView {
     this.wantStream = true;
 
     if (scroll) this.card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (loadPathPref() === 'https') { this.startHttps({ isReconnect }); return; }
+    if (startingPath() === 'https') { this.startHttps({ isReconnect }); return; }
     this.transport = 'webrtc';
     this.setMsg(isReconnect ? 'Obnovuji spojení…' : 'Navazuji spojení…');
 
@@ -417,9 +424,27 @@ export class CameraView {
     this.hooks.onChange();
   }
 
+  /** The viewer picks the way; a running picture is restarted on it at once. */
+  setPath(mode) {
+    if (!PATH_MODES.includes(mode)) return;
+    savePathPref({ mode, httpsUntil: 0 });
+    this.renderPath();
+    if (!this.wantStream) return;
+    this.reconnectAttempt = 0;
+    if (this.reconnectTimer !== null) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    this.teardown({ keepIntent: true }).then(() => { if (this.wantStream) this.start(); });
+  }
+
+  renderPath() {
+    const p = loadPathPref();
+    this.el.paths.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.path === p.mode)));
+    this.el.pathInfo.textContent = p.mode === 'auto' && Date.now() < p.httpsUntil ? 'teď HTTPS (WebRTC tu neprošlo)' : '';
+  }
+
   /** WebRTC connected (or failed) without a single packet: the network is in the way, not the camera. */
   switchToHttps(reason, stats) {
-    savePathPref('https');
+    savePathPref({ mode: 'auto', httpsUntil: Date.now() + PATH_MEMORY_MS });
+    this.renderPath();
     if (!this.httpsLogged) {
       this.httpsLogged = true;
       this.log({ t: this.analyzing ? (Date.now() - this.analysisStartedAt) / 1000 : 0, kind: 'stream', level: 'warn',
@@ -509,7 +534,7 @@ export class CameraView {
     this.stopWatchdog();
     // Nothing at all came through WebRTC: trying the same way again would
     // only repeat the black picture, so take the other way.
-    if (this.transport === 'webrtc' && stats && stats.packets === 0 && stats.bytes === 0) {
+    if (this.transport === 'webrtc' && loadPathPref().mode === 'auto' && stats && stats.packets === 0 && stats.bytes === 0) {
       this.switchToHttps(reason, stats);
       return;
     }
@@ -539,7 +564,10 @@ export class CameraView {
 
   giveUp(reason) {
     this.wantStream = false;
-    if (this.transport === 'https') savePathPref('webrtc');   // Zkusit znovu starts from WebRTC again
+    if (this.transport === 'https' && loadPathPref().mode === 'auto') {   // Zkusit znovu starts from WebRTC again
+      savePathPref({ mode: 'auto', httpsUntil: 0 });
+      this.renderPath();
+    }
     this.setMsg(`${reason}. Spojení se nepodařilo obnovit.`, true);
     this.log({ t: this.analyzing ? (Date.now() - this.analysisStartedAt) / 1000 : 0, kind: 'stream', level: 'warn',
                text: `${reason} – spojení se po ${MAX_RECONNECTS} pokusech nepodařilo obnovit.` });

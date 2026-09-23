@@ -93,8 +93,12 @@ export function detekceZTopicSet(topicSet) {
   return [...out.values()];
 }
 
-/** Zprávy z PullMessages → události [{ kind, label, at }] – jen přechody na „true“. */
-export function udalostiZeZprav(doc, now = Date.now) {
+/**
+ * Zprávy z PullMessages → události [{ kind, label, at }] – jen přechody na
+ * „true“. Co se do katalogu nevešlo (jiné téma, jiná položka), přijde do
+ * `nezarazene`, aby šlo z logu serveru zjistit, co kamera vlastně posílá.
+ */
+export function udalostiZeZprav(doc, now = Date.now, nezarazene = []) {
   const out = [];
   for (const nm of vsechny(doc, 'NotificationMessage')) {
     const topic = textUzlu(najdi(nm, 'Topic'));
@@ -110,6 +114,7 @@ export function udalostiZeZprav(doc, now = Date.now) {
       if (String(it.attrs.Value).toLowerCase() !== 'true') continue;
       const d = druhDetekce(topic, it.attrs.Name || '');
       if (d) out.push({ kind: d.kind, label: d.label, at });
+      else nezarazene.push({ topic: topic.replace(/^.*?:/, ''), item: it.attrs.Name || '' });
     }
   }
   return out;
@@ -203,10 +208,10 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
     },
 
     /** Čeká až timeoutS na události; vrací [{ kind, label, at }]. */
-    async pull(adresa, { timeoutS = 60, limit = 100 } = {}) {
+    async pull(adresa, { timeoutS = 60, limit = 100, nezarazene } = {}) {
       const doc = await soap(adresa, { action: AKCE.pull, to: adresa, timeoutMs: (timeoutS + 15) * 1000,
         body: `<tev:PullMessages><tev:Timeout>PT${timeoutS}S</tev:Timeout><tev:MessageLimit>${limit}</tev:MessageLimit></tev:PullMessages>` });
-      return udalostiZeZprav(doc, now);
+      return udalostiZeZprav(doc, now, nezarazene);
     },
 
     async renew(adresa, termS = 600) {

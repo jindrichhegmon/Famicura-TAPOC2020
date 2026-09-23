@@ -145,7 +145,7 @@
   .schedRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
             padding:10px 0;border-bottom:1px solid #eef2f6}
   .schedRow:last-child{border-bottom:0}
-  .schedRow input[type=time]{flex:1 1 110px;width:auto}
+  .schedRow input[type=time]{flex:1 1 110px;width:auto;min-width:0}
   .schedRow .no{color:#5a6b7d;font-size:.85rem;flex:0 0 18px}
   .schedRow label{display:flex;align-items:center;gap:6px;font-size:.85rem;color:#5a6b7d;
                   min-height:44px;cursor:pointer}
@@ -159,9 +159,15 @@
                 font-weight:700;cursor:pointer}
   .watchRow input[type=checkbox]{width:22px;height:22px;min-height:22px;margin:0}
   .watchRow .opt{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:.85rem;color:#5a6b7d}
-  /* od–do stays one line; the two fields share it, however narrow */
+  /* od–do stays one line; the two fields share it, however narrow. iOS gives a
+     time field a fixed intrinsic width unless its native look is turned off,
+     which made the two fields run over each other on a phone. */
   .watchRow .hours{flex:1 1 250px;flex-wrap:nowrap;min-width:0;max-width:100%}
-  .watchRow .hours input[type=time]{flex:1 1 0;min-width:0;width:auto;padding:8px}
+  .watchRow .hours input[type=time],.schedRow input[type=time]{
+    flex:1 1 0;min-width:0;width:auto;max-width:9.5em;padding:8px;box-sizing:border-box;
+    -webkit-appearance:none;appearance:none;-webkit-min-logical-width:0}
+  .watchRow .hours input[type=time]::-webkit-date-and-time-value,
+  .schedRow input[type=time]::-webkit-date-and-time-value{text-align:center;min-height:1.4em}
   .watchRow select{font-size:16px;min-height:44px;padding:8px;border:1px solid #bcc8d1;
                    border-radius:12px;background:#fff}
   .watchRow.off .opt{opacity:.45}
@@ -294,6 +300,16 @@
           <button data-mode="black" aria-pressed="false">Černé pozadí</button>
         </div>
 
+        <div class="viewHead" style="margin-top:10px">
+          <span class="muted">Cesta obrazu</span>
+          <span class="muted pathInfo"></span>
+        </div>
+        <div class="seg paths">
+          <button data-path="auto" aria-pressed="true" title="WebRTC; když neprojde, HTTPS">Automaticky</button>
+          <button data-path="webrtc" aria-pressed="false" title="Přímo z VPS (UDP 8555), se zvukem">WebRTC</button>
+          <button data-path="https" aria-pressed="false" title="Přes server jako stránka, bez zvuku, o 1–2 s pozadu">HTTPS</button>
+        </div>
+
         <div class="row" style="margin-top:12px">
           <button class="record rec">● Nahrávat</button>
           <button class="analyze">Spustit analýzu</button>
@@ -405,6 +421,9 @@ function describeEventsState(c) {
     : `<span class="bad">neodebírám</span>${c.eventsError ? `<br><span class="muted">${esc(c.eventsError)}</span>` : ''}`;
   if (c.eventsLast) out += `<br><span class="muted">naposledy ${esc(fmtClock(new Date(c.eventsLast.at)))} – ${esc(c.eventsLast.text)}</span>`;
   if (c.clbError) out += `<br><span class="bad">zápis do CLB1 se nedaří: ${esc(c.clbError)}</span>`;
+  if (c.eventsOther?.length) {
+    out += `<br><span class="muted">kamera hlásila i mimo nabídku: ${esc(c.eventsOther.map((x) => `${x.topic} (${x.item})`).join(', '))}</span>`;
+  }
   return out;
 }
 
