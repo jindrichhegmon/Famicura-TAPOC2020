@@ -41,7 +41,7 @@ rsync -az -e "$SSH" --exclude node_modules --exclude .git --exclude .DS_Store --
   --exclude data --exclude bin --exclude cameras.json --exclude go2rtc.yaml ./ "$VPS:$DIR/"
 
 # go2rtc: stáhnout, jen když chybí nebo nesedí součet.
-$SSH "$VPS" "cd $DIR/bin && if ! echo '$GO2RTC_SHA  go2rtc' | sha256sum -c --status 2>/dev/null; then
+$SSH "$VPS" "cd $DIR/bin && if ! { [ -f go2rtc ] && echo '$GO2RTC_SHA  go2rtc' | sha256sum -c --status >/dev/null 2>&1; }; then
   curl -fsSL -o go2rtc.new https://github.com/AlexxIT/go2rtc/releases/download/v$GO2RTC_VER/go2rtc_linux_amd64 &&
   echo '$GO2RTC_SHA  go2rtc.new' | sha256sum -c --status && chmod 755 go2rtc.new && mv go2rtc.new go2rtc && echo 'go2rtc $GO2RTC_VER staženo a ověřeno.' ||
   { echo 'go2rtc: stažení nebo kontrola součtu selhala.'; rm -f go2rtc.new; exit 1; }
