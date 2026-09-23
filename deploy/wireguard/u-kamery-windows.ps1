@@ -4,9 +4,10 @@
 
 .DESCRIPTION
   Nainstaluje tunel WireGuard k VPS (jako službu, naběhne i po restartu) a
-  předávání jediného portu: TCP 554 na tomto serveru → kamera. Tunelem je
-  z VPS dostupný jen tento port; nic jiného na serveru ani v místní síti.
-  Firewall pouští port 554 a ping jen z VPS na konci tunelu (10.77.0.1).
+  předávání dvou portů na kameru: TCP 554 (obraz, RTSP) a TCP 2020 (události,
+  které kamera sama hlásí – ONVIF). Tunelem jsou z VPS dostupné jen tyto dva
+  porty; nic jiného na serveru ani v místní síti. Firewall je pouští spolu
+  s pingem jen z VPS na konci tunelu (10.77.0.1).
   Tunel nemění běžné směrování serveru do internetu.
 
   Spouštět v PowerShellu otevřeném jako správce, ve složce se soubory:
@@ -34,6 +35,7 @@ $Wg      = Join-Path $env:ProgramFiles 'WireGuard\wireguard.exe'
 $Vps     = '10.77.0.1'
 $Skupina = 'Famicura Tapo'
 $Sluzba  = "WireGuardTunnel`$$Tunel"     # jak služba tunelu jmenuje WireGuard
+$Porty   = @(554, 2020)                  # RTSP (obraz) a ONVIF (události kamery)
 
 # wireguard.exe a netsh píšou i běžná hlášení na stderr. Windows PowerShell 5.1
 # z nich při ErrorActionPreference=Stop dělá chybu, která skript ukončí, a to
@@ -54,13 +56,32 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
   Konec 'Spusťte PowerShell jako správce (pravým tlačítkem → Spustit jako správce).'
 }
 
-# Jediné pravidlo předávání, které tento skript spravuje: 0.0.0.0:554 → kamera.
+# Jediná pravidla předávání, která tento skript spravuje: 0.0.0.0:554 a :2020 → kamera.
 function Nastav-Predavani([string]$ip) {
   Set-Service iphlpsvc -StartupType Automatic      # služba, která portproxy obsluhuje
   Start-Service iphlpsvc
-  Spust { netsh interface portproxy delete v4tov4 listenport=554 listenaddress=0.0.0.0 } | Out-Null
-  $r = Spust { netsh interface portproxy add v4tov4 listenport=554 listenaddress=0.0.0.0 connectport=554 connectaddress=$ip }
-  if ($r.Kod -ne 0) { Konec "Předávání portu 554 se nepodařilo nastavit: $($r.Text)" }
+  foreach ($port in $Porty) {
+    Spust { netsh interface portproxy delete v4tov4 listenport=$port listenaddress=0.0.0.0 } | Out-Null
+    $r = Spust { netsh interface portproxy add v4tov4 listenport=$port listenaddress=0.0.0.0 connectport=$port connectaddress=$ip }
+    if ($r.Kod -ne 0) { Konec "Předávání portu $port se nepodařilo nastavit: $($r.Text)" }
+  }
+}
+
+function Odeber-Predavani {
+  foreach ($port in $Porty) {
+    Spust { netsh interface portproxy delete v4tov4 listenport=$port listenaddress=0.0.0.0 } | Out-Null
+  }
+}
+
+# Firewall: porty na kameru a ping jen z VPS na konci tunelu, z nikoho jiného.
+function Nastav-Firewall {
+  Get-NetFirewallRule -Group $Skupina -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+  New-NetFirewallRule -Group $Skupina -DisplayName 'Famicura Tapo – obraz z kamery pro VPS' `
+    -Direction Inbound -Protocol TCP -LocalPort 554 -RemoteAddress $Vps -Action Allow -Profile Any | Out-Null
+  New-NetFirewallRule -Group $Skupina -DisplayName 'Famicura Tapo – události kamery pro VPS' `
+    -Direction Inbound -Protocol TCP -LocalPort 2020 -RemoteAddress $Vps -Action Allow -Profile Any | Out-Null
+  New-NetFirewallRule -Group $Skupina -DisplayName 'Famicura Tapo – ping z VPS' `
+    -Direction Inbound -Protocol ICMPv4 -IcmpType 8 -RemoteAddress $Vps -Action Allow -Profile Any | Out-Null
 }
 
 function Odeber-Tunel {
@@ -71,28 +92,33 @@ function Odeber-Tunel {
 }
 
 function Zkus-Kameru([string]$ip) {
-  Write-Host "Zkouším, jestli server vidí kameru $ip na portu 554…"
-  if (Test-NetConnection -ComputerName $ip -Port 554 -InformationLevel Quiet -WarningAction SilentlyContinue) {
-    Write-Host "Kamera $ip odpovídá." -ForegroundColor Green
-  } else {
-    Write-Host "POZOR: kamera $ip z tohoto serveru na portu 554 neodpovídá. Je zapnutá a ve stejné síti?" -ForegroundColor Yellow
+  foreach ($port in $Porty) {
+    Write-Host "Zkouším, jestli server vidí kameru $ip na portu $port…"
+    if (Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue) {
+      Write-Host "Kamera $ip na portu $port odpovídá." -ForegroundColor Green
+    } elseif ($port -eq 554) {
+      Write-Host "POZOR: kamera $ip z tohoto serveru na portu 554 neodpovídá. Je zapnutá a ve stejné síti?" -ForegroundColor Yellow
+    } else {
+      Write-Host "POZOR: kamera $ip na portu 2020 (ONVIF) neodpovídá. Události kamery pak nepůjdou; obraz ano." -ForegroundColor Yellow
+    }
   }
 }
 
 if ($Odebrat) {
   if (Test-Path $Wg) { Odeber-Tunel }
-  Spust { netsh interface portproxy delete v4tov4 listenport=554 listenaddress=0.0.0.0 } | Out-Null
+  Odeber-Predavani
   Get-NetFirewallRule -Group $Skupina -ErrorAction SilentlyContinue | Remove-NetFirewallRule
   Remove-Item -Recurse -Force $Slozka -ErrorAction SilentlyContinue
-  Write-Host 'Odebráno: tunel, předávání portu 554 i pravidla firewallu.' -ForegroundColor Green
+  Write-Host 'Odebráno: tunel, předávání portů 554 a 2020 i pravidla firewallu.' -ForegroundColor Green
   exit 0
 }
 
 if ($Kamera -and -not $Konfigurace) {
   if (-not (Platna-IP $Kamera)) { Konec "Neplatná IP adresa kamery: $Kamera" }
   Nastav-Predavani $Kamera
+  Nastav-Firewall
   Zkus-Kameru $Kamera
-  Write-Host "Port 554 teď vede na kameru $Kamera." -ForegroundColor Green
+  Write-Host "Porty 554 a 2020 teď vedou na kameru $Kamera." -ForegroundColor Green
   exit 0
 }
 
@@ -115,11 +141,13 @@ if ($Kamera) {
   if (-not (Platna-IP $Kamera)) { Konec "Neplatná IP adresa kamery: $Kamera" }
 } else { $Kamera = $m.Groups[1].Value }
 
-# Port 554 na serveru nesmí držet nic jiného než naše předávání.
-$posloucha = Get-NetTCPConnection -LocalPort 554 -State Listen -ErrorAction SilentlyContinue
-$nase = @(netsh interface portproxy show v4tov4) -match '\b554\b'
-if ($posloucha -and -not $nase) {
-  Konec "Port 554 na tomto serveru už používá jiný program (PID $($posloucha[0].OwningProcess)). Nic jsem neměnil."
+# Porty 554 a 2020 na serveru nesmí držet nic jiného než naše předávání.
+foreach ($port in $Porty) {
+  $posloucha = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+  $nase = @(netsh interface portproxy show v4tov4) -match "\b$port\b"
+  if ($posloucha -and -not $nase) {
+    Konec "Port $port na tomto serveru už používá jiný program (PID $($posloucha[0].OwningProcess)). Nic jsem neměnil."
+  }
 }
 
 Zkus-Kameru $Kamera
@@ -144,17 +172,11 @@ if (-not $bezi) { Konec "Služba tunelu $Sluzba se nespustila. Podívejte se do 
 Write-Host 'Tunel WireGuard je nainstalovaný jako služba.' -ForegroundColor Green
 
 Nastav-Predavani $Kamera
-
-# Firewall: port 554 a ping jen z VPS na konci tunelu, z nikoho jiného.
-Get-NetFirewallRule -Group $Skupina -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -Group $Skupina -DisplayName 'Famicura Tapo – obraz z kamery pro VPS' `
-  -Direction Inbound -Protocol TCP -LocalPort 554 -RemoteAddress $Vps -Action Allow -Profile Any | Out-Null
-New-NetFirewallRule -Group $Skupina -DisplayName 'Famicura Tapo – ping z VPS' `
-  -Direction Inbound -Protocol ICMPv4 -IcmpType 8 -RemoteAddress $Vps -Action Allow -Profile Any | Out-Null
+Nastav-Firewall
 
 $vypnuty = @(Get-NetFirewallProfile | Where-Object { -not $_.Enabled } | ForEach-Object { $_.Name })
 if ($vypnuty.Count) {
-  Write-Host "POZOR: firewall Windows je vypnutý (profil $($vypnuty -join ', ')). Port 554 by pak byl dostupný i z místní sítě." -ForegroundColor Yellow
+  Write-Host "POZOR: firewall Windows je vypnutý (profil $($vypnuty -join ', ')). Porty 554 a 2020 by pak byly dostupné i z místní sítě." -ForegroundColor Yellow
 }
 
 Write-Host 'Čekám na spojení s VPS…'
@@ -164,7 +186,7 @@ for ($i = 0; $i -lt 10 -and -not $ok; $i++) {
   $ok = Test-Connection -ComputerName $Vps -Count 1 -Quiet
 }
 if ($ok) {
-  Write-Host "Hotovo: tunel k VPS běží a port 554 vede na kameru $Kamera." -ForegroundColor Green
+  Write-Host "Hotovo: tunel k VPS běží a porty 554 a 2020 vedou na kameru $Kamera." -ForegroundColor Green
 } else {
   Write-Host 'Tunel je nainstalovaný, ale VPS zatím neodpovídá. Stav najdete v aplikaci WireGuard (tunel wg-famicura).' -ForegroundColor Yellow
 }

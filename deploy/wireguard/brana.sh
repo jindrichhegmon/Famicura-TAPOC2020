@@ -1,6 +1,7 @@
 #!/bin/sh
-# Brána na zařízení u kamery: z tunelu jen na RTSP kamery (TCP 554) a ping,
-# nikam jinam v místní síti a na zařízení samotné také ne.
+# Brána na zařízení u kamery: z tunelu jen na kameru, a to jen RTSP (TCP 554,
+# obraz), ONVIF (TCP 2020, události, které kamera hlásí) a ping; nikam jinam
+# v místní síti a na zařízení samotné také ne.
 #
 # Volá ho wg-quick (PostUp/PostDown) jako:  brana.sh up|down <rozhraní>
 # KAMERA a LAN_IF doplní wireguard-u-kamery.sh při instalaci.
@@ -20,6 +21,7 @@ case "$ACT" in
     sysctl -qw net.ipv4.ip_forward=1
     iptables -N "$CH" 2>/dev/null || iptables -F "$CH"
     iptables -A "$CH" -i "$WG" -o "$LAN_IF" -s "$VPS_T" -d "$KAMERA" -p tcp --dport 554 -j ACCEPT
+    iptables -A "$CH" -i "$WG" -o "$LAN_IF" -s "$VPS_T" -d "$KAMERA" -p tcp --dport 2020 -j ACCEPT
     iptables -A "$CH" -i "$WG" -o "$LAN_IF" -s "$VPS_T" -d "$KAMERA" -p icmp -j ACCEPT
     iptables -A "$CH" -i "$LAN_IF" -o "$WG" -s "$KAMERA" -d "$VPS_T" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     iptables -A "$CH" -j DROP

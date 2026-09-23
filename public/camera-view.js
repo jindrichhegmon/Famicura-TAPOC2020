@@ -131,7 +131,7 @@ export class CameraView {
    *                  onSound(view) when this one is unmuted, onClose(view)
    */
   constructor(device, template, hooks) {
-    this.device = { id: device.id, name: device.name };
+    this.device = { id: device.id, name: device.name, events: device.events || [] };   // events: what the camera reports itself
     this.hooks = hooks;
 
     this.pc = null;
@@ -193,7 +193,7 @@ export class CameraView {
   setWatch(watch) {
     this.filter.set(watch);
     this.analyzer.configure(this.filter.detectorOptions());
-    this.el.watchInfo.textContent = 'Sleduje: ' + describeWatch(this.filter.watch);
+    this.el.watchInfo.textContent = 'Sleduje: ' + describeWatch(this.filter.watch, this.device.events || []);
   }
 
   bind() {
@@ -323,28 +323,61 @@ export class CameraView {
     this.start();
   }
 
+  /*
+   * The picture is alive only while frames keep arriving. currentTime is no
+   * proof: on a live stream it runs on with nothing coming in, and the browser
+   * shows black while the card still reads "Přehrávám". So the watchdog counts
+   * decoded frames from the connection's own statistics.
+   */
+  async streamStats() {
+    const pc = this.pc;
+    const out = { frames: null, bytes: 0, lost: 0, packets: 0 };
+    if (!pc) return out;
+    try {
+      for (const s of (await pc.getStats()).values()) {
+        if (s.type !== 'inbound-rtp' || (s.kind || s.mediaType) !== 'video') continue;
+        out.frames = s.framesDecoded ?? s.framesReceived ?? null;
+        out.bytes = s.bytesReceived || 0;
+        out.lost = s.packetsLost || 0;
+        out.packets = s.packetsReceived || 0;
+      }
+    } catch { /* stats unavailable: fall back to currentTime below */ }
+    if (out.frames === null) out.frames = this.el.video.currentTime;
+    return out;
+  }
+
   startWatchdog() {
     this.stopWatchdog();
     this.watchTime = -1;
     this.stalledFor = 0;
-    this.watchdogId = setInterval(() => {
+    const id = setInterval(async () => {
       if (!this.wantStream || !this.pc) return;
-      const v = this.el.video;
-      if (v.currentTime !== this.watchTime) {  // sampling currentTime needs no events
-        this.watchTime = v.currentTime;
+      const stats = await this.streamStats();
+      if (this.watchdogId !== id) return;      // torn down while the stats were on their way
+      if (stats.frames !== this.watchTime) {
+        this.watchTime = stats.frames;
         this.stalledFor = 0;
         return;
       }
       this.stalledFor += WATCHDOG_MS;
-      if (this.stalledFor >= STALL_MS) this.reconnect('Obraz se zastavil');
+      if (this.stalledFor >= STALL_MS) this.reconnect('Obraz se zastavil', stats);
     }, WATCHDOG_MS);
+    this.watchdogId = id;
   }
 
   stopWatchdog() {
     if (this.watchdogId !== null) { clearInterval(this.watchdogId); this.watchdogId = null; }
   }
 
-  reconnect(reason) {
+  /** "za spojení přišlo 12,3 MB, 1 480 snímků, ztraceno 0 z 9 800 paketů" – a dead camera reads differently from a bad link. */
+  static describeStats(s) {
+    if (!s || typeof s.frames !== 'number') return '';
+    const cz = (n) => Math.round(n).toLocaleString('cs-CZ');
+    return `za spojení přišlo ${(s.bytes / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} MB, ` +
+      `${cz(s.frames)} snímků, ztraceno ${cz(s.lost)} z ${cz(s.packets + s.lost)} paketů`;
+  }
+
+  reconnect(reason, stats = null) {
     if (!this.wantStream || this.reconnectTimer !== null) return;
     this.stopWatchdog();
 
@@ -353,11 +386,16 @@ export class CameraView {
     const delay = Math.min(15000, 1000 * Math.pow(2, this.reconnectAttempt));
     this.reconnectAttempt++;
     this.setMsg(`${reason}. Obnovuji spojení… (pokus ${this.reconnectAttempt})`);
-    if (this.analyzing) {
-      this.analyzer.notePause();
-      this.log({ t: (Date.now() - this.analysisStartedAt) / 1000, level: 'warn',
-                 text: `${reason} – analýza pokračuje po obnovení spojení.` });
+    // A dropout goes to the log and CLB1 whether or not analysis runs: a black
+    // picture nobody wrote down would otherwise pass for a quiet room.
+    // Only the first attempt of a series: the next ones say nothing new.
+    if (this.reconnectAttempt === 1) {
+      const detail = CameraView.describeStats(stats);
+      this.log({ t: this.analyzing ? (Date.now() - this.analysisStartedAt) / 1000 : 0, kind: 'stream', level: 'warn',
+                 text: `${reason}${detail ? ` (${detail})` : ''}` +
+                       (this.analyzing ? ' – analýza pokračuje po obnovení spojení.' : ' – obnovuji spojení.') });
     }
+    if (this.analyzing) this.analyzer.notePause();
 
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
@@ -369,6 +407,8 @@ export class CameraView {
   giveUp(reason) {
     this.wantStream = false;
     this.setMsg(`${reason}. Spojení se nepodařilo obnovit.`, true);
+    this.log({ t: this.analyzing ? (Date.now() - this.analysisStartedAt) / 1000 : 0, kind: 'stream', level: 'warn',
+               text: `${reason} – spojení se po ${MAX_RECONNECTS} pokusech nepodařilo obnovit.` });
     this.el.retry.classList.remove('hide');
     if (this.recording) this.stopRecording();
     if (this.analyzing) this.stopAnalysis();

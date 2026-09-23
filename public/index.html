@@ -166,6 +166,8 @@
                    border-radius:12px;background:#fff}
   .watchRow.off .opt{opacity:.45}
   .view .watchInfo{margin:10px 0 0;font-size:.85rem}
+  .watchHead{margin:12px 0 4px;font-size:.85rem;color:#5a6b7d}
+  .watchHead:first-child{margin-top:0}
   .view .viewHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0 2px}
   .view .skel{display:flex;align-items:center;gap:8px;min-height:44px;font-size:.9rem;cursor:pointer}
   .view .skel input{width:22px;height:22px;min-height:22px;margin:0}
@@ -241,8 +243,9 @@
     <div class="c hide" id="watchCard">
       <h2>Sledované události <span id="watchFor" class="muted"></span></h2>
       <p class="muted" style="margin:0 0 6px">
-        Co má analýza u této kamery hlásit do logu a do CLB1. Prázdné hodiny znamenají celý den;
-        začátek větší než konec platí přes půlnoc (22:00–06:00).
+        Co se u této kamery hlásí do logu a do CLB1: události z analýzy obrazu v prohlížeči a události,
+        které rozpozná kamera sama (ty zapisuje server i bez otevřeného prohlížeče). Prázdné hodiny
+        znamenají celý den; začátek větší než konec platí přes půlnoc (22:00–06:00).
       </p>
       <div id="watchRows"></div>
       <div class="row" style="margin-top:12px">
@@ -344,7 +347,7 @@
 import { fmtClock, createLogEntry, boundFrom, filterLog, logToCsv, csvFilename } from '/analyzer.js';
 import { MAX_INTERVALS, isWithin, dueRecordings, fmtInterval, collectIntervals } from '/schedule.js';
 import { CameraView } from '/camera-view.js';
-import { WATCH_EVENTS, normalizeWatch, fmtAfter } from '/watch.js';
+import { WATCH_EVENTS, normalizeWatch, fmtAfter, cameraEventLabel } from '/watch.js';
 import { WakeKeeper } from '/wake.js';
 import { isSupported as folderSupported, pickFolder, loadHandle, saveHandle,
          forgetHandle, ensurePermission, writeFile } from '/folder.js';
@@ -391,6 +394,20 @@ function kv(rows) {
 
 /* ---------- status ---------- */
 
+// What the server hears from the camera itself, and whether it hears at all.
+function describeEventsState(c) {
+  if (c.eventsOk === null || c.eventsOk === undefined) {
+    return '<span class="muted">server neodebírá – kamera není v cameras.json (deploy/vps-kamera.sh)</span>';
+  }
+  const umi = (c.events || []).map((e) => cameraEventLabel(e.kind, e.label).toLowerCase()).join(', ');
+  let out = c.eventsOk
+    ? `<span class="ok">odebírám</span> <span class="muted">${esc(umi || 'kamera nehlásí nic')}</span>`
+    : `<span class="bad">neodebírám</span>${c.eventsError ? `<br><span class="muted">${esc(c.eventsError)}</span>` : ''}`;
+  if (c.eventsLast) out += `<br><span class="muted">naposledy ${esc(fmtClock(new Date(c.eventsLast.at)))} – ${esc(c.eventsLast.text)}</span>`;
+  if (c.clbError) out += `<br><span class="bad">zápis do CLB1 se nedaří: ${esc(c.clbError)}</span>`;
+  return out;
+}
+
 function renderDiag(s) {
   const rows = [];
   const g = s.go2rtc || {};
@@ -402,6 +419,7 @@ function renderDiag(s) {
     rows.push([`Kamera ${esc(c.name)}`, c.online
       ? '<span class="ok">posílá obraz</span>'
       : `<span class="bad">neodpovídá</span>${c.detail ? `<br><span class="muted">${esc(c.detail)}</span>` : ''}`]);
+    rows.push([`Události kamery ${esc(c.name)}`, describeEventsState(c)]);
   }
   if (g.ok && !(s.cameras || []).length) rows.push(['Kamery', '<span class="bad">v go2rtc.yaml není žádná</span>']);
 
@@ -439,6 +457,7 @@ async function refreshStatus() {
   renderDiag(body);
   loadSchedules();
   loadWatches();
+  startEventPolling();
   initFolder().catch(() => {});
 }
 
@@ -460,6 +479,11 @@ $('loginForm').onsubmit = async (e) => {
 /* ---------- devices ---------- */
 
 let knownDevices = [];
+
+// The button carries id and name; the rest (what the camera can report) is in the list.
+function deviceById(id, name) {
+  return knownDevices.find((d) => d.id === id) || { id, name };
+}
 
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -521,19 +545,19 @@ $('loadDevices').onclick = async () => {
         <button class="go icon" data-id="${esc(d.id)}" data-name="${esc(d.name)}"
                 aria-label="Živý obraz – ${esc(d.name)}" title="Živý obraz">${CAMERA_ICON}</button>
         <button class="sched sec" data-id="${esc(d.id)}" data-name="${esc(d.name)}">Plán</button>
-        <button class="watch sec" data-id="${esc(d.id)}" data-name="${esc(d.name)}">Analýza</button>
+        <button class="watch sec" data-id="${esc(d.id)}" data-name="${esc(d.name)}">Události</button>
       </div>
     </div>`; }).join('');
 
   $('views').classList.remove('hide');
   $('devices').querySelectorAll('button.go').forEach((b) => {
-    b.onclick = () => openCamera({ id: b.dataset.id, name: b.dataset.name });
+    b.onclick = () => openCamera(deviceById(b.dataset.id, b.dataset.name));
   });
   $('devices').querySelectorAll('button.sched').forEach((b) => {
-    b.onclick = () => openSchedule({ id: b.dataset.id, name: b.dataset.name });
+    b.onclick = () => openSchedule(deviceById(b.dataset.id, b.dataset.name));
   });
   $('devices').querySelectorAll('button.watch').forEach((b) => {
-    b.onclick = () => openWatch({ id: b.dataset.id, name: b.dataset.name });
+    b.onclick = () => openWatch(deviceById(b.dataset.id, b.dataset.name));
   });
 
   markActiveCamera();
@@ -854,6 +878,34 @@ async function shareRecording(rec) {
   } catch (e) { /* the user dismissed the sheet */ }
 }
 
+/* ---------- what the camera reports itself ---------- */
+
+/*
+ * The server subscribes to the camera (ONVIF) and writes its detections to
+ * CLB1 on its own; the page only asks every few seconds what came in since
+ * its last look and shows it in the log with the analysis events.
+ */
+const EVENTS_POLL_MS = 5000;
+let eventsSince = 0;
+let eventsTimer = null;
+
+async function pollCameraEvents() {
+  const { res, body } = await api('/api/events?since=' + eventsSince);
+  if (!res.ok) return;
+  eventsSince = body.cas || eventsSince;
+  // On the first look the server may hold hours of history; the page shows the tail.
+  for (const ev of (body.events || []).slice(-100)) {
+    appendLog({ at: new Date(ev.at), t: 0, kind: ev.kind, level: ev.level, text: ev.text,
+                device: { id: ev.kameraId, name: ev.kameraNazev }, server: true });
+  }
+}
+
+function startEventPolling() {
+  if (eventsTimer !== null) return;
+  pollCameraEvents().catch(() => {});
+  eventsTimer = setInterval(() => pollCameraEvents().catch(() => {}), EVENTS_POLL_MS);
+}
+
 /* ---------- analysis log ---------- */
 
 // One log for every camera; each line carries the camera it came from.
@@ -865,7 +917,8 @@ function appendLog(ev) {
   const entry = { ...ev, at: ev.at || new Date() };
   logEntries.push(entry);
 
-  clbSend({
+  // What the camera reported the server has already written to CLB1.
+  if (!entry.server) clbSend({
     typ: 'udalost',
     cas: entry.at.toISOString(),
     kameraId: entry.device?.id || null,
@@ -879,6 +932,7 @@ function appendLog(ev) {
   if (logEntries.length > MAX_LOG_ENTRIES) logEntries.shift();
 
   $('logEmpty').classList.add('hide');
+  if (entry.server) $('logCard').classList.remove('hide');
   $('log').prepend(createLogEntry(document, entry)); // newest first: no scrolling on a phone
   while ($('log').children.length > 200) $('log').lastElementChild.remove();
 }
@@ -1015,28 +1069,51 @@ async function loadWatches() {
   for (const v of views.values()) v.setWatch(watchFor(v.device.id));
 }
 
-function renderWatchRows(watch) {
-  $('watchRows').innerHTML = '';
-  for (const e of WATCH_EVENTS) {
-    const r = watch[e.kind];
-    const row = document.createElement('div');
-    row.className = 'watchRow' + (r.enabled ? '' : ' off');
-    row.dataset.kind = e.kind;
-    const after = e.after
-      ? `<label class="opt">déle než <select class="after" aria-label="${esc(e.label)} – déle než">
-           ${e.after.map((s) => `<option value="${s}" ${s === r.after ? 'selected' : ''}>${fmtAfter(s)}</option>`).join('')}
-         </select></label>`
-      : '';
-    row.innerHTML = `
-      <label class="on"><input type="checkbox" class="enabled" ${r.enabled ? 'checked' : ''}> ${esc(e.label)}</label>
-      ${after}
-      <span class="opt hours">jen
-        <input class="from" type="time" value="${esc(r.from)}" aria-label="${esc(e.label)} – od">
-        –
-        <input class="to" type="time" value="${esc(r.to)}" aria-label="${esc(e.label)} – do">
-      </span>`;
-    row.querySelector('.enabled').onchange = (ev) => row.classList.toggle('off', !ev.target.checked);
-    $('watchRows').append(row);
+function watchRow(kind, label, r, afterChoices) {
+  const row = document.createElement('div');
+  row.className = 'watchRow' + (r.enabled ? '' : ' off');
+  row.dataset.kind = kind;
+  const after = afterChoices
+    ? `<label class="opt">déle než <select class="after" aria-label="${esc(label)} – déle než">
+         ${afterChoices.map((s) => `<option value="${s}" ${s === r.after ? 'selected' : ''}>${fmtAfter(s)}</option>`).join('')}
+       </select></label>`
+    : '';
+  row.innerHTML = `
+    <label class="on"><input type="checkbox" class="enabled" ${r.enabled ? 'checked' : ''}> ${esc(label)}</label>
+    ${after}
+    <span class="opt hours">jen
+      <input class="from" type="time" value="${esc(r.from)}" aria-label="${esc(label)} – od">
+      –
+      <input class="to" type="time" value="${esc(r.to)}" aria-label="${esc(label)} – do">
+    </span>`;
+  row.querySelector('.enabled').onchange = (ev) => row.classList.toggle('off', !ev.target.checked);
+  return row;
+}
+
+function watchHead(text) {
+  const p = document.createElement('p');
+  p.className = 'watchHead';
+  p.textContent = text;
+  return p;
+}
+
+// The camera part lists only what this camera said it can report: a C200
+// gets motion, a C220 gets person, vehicle and pet as well.
+function renderWatchRows(watch, device) {
+  const box = $('watchRows');
+  box.innerHTML = '';
+  box.append(watchHead('Z analýzy obrazu v prohlížeči (jen když je kamera otevřená):'));
+  for (const e of WATCH_EVENTS) box.append(watchRow(e.kind, e.label, watch[e.kind], e.after));
+
+  const cam = device?.events || [];
+  if (!cam.length) {
+    box.append(watchHead('Kamera zatím nenahlásila, co umí sama rozpoznat – stav je v Diagnostice.'));
+    return;
+  }
+  box.append(watchHead('Rozpozná kamera sama (zapisuje server, i bez otevřeného prohlížeče):'));
+  for (const e of cam) {
+    const r = watch[e.kind] || { enabled: true, from: '', to: '' };
+    box.append(watchRow(e.kind, cameraEventLabel(e.kind, e.label), r, null));
   }
 }
 
@@ -1057,7 +1134,7 @@ function openWatch(device) {
   watchEditFor = device;
   $('watchFor').textContent = '– ' + device.name;
   $('watchCard').classList.remove('hide');
-  renderWatchRows(watchFor(device.id));
+  renderWatchRows(watchFor(device.id), device);
   $('watchMsg').textContent = '';
   $('watchCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

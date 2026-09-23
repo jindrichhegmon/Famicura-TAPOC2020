@@ -64,6 +64,7 @@ sleep 2
 KOD=$($SSH "$VPS" "curl -s -o /dev/null -m 15 -w '%{http_code}' 'http://127.0.0.1:1984/api/stream.mp4?src=$ID'" || true)
 if [ "$KOD" = "200" ]; then
   echo "Kamera $ID posílá obraz. Otevřete https://famicuratapo.95-216-201-2.sslip.io"
+  echo "Události, které kamera hlásí sama (port 2020), uvidíte v Diagnostice do půl minuty."
 else
   echo "Kamera $ID neodpovídá (go2rtc vrátil ${KOD:-nic}). Zkontrolujte:"
   echo "  tunel:  ssh -i $KEY $VPS \"wg show wg-famicura && ping -c 2 $IP\""

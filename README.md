@@ -1,7 +1,8 @@
 # Famicura Tapo
 
 Kamera TP-Link Tapo → Famicura: živý obraz v prohlížeči, nahrávání, živá
-analýza pádů, plán nahrávání, sledované události a zápis do CLB1.
+analýza pádů, plán nahrávání, sledované události (z analýzy i to, co kamera
+rozpozná sama) a zápis do CLB1.
 
 Vzniklo jako klon [Famicura-Ring](https://github.com/jindrichhegmon/famicura-ring).
 Přehrávač, analýza, nahrávání, plány, sledované události, hlídání spořiče
@@ -21,17 +22,59 @@ kamera Tapo ──RTSP──▶ Windows server ══ WireGuard ══▶ VPS: g
   Samo se tunelem WireGuard připojí k VPS a obraz z kamery mu předá. Na
   routeru se nic neotevírá. Ke kameře se VPS jinak dostat nemůže, protože
   router zvenku dovnitř nic nepustí a Tapo nemá cloud.
-  * **Windows server** (tahle instalace): předává jen svůj port 554 na
-    kameru (`netsh interface portproxy`). VPS kameru ani nic jiného v síti
-    nevidí (`deploy/wireguard/u-kamery-windows.ps1`).
-  * **Raspberry Pi / Linux**: pouští z tunelu jen RTSP kamery a ping
-    (`deploy/wireguard/brana.sh`).
+  * **Windows server** (tahle instalace): předává na kameru jen své porty
+    554 (obraz, RTSP) a 2020 (události, které kamera hlásí, ONVIF) přes
+    `netsh interface portproxy`. VPS kameru ani nic jiného v síti nevidí
+    (`deploy/wireguard/u-kamery-windows.ps1`).
+  * **Raspberry Pi / Linux**: pouští z tunelu jen tyto dva porty kamery a
+    ping (`deploy/wireguard/brana.sh`).
 * **go2rtc** na VPS převádí RTSP na WebRTC. Kamera posílá H.264 a G.711,
   obojí prohlížeč umí přímo, takže se nic nepřekódovává. API go2rtc
   poslouchá jen na `127.0.0.1`. Veřejný je jen port 8555 pro šifrovaná
   média.
 * **server.mjs** na VPS obsluhuje stránku, přihlášení heslem Famicura,
   WebRTC (předává nabídku go2rtc), plány, sledované události a zápis do CLB1.
+  Zároveň odebírá z kamery události, které rozpozná sama (níže).
+
+### Události, které hlásí kamera sama
+
+Kamera Tapo má vlastní rozpoznávání: pohyb, u novějších modelů osobu,
+vozidlo, zvíře, překročení čáry, zakrytí nebo posunutí kamery. Hlásí je
+přes ONVIF na svém portu 2020 a v `GetEventProperties` řekne, které z nich
+umí. Server na VPS se ke kameře přihlásí účtem kamery (tím samým, co
+go2rtc), založí odběr (PullPoint) a drží ho trvale: každou událost projde
+nastavením Sledovaných událostí té kamery a zapíše do CLB1 sám, **i když
+nikdo nemá otevřený prohlížeč**. Stránka se každých pár sekund zeptá, co
+přišlo, a ukáže to v logu vedle událostí z analýzy.
+
+V kartě **Události** u kamery jsou dvě části: „Z analýzy obrazu v
+prohlížeči“ (pád, dlouhé ležení… – běží jen s otevřenou kamerou) a
+„Rozpozná kamera sama“ – tam je přesně to, co kamera nahlásila, že umí:
+C200 jen pohyb, C210/C220 i osobu, vozidlo a zvíře. Každou událost lze
+vypnout nebo omezit hodinami (v čase pečovatelů, Europe/Prague, ne serveru).
+Bez nastavení je vše zapnuté celý den. Stejná detekce do 5 s po sobě je
+jedna událost; „Initialized“ (stav při založení odběru) není událost.
+
+Diagnostika ukazuje u každé kamery, zda odběr běží, co kamera umí, poslední
+událost a případnou chybu zápisu do CLB1. Když kamera na portu 2020
+neodpovídá (starší skript na Windows serveru předával jen 554), obraz jde
+dál, jen události chybí – stav to řekne.
+
+Firmware Tapo 1.3.4 a 1.3.5 (jaro 2023) události ONVIF neposílal; novější i
+starší ano. Kdyby diagnostika hlásila odběr v pořádku, ale žádná událost
+nechodila, zkontrolujte v aplikaci Tapo, že je detekce zapnutá, a verzi
+firmwaru.
+
+### Když obraz vypadne
+
+Živý přenos hlídá počet skutečně dekódovaných snímků, ne čas přehrávání –
+ten u živého přenosu běží dál, i když z kamery nic nechodí, a prohlížeč
+ukazuje černou plochu. Po 7 s bez snímku karta řekne „Obraz se zastavil“
+a spojení se obnoví (až 8 pokusů, pak tlačítko Zkusit znovu). Do logu i
+CLB1 jde jeden řádek za výpadek s tím, kolik dat, snímků a ztracených
+paketů do té doby přišlo: hodně dat a 0 ztracených paketů, pak najednou
+nic, znamená, že přestala posílat kamera (nebo tunel); rostoucí ztráty
+ukazují na špatnou linku k prohlížeči.
 
 ### Prohlížeč
 
@@ -100,8 +143,8 @@ Na serveru se nastaví jen tři věci:
 | | |
 |---|---|
 | služba WireGuard `wg-famicura` | tunel k VPS, naběhne i po restartu. Tunelem jde jen provoz pro VPS (10.77.0.1), běžný provoz serveru do internetu se nemění. |
-| `netsh interface portproxy` 0.0.0.0:554 → kamera | předává obraz z kamery |
-| firewall „Famicura Tapo“ | port 554 a ping povolené **jen z VPS** (10.77.0.1) |
+| `netsh interface portproxy` 0.0.0.0:554 a :2020 → kamera | předává obraz z kamery a její události |
+| firewall „Famicura Tapo“ | porty 554, 2020 a ping povolené **jen z VPS** (10.77.0.1) |
 
 Změna IP kamery: `.\u-kamery-windows.ps1 -Kamera 192.168.1.60`.
 Odebrání všeho: `.\u-kamery-windows.ps1 -Odebrat` (obojí jako správce,
@@ -190,8 +233,10 @@ založil `node scripts/init-db.mjs`.
   WebRTC, kterého se CSP netýká. Ověřeno v Electronu: požadavek na
   `odml.pa.googleapis.com/v1/log` prohlížeč odmítl, model, WASM ani API
   CSP nezablokovalo.
-* Z tunelu je dostupná jen kamera, jen na RTSP a ping. U Windows serveru
-  jen jeho port 554, přesměrovaný na kameru. Ověřeno testy na modelu sítě:
+* Z tunelu je dostupná jen kamera, jen RTSP (554), ONVIF (2020) a ping.
+  U Windows serveru jen tyto dva jeho porty, přesměrované na kameru.
+  Přihlášení k ONVIF je digest (heslo se neposílá), ale bez šifrování –
+  proto jde jen tunelem. Ověřeno testy na modelu sítě:
   u Linuxu jsou jiný port kamery, jiný počítač i zařízení samotné
   zablokované. U Windows přišel obraz přes předávání TCP, i když VPS
   kameru napřímo vůbec neviděl.
@@ -199,15 +244,25 @@ založil `node scripts/init-db.mjs`.
 ## Vývoj a testy
 
 ```
-npm test          # server, přihlášení, go2rtc klient, kamery, plány, analýza
+npm test          # server, přihlášení, go2rtc klient, kamery, plány, analýza, ONVIF
 ```
+
+Události kamery se testují proti falešné kameře ONVIF (`test/fake-onvif.mjs`):
+ověřuje digest WS-Security i s hodinami o minuty jinak, hlásí témata jako
+C210/C220 nebo C200, svou adresu uvádí v místní síti (aby se ověřilo
+přepsání na adresu tunelu) a posílá zprávy z fronty včetně „Initialized“ a
+času zaseknutého na 1970.
 
 Celou cestu obrazu jsme ověřili naostro: falešná kamera (ffmpeg, RTSP
 s heslem, H.264 Main + G.711), dál go2rtc 1.9.14 s konfigurací z
 `scripts/set-camera.mjs`, pak `server.mjs` a nakonec prohlížeč s H.264
 (Electron/Chrome 152). Test zahrnoval přihlášení, diagnostiku, živý obraz
-1280×720 se zvukem, nahrávání, analýzu, plán, sledované události a
-prohlížeč bez H.264 a bez WebGL. Pravidla brány na Linuxu i předávání
+1280×720 se zvukem, nahrávání, analýzu, plán, sledované události, události
+z falešné kamery ONVIF (v editoru je přesně to, co kamera umí; vypnutý
+pohyb se nezapíše, osoba ano, bez otevřené analýzy), výpadek obrazu
+(kamera zabitá za běhu: do 10 s „Obraz se zastavil“ s údaji o přijatých
+datech, po návratu kamery „Spojení obnoveno“) a prohlížeč bez H.264 a
+bez WebGL. Pravidla brány na Linuxu i předávání
 přes Windows server (prostá TCP proxy jako `netsh portproxy`) jsme ověřili
 na modelu sítě se síťovými jmennými prostory. Skript pro Windows prošel
 parserem PowerShellu 7.4. Na skutečném Windows ani se skutečnou kamerou

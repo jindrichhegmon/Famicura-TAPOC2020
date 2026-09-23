@@ -7,7 +7,7 @@
 #
 # linux:   zařízení u kamery (Raspberry Pi…) posílá provoz dál ke kameře,
 #          VPS má do tunelu cestu i na IP kamery.
-# windows: Windows server u kamery předává jen port 554 (netsh portproxy);
+# windows: Windows server u kamery předává jen porty 554 a 2020 (netsh portproxy);
 #          VPS se připojuje na server (10.77.0.2) a kameru samotnou nevidí.
 # Pro zkoušku bez systému: DRY=1 WG_DIR=/tmp/wg bash vps-setup.sh 192.168.1.50 windows
 set -euo pipefail
@@ -44,7 +44,7 @@ SITE_PRIV=$(wg genkey)
 SITE_PUB=$(printf '%s' "$SITE_PRIV" | wg pubkey)
 
 if [ "$REZIM" = windows ]; then
-  POPIS="# Windows server u kamery. Předává jen svůj port 554 na kameru $KAMERA;
+  POPIS="# Windows server u kamery. Předává jen své porty 554 a 2020 na kameru $KAMERA;
 # kameru ani nic jiného v síti VPS nevidí."
   ALLOWED="$NET.2/32"
 else

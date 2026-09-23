@@ -36,11 +36,21 @@ const { dbs } = await import('./src/db.mjs');
 const { createGo2rtc } = await import('./src/go2rtc.mjs');
 const { createStore } = await import('./src/store.mjs');
 const { BEZPECNOSTNI_HLAVICKY } = await import('./src/csp.mjs');
-const handle = createHandler({
-  dbs,
-  go2rtc: createGo2rtc(),
-  store: createStore(process.env.DATA_DIR || path.join(ROOT, 'data')),
-});
+const { createCameraEvents } = await import('./src/udalosti-kamer.mjs');
+const store = createStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
+
+// The camera's own detections: the server subscribes to each camera in
+// cameras.json (the same account go2rtc uses) and writes them to CLB1 itself.
+const KAMERY = process.env.CAMERAS_FILE || path.join(ROOT, 'cameras.json');
+const udalosti = createCameraEvents({ store, dbs, kamery: async () => {
+  try { return JSON.parse(await readFile(KAMERY, 'utf8')); }
+  catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+} });
+udalosti.start().catch((e) => console.error('[famicura-tapo] události kamer:', e.message));
+// pm2 stops with SIGINT: cancel the subscriptions, the camera keeps only a few.
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { udalosti.stop().finally(() => process.exit(0)); });
+
+const handle = createHandler({ dbs, go2rtc: createGo2rtc(), store, udalosti });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 const MAX_BODY = 256 * 1024;

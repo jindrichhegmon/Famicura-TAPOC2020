@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WATCH_EVENTS, defaultWatch, normalizeWatch, isDefaultWatch, describeWatch, WatchFilter }
+import { WATCH_EVENTS, defaultWatch, normalizeWatch, isDefaultWatch, describeWatch, WatchFilter, cameraEventAllowed, cameraEventLabel }
   from '../public/watch.js';
 import { LiveAnalyzer } from '../public/analyzer.js';
 
@@ -129,4 +129,43 @@ test('odchod ze záběru až po nastavené době', () => {
 test('delší ležení se hlásí v minutách', () => {
   const e = run({ longLieS: 120 }, seconds(130, lying())).find((x) => x.kind === 'longlie');
   assert.match(e.text, /přibližně 2 min\./);
+});
+
+/* ---------- co hlásí kamera sama ---------- */
+
+test('události kamery: bez nastavení jsou zapnuté; výchozí se neukládá, změna ano', () => {
+  const r = normalizeWatch({ 'cam-motion': { enabled: true }, 'cam-person': { enabled: false }, 'cam-pet': { from: '22:00', to: '06:00' } });
+  assert.equal(r.ok, true);
+  assert.equal('cam-motion' in r.watch, false, 'zapnuté bez hodin je výchozí');
+  assert.deepEqual(r.watch['cam-person'], { enabled: false, from: '', to: '' });
+  assert.deepEqual(r.watch['cam-pet'], { enabled: true, from: '22:00', to: '06:00' });
+  assert.equal(isDefaultWatch({ 'cam-motion': { enabled: true } }), true);
+  assert.equal(isDefaultWatch({ 'cam-motion': { enabled: false } }), false);
+  // A camera-declared kind outside the catalogue is kept too; junk is not.
+  assert.equal('cam-babycry' in normalizeWatch({ 'cam-babycry': { enabled: false } }).watch, true);
+  assert.equal('cam-Špatně' in normalizeWatch({ 'cam-Špatně': { enabled: false } }).watch, false);
+  assert.equal(normalizeWatch({ 'cam-motion': { from: '22:00', to: '' } }).ok, false);
+  assert.match(normalizeWatch({ 'cam-motion': { from: '22:00', to: '' } }).error, /^Pohyb:/);
+});
+
+test('události kamery: filtr podle nastavení a hodin', () => {
+  const w = normalizeWatch({ 'cam-person': { enabled: false }, 'cam-motion': { from: '22:00', to: '06:00' } }).watch;
+  assert.equal(cameraEventAllowed(w, 'cam-person', at(12)), false);
+  assert.equal(cameraEventAllowed(w, 'cam-motion', at(12)), false);
+  assert.equal(cameraEventAllowed(w, 'cam-motion', at(23)), true);
+  assert.equal(cameraEventAllowed(w, 'cam-motion', at(5, 59)), true);
+  assert.equal(cameraEventAllowed(w, 'cam-tamper', at(12)), true, 'bez nastavení ano');
+  assert.equal(cameraEventAllowed(undefined, 'cam-tamper', at(12)), true);
+});
+
+test('popis karty jmenuje i to, co hlásí kamera', () => {
+  const umi = [{ kind: 'cam-motion' }, { kind: 'cam-person' }, { kind: 'cam-babycry', label: 'BabyCry (hlásí kamera)' }];
+  const w = normalizeWatch({ 'cam-person': { enabled: false }, 'cam-motion': { from: '22:00', to: '06:00' } }).watch;
+  const d = describeWatch(w, umi);
+  assert.match(d, /kamera hlásí: pohyb \(22:00–06:00\), babycry \(hlásí kamera\)$/);
+  assert.doesNotMatch(d, /osoba/);
+  assert.doesNotMatch(describeWatch(w, []), /kamera hlásí/);
+  assert.equal(cameraEventLabel('cam-tamper'), 'Zakrytí nebo posunutí kamery');
+  assert.equal(cameraEventLabel('cam-babycry', 'BabyCry (hlásí kamera)'), 'BabyCry (hlásí kamera)');
+  assert.equal(cameraEventLabel('cam-neco'), 'neco');
 });

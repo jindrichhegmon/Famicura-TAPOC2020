@@ -44,7 +44,7 @@ function handler(over = {}) {
   const db = mockDbs(over.radky);
   const go2rtc = over.go2rtc || fakeGo2rtc();
   const store = over.store || memStore();
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter }), ...db, go2rtc, store };
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null }), ...db, go2rtc, store };
 }
 
 test('health nepotřebuje přihlášení a vrací verzi', async () => {
@@ -219,7 +219,8 @@ test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
     const b = await (await h(req('GET', '/api/status', { cookies: cookie() }))).json();
     assert.equal(b.go2rtc.ok, true);
     assert.equal(b.go2rtc.version, '1.9.14');
-    assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', online: false, detail: 'dial tcp: i/o timeout' }]);
+    assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', events: [], online: false, detail: 'dial tcp: i/o timeout',
+      eventsOk: null, eventsError: null, eventsLast: null, clbError: null }]);
   } finally { delete process.env.CAMERA_NAMES; }
 });
 
@@ -228,7 +229,7 @@ test('seznam kamer bere názvy z CAMERA_NAMES, jinak ID', async () => {
   try {
     const { h } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
     const b = await (await h(req('GET', '/api/devices', { cookies: cookie() }))).json();
-    assert.deepEqual(b.devices, [{ id: 'tapoc2020', name: 'Pokoj 12 – okno' }, { id: 'druha', name: 'druha' }]);
+    assert.deepEqual(b.devices, [{ id: 'tapoc2020', name: 'Pokoj 12 – okno', events: [] }, { id: 'druha', name: 'druha', events: [] }]);
   } finally { delete process.env.CAMERA_NAMES; }
   assert.deepEqual(cameraNames('a=Jméno = s rovnítkem;;  b = B '), { a: 'Jméno = s rovnítkem', b: 'B' });
 });
@@ -300,4 +301,51 @@ test('prázdné hodnoty jsou NULL, ne prázdné řetězce', () => {
 test('neplatné číslo neprojde jako text', () => {
   const p = pripravit({ typ: 'nahravka', od: new Date(), velikostB: '1; DROP TABLE x' });
   assert.equal(p.params.velikostB, null);
+});
+
+/* ---------- události, které hlásí kamera ---------- */
+
+function fakeUdalosti() {
+  const list = [
+    { at: '2026-09-23T10:00:00.000Z', prijato: 1000, kameraId: 'tapoc2020', kameraNazev: 'Pokoj', kind: 'cam-motion', label: 'Pohyb', level: 'info', text: 'Kamera hlásí: pohyb.' },
+    { at: '2026-09-23T10:00:05.000Z', prijato: 6000, kameraId: 'tapoc2020', kameraNazev: 'Pokoj', kind: 'cam-person', label: 'Osoba', level: 'info', text: 'Kamera hlásí: osoba.' },
+  ];
+  return {
+    stav: () => ({ tapoc2020: { ok: true, error: null, events: [{ kind: 'cam-motion', label: null }, { kind: 'cam-person', label: null }], posledni: list[1], clbChyba: null } }),
+    nedavne: (since) => list.filter((r) => r.prijato > since),
+  };
+}
+
+test('kamery nesou, co umí hlásit; stav říká, zda odběr běží', async () => {
+  const { h } = handler({ udalosti: fakeUdalosti() });
+  const d = await (await h(req('GET', '/api/devices', { cookies: cookie() }))).json();
+  assert.deepEqual(d.devices[0].events.map((e) => e.kind), ['cam-motion', 'cam-person']);
+  const s = await (await h(req('GET', '/api/status', { cookies: cookie() }))).json();
+  assert.equal(s.cameras[0].eventsOk, true);
+  assert.equal(s.cameras[0].eventsLast.kind, 'cam-person');
+  // Without a subscriber (no cameras.json) the page must not claim anything.
+  const { h: h2 } = handler();
+  const s2 = await (await h2(req('GET', '/api/status', { cookies: cookie() }))).json();
+  assert.equal(s2.cameras[0].eventsOk, null);
+  assert.deepEqual(s2.cameras[0].events, []);
+});
+
+test('události kamery: od daného času, jen po přihlášení', async () => {
+  const { h } = handler({ udalosti: fakeUdalosti() });
+  assert.equal((await h(req('GET', '/api/events'))).status, 401);
+  const all = await (await h(req('GET', '/api/events', { cookies: cookie() }))).json();
+  assert.equal(all.events.length, 2);
+  assert.ok(all.cas > 0);
+  const some = await (await h(req('GET', '/api/events?since=1000', { cookies: cookie() }))).json();
+  assert.deepEqual(some.events.map((e) => e.kind), ['cam-person']);
+  const none = await (await h(req('GET', '/api/events', { cookies: cookie() }))).json;
+  assert.ok(none);
+});
+
+test('nastavení událostí kamery se ukládá spolu s analýzou', async () => {
+  const { h, store } = handler();
+  const put = (watch) => h(req('PUT', '/api/watch', { cookies: cookie(), body: { deviceId: 'tapoc2020', watch } }));
+  assert.equal((await put({ 'cam-motion': { enabled: false }, fall: { enabled: true } })).status, 200);
+  assert.deepEqual(store.data.watch.tapoc2020['cam-motion'], { enabled: false, from: '', to: '' });
+  assert.equal((await put({ 'cam-motion': { from: '22:00', to: '' } })).status, 400);
 });

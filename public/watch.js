@@ -23,6 +23,27 @@ export const WATCH_EVENTS = [
 
 const BY_KIND = Object.fromEntries(WATCH_EVENTS.map((e) => [e.kind, e]));
 
+/*
+ * What the camera itself reports (ONVIF). Which of these a camera has, the
+ * camera says (src/onvif.mjs); the server filters and writes them, so this
+ * side only decides and describes. A kind outside the list is one the camera
+ * declared under its own name: it keeps the label the camera gave it.
+ */
+export const CAMERA_EVENTS = [
+  { kind: 'cam-motion',    label: 'Pohyb',                        level: 'info' },
+  { kind: 'cam-person',    label: 'Osoba',                        level: 'info' },
+  { kind: 'cam-vehicle',   label: 'Vozidlo',                      level: 'info' },
+  { kind: 'cam-pet',       label: 'Zvíře',                        level: 'info' },
+  { kind: 'cam-linecross', label: 'Překročení čáry',              level: 'warn' },
+  { kind: 'cam-tamper',    label: 'Zakrytí nebo posunutí kamery', level: 'warn' },
+];
+const BY_CAM = Object.fromEntries(CAMERA_EVENTS.map((e) => [e.kind, e]));
+export const CAMERA_KIND = /^cam-[a-z0-9]{1,30}$/;
+
+export const isCameraKind = (kind) => CAMERA_KIND.test(String(kind || ''));
+export const cameraEventLabel = (kind, label) => BY_CAM[kind]?.label || label || String(kind).slice(4);
+export const cameraEventLevel = (kind) => BY_CAM[kind]?.level || 'info';
+
 /** Everything on, all day, original durations – how analysis always behaved. */
 export function defaultWatch() {
   const w = {};
@@ -68,15 +89,49 @@ export function normalizeWatch(raw) {
     }
     watch[e.kind] = out;
   }
+
+  // Camera-reported events: only the ones the caller set, and only when they
+  // differ from the default (on, all day), so an untouched camera stays default.
+  for (const kind of Object.keys(raw)) {
+    if (!isCameraKind(kind)) continue;
+    const r = raw[kind];
+    if (r === null || r === undefined) continue;
+    const label = cameraEventLabel(kind);
+    if (typeof r !== 'object') return { ok: false, error: `${label}: neplatné nastavení.` };
+    const from = String(r.from ?? '').trim();
+    const to = String(r.to ?? '').trim();
+    if (!!from !== !!to) return { ok: false, error: `${label}: vyplňte začátek i konec hodin, nebo ani jedno.` };
+    if (from && (toMinutes(from) === null || toMinutes(to) === null)) {
+      return { ok: false, error: `${label}: čas musí být ve tvaru HH:MM.` };
+    }
+    if (from && from === to) return { ok: false, error: `${label}: začátek a konec se nesmí rovnat.` };
+    const enabled = r.enabled !== false;
+    if (enabled && !from) continue;
+    watch[kind] = { enabled, from, to };
+  }
   return { ok: true, watch };
+}
+
+/**
+ * Whether a camera-reported event is wanted now. No setting means yes: the
+ * camera's own detections are on until someone turns them off.
+ */
+export function cameraEventAllowed(watch, kind, date = new Date()) {
+  const r = watch?.[kind];
+  if (!r) return true;
+  return r.enabled !== false && (!r.from || isWithin({ from: r.from, to: r.to }, date));
 }
 
 export function isDefaultWatch(w) {
   return JSON.stringify(normalizeWatch(w).watch) === JSON.stringify(defaultWatch());
 }
 
-/** One line for the camera card: what this camera is watching for. */
-export function describeWatch(w) {
+/**
+ * One line for the camera card: what this camera is watching for. cameraEvents
+ * is what the camera itself can report ([{ kind, label }]); those are on
+ * unless a setting says otherwise.
+ */
+export function describeWatch(w, cameraEvents = []) {
   const parts = [];
   for (const e of WATCH_EVENTS) {
     const r = w?.[e.kind];
@@ -86,7 +141,14 @@ export function describeWatch(w) {
     if (r.from) text += ` (${r.from}–${r.to})`;
     parts.push(text);
   }
-  return parts.length ? parts.join(' · ') : 'nic – analýza nic nehlásí';
+  const cam = [];
+  for (const e of cameraEvents) {
+    const r = w?.[e.kind];
+    if (r && r.enabled === false) continue;
+    cam.push(cameraEventLabel(e.kind, e.label).toLowerCase() + (r?.from ? ` (${r.from}–${r.to})` : ''));
+  }
+  const text = parts.length ? parts.join(' · ') : 'nic – analýza nic nehlásí';
+  return cam.length ? `${text} · kamera hlásí: ${cam.join(', ')}` : text;
 }
 
 /**

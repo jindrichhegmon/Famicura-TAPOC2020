@@ -7,7 +7,8 @@
  *   GET  /api/devices           → kamery z go2rtc
  *   POST /api/stream            { deviceId, sdpOffer } → { sdpAnswer } (WebRTC přes go2rtc)
  *   GET|PUT /api/schedules      plány nahrávání
- *   GET|PUT /api/watch          sledované události analýzy
+ *   GET|PUT /api/watch          sledované události analýzy i kamery
+ *   GET  /api/events?since=ms   události, které nahlásila kamera (odebírá server)
  *   GET  /api/diag              počty řádků v CLB1
  *   POST /api/clb               { typ: 'udalost' | 'nahravka', ... } → zápis do CLB1
  *
@@ -53,10 +54,12 @@ function health() {
     spusteno: process.env.APP_SPUSTENO || '' };
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter() }) {
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null }) {
+  // Each camera carries what it can report itself, so the page offers only that.
   async function kamery() {
     const names = cameraNames();
-    return (await go2rtc.streams()).map((id) => ({ id, name: names[id] || id }));
+    const st = udalosti ? udalosti.stav() : {};
+    return (await go2rtc.streams()).map((id) => ({ id, name: names[id] || id, events: st[id]?.events || [] }));
   }
 
   async function telo(req) {
@@ -95,7 +98,11 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter() })
           out.cameras = await kamery();
           // Camera checks run side by side; each gives up after a few seconds.
           const probes = await Promise.all(out.cameras.map((c) => go2rtc.probe(c.id)));
-          out.cameras = out.cameras.map((c, i) => ({ ...c, online: probes[i].ok, detail: probes[i].detail }));
+          const st = udalosti ? udalosti.stav() : {};
+          out.cameras = out.cameras.map((c, i) => ({ ...c, online: probes[i].ok, detail: probes[i].detail,
+            // null: the server does not subscribe at all (no cameras.json)
+            eventsOk: st[c.id] ? st[c.id].ok : null, eventsError: st[c.id]?.error || null,
+            eventsLast: st[c.id]?.posledni || null, clbError: st[c.id]?.clbChyba || null }));
         } catch (e) {
           out.go2rtc = { ok: false, error: e.message };
         }
@@ -145,6 +152,12 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter() })
         if (isDefaultWatch(r.watch)) delete all[deviceId]; else all[deviceId] = r.watch;
         await store.uloz('watch', all);
         return json({ ok: true, watch: r.watch });
+      }
+
+      if (m === 'GET' && path === '/api/events') {
+        const since = Number(url.searchParams.get('since')) || 0;
+        const cas = Date.now();                 // before the list, so nothing slips between
+        return json({ ok: true, cas, events: udalosti ? udalosti.nedavne(since) : [] });
       }
 
       if (m === 'GET' && path === '/api/diag') {
