@@ -9,15 +9,18 @@
   Firewall pouští port 554 a ping jen z VPS na konci tunelu (10.77.0.1).
   Tunel nemění běžné směrování serveru do internetu.
 
-  Spouštět v PowerShellu jako správce, ve složce se staženými soubory:
+  Spouštět v PowerShellu otevřeném jako správce, ve složce se soubory:
 
-    powershell -ExecutionPolicy Bypass -File .\u-kamery-windows.ps1 -Konfigurace .\famicura-wg-u-kamery.conf
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+    .\u-kamery-windows.ps1 -Konfigurace .\famicura-wg-u-kamery.conf
 
   Změna IP adresy kamery (bez nového tunelu):
-    powershell -ExecutionPolicy Bypass -File .\u-kamery-windows.ps1 -Kamera 192.168.1.60
+    .\u-kamery-windows.ps1 -Kamera 192.168.1.60
 
   Odebrání všeho, co skript nastavil:
-    powershell -ExecutionPolicy Bypass -File .\u-kamery-windows.ps1 -Odebrat
+    .\u-kamery-windows.ps1 -Odebrat
+
+  Skript jde spustit opakovaně; co už je nastavené, jen znovu nastaví.
 #>
 param(
   [string]$Konfigurace,
@@ -30,6 +33,18 @@ $Slozka  = Join-Path $env:ProgramData 'Famicura'
 $Wg      = Join-Path $env:ProgramFiles 'WireGuard\wireguard.exe'
 $Vps     = '10.77.0.1'
 $Skupina = 'Famicura Tapo'
+$Sluzba  = "WireGuardTunnel`$$Tunel"     # jak služba tunelu jmenuje WireGuard
+
+# wireguard.exe a netsh píšou i běžná hlášení na stderr. Windows PowerShell 5.1
+# z nich při ErrorActionPreference=Stop dělá chybu, která skript ukončí, a to
+# i přes 2>$null. Proto se volají tady: rozhoduje návratový kód, ne stderr.
+function Spust([scriptblock]$prikaz) {
+  $puvodni = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { $vystup = & $prikaz 2>&1 | ForEach-Object { "$_" } }
+  finally { $ErrorActionPreference = $puvodni }
+  return [pscustomobject]@{ Kod = $LASTEXITCODE; Text = (@($vystup) -join ' ').Trim() }
+}
 
 function Konec([string]$text) { Write-Host $text -ForegroundColor Red; exit 1 }
 function Platna-IP([string]$ip) { return $ip -match '^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$' -and ($ip.Split('.') | Where-Object { [int]$_ -gt 255 }).Count -eq 0 }
@@ -43,8 +58,16 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 function Nastav-Predavani([string]$ip) {
   Set-Service iphlpsvc -StartupType Automatic      # služba, která portproxy obsluhuje
   Start-Service iphlpsvc
-  netsh interface portproxy delete v4tov4 listenport=554 listenaddress=0.0.0.0 2>$null | Out-Null
-  netsh interface portproxy add v4tov4 listenport=554 listenaddress=0.0.0.0 connectport=554 connectaddress=$ip | Out-Null
+  Spust { netsh interface portproxy delete v4tov4 listenport=554 listenaddress=0.0.0.0 } | Out-Null
+  $r = Spust { netsh interface portproxy add v4tov4 listenport=554 listenaddress=0.0.0.0 connectport=554 connectaddress=$ip }
+  if ($r.Kod -ne 0) { Konec "Předávání portu 554 se nepodařilo nastavit: $($r.Text)" }
+}
+
+function Odeber-Tunel {
+  if (Get-Service -Name $Sluzba -ErrorAction SilentlyContinue) {
+    Spust { & $Wg /uninstalltunnelservice $Tunel } | Out-Null
+    for ($i = 0; $i -lt 10 -and (Get-Service -Name $Sluzba -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+  }
 }
 
 function Zkus-Kameru([string]$ip) {
@@ -57,8 +80,8 @@ function Zkus-Kameru([string]$ip) {
 }
 
 if ($Odebrat) {
-  if (Test-Path $Wg) { & $Wg /uninstalltunnelservice $Tunel 2>$null | Out-Null }
-  netsh interface portproxy delete v4tov4 listenport=554 listenaddress=0.0.0.0 2>$null | Out-Null
+  if (Test-Path $Wg) { Odeber-Tunel }
+  Spust { netsh interface portproxy delete v4tov4 listenport=554 listenaddress=0.0.0.0 } | Out-Null
   Get-NetFirewallRule -Group $Skupina -ErrorAction SilentlyContinue | Remove-NetFirewallRule
   Remove-Item -Recurse -Force $Slozka -ErrorAction SilentlyContinue
   Write-Host 'Odebráno: tunel, předávání portu 554 i pravidla firewallu.' -ForegroundColor Green
@@ -107,11 +130,18 @@ $cil = Join-Path $Slozka "$Tunel.conf"
 Copy-Item -Force $Konfigurace $cil
 icacls $Slozka /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
 
-# Tunel jako služba WireGuard: naběhne sám i po restartu serveru.
-& $Wg /uninstalltunnelservice $Tunel 2>$null | Out-Null
-Start-Sleep -Seconds 2
-& $Wg /installtunnelservice $cil
-Start-Sleep -Seconds 3
+# Tunel jako služba WireGuard: naběhne sám i po restartu serveru. Starou
+# službu (z dřívějšího spuštění) nejdřív odebrat, jinak by instalace selhala.
+Odeber-Tunel
+$r = Spust { & $Wg /installtunnelservice $cil }
+if ($r.Kod -ne 0) { Konec "Tunel se nepodařilo nainstalovat: $($r.Text)" }
+$bezi = $false
+for ($i = 0; $i -lt 15 -and -not $bezi; $i++) {
+  Start-Sleep -Seconds 1
+  $bezi = (Get-Service -Name $Sluzba -ErrorAction SilentlyContinue).Status -eq 'Running'
+}
+if (-not $bezi) { Konec "Služba tunelu $Sluzba se nespustila. Podívejte se do aplikace WireGuard na záložku Log." }
+Write-Host 'Tunel WireGuard je nainstalovaný jako služba.' -ForegroundColor Green
 
 Nastav-Predavani $Kamera
 

@@ -74,10 +74,13 @@ Na VPS nastaví rozhraní `wg-famicura` (UDP 51821) a sem uloží
 1. Nainstalujte **WireGuard pro Windows** z https://www.wireguard.com/install/.
 2. Zkopírujte na server `famicura-wg-u-kamery.conf` a
    `deploy/wireguard/u-kamery-windows.ps1`, třeba přes vzdálenou plochu.
-3. Ve složce s nimi otevřete **PowerShell jako správce** a spusťte:
+3. Otevřete **PowerShell jako správce**, přejděte do složky s nimi a spusťte:
    ```
-   powershell -ExecutionPolicy Bypass -File .\u-kamery-windows.ps1 -Konfigurace .\famicura-wg-u-kamery.conf
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+   .\u-kamery-windows.ps1 -Konfigurace .\famicura-wg-u-kamery.conf
    ```
+   Skript spouštějte přímo, ne přes další `powershell …`. Výstup vnořeného
+   PowerShellu prochází kódovou stránkou konzole a čeština se rozsype.
 4. Soubor `famicura-wg-u-kamery.conf` smažte na serveru i na Macu.
    Obsahuje soukromý klíč a je v `.gitignore`.
 
@@ -91,7 +94,8 @@ Na serveru se nastaví jen tři věci:
 
 Změna IP kamery: `.\u-kamery-windows.ps1 -Kamera 192.168.1.60`.
 Odebrání všeho: `.\u-kamery-windows.ps1 -Odebrat` (obojí jako správce,
-s `powershell -ExecutionPolicy Bypass -File`).
+po `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force`).
+Skript jde spustit opakovaně. Co už je nastavené, jen znovu nastaví.
 
 **Místo Windows serveru Raspberry Pi nebo jiný Linux:** vynechte
 `--windows`. Skript pak vypíše příkazy pro `deploy/wireguard/u-kamery.sh`.

@@ -33,8 +33,9 @@ Na Windows serveru (ve stejné síti jako kamera):
   2. Zkopírujte na server tyto dva soubory (např. přes vzdálenou plochu):
        $OUT
        deploy/wireguard/u-kamery-windows.ps1
-  3. Ve složce s nimi otevřete PowerShell jako správce a spusťte:
-       powershell -ExecutionPolicy Bypass -File .${BS}u-kamery-windows.ps1 -Konfigurace .${BS}$OUT
+  3. Otevřete PowerShell jako správce, přejděte do složky s nimi a spusťte:
+       Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+       .${BS}u-kamery-windows.ps1 -Konfigurace .${BS}$OUT
   4. Soubor $OUT pak smažte na serveru i tady:  rm $OUT
 
 Ověření z VPS:
