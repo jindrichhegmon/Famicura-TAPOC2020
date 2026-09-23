@@ -190,6 +190,19 @@ test('po deseti chybách z jedné adresy se na chvíli nedá zkoušet, jiná adr
   assert.equal((await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' }, ip: '1.2.3.4' }))).status, 200);
 });
 
+test('celkový strop: ani zkoušení z mnoha adres najednou neobejde limit', async () => {
+  let t = 1_000_000;
+  const { h } = handler({ limiter: createLimiter({ now: () => t }) });
+  for (let i = 0; i < 50; i++) {
+    const r = await h(req('POST', '/api/login', { body: { password: 'x' }, ip: `10.0.0.${i}` }));
+    assert.equal(r.status, 401, `pokus ${i}`);
+  }
+  const r = await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' }, ip: '9.9.9.9' }));
+  assert.equal(r.status, 429, 'po 50 chybách celkem se zavře i pro ostatní');
+  t += 15 * 60 * 1000;
+  assert.equal((await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' }, ip: '9.9.9.9' }))).status, 200);
+});
+
 /* ---------- kamery a stream ---------- */
 
 test('stav bez přihlášení neprozradí kamery', async () => {

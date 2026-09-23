@@ -182,6 +182,14 @@ založil `node scripts/init-db.mjs`.
   WebRTC. Média jsou šifrovaná (DTLS-SRTP).
 * go2rtc má vypnuté vlastní servery RTSP, RTMP a SRTP a jeho API je
   jen na localhostu.
+* Stránka posílá hlavičku Content-Security-Policy (`src/csp.mjs`). Prohlížeč
+  smí z ní mluvit jen s naším serverem a stáhnout model a knihovnu MediaPipe
+  (cdn.jsdelivr.net, storage.googleapis.com). Nic jiného neodejde: MediaPipe
+  se po ukončení kamery pokouší poslat statistiku použití na
+  `odml.pa.googleapis.com` a prohlížeč to kvůli CSP odmítne. Obraz jde přes
+  WebRTC, kterého se CSP netýká. Ověřeno v Electronu: požadavek na
+  `odml.pa.googleapis.com/v1/log` prohlížeč odmítl, model, WASM ani API
+  CSP nezablokovalo.
 * Z tunelu je dostupná jen kamera, jen na RTSP a ping. U Windows serveru
   jen jeho port 554, přesměrovaný na kameru. Ověřeno testy na modelu sítě:
   u Linuxu jsou jiný port kamery, jiný počítač i zařízení samotné

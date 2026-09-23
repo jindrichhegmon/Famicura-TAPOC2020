@@ -35,6 +35,7 @@ const { createHandler } = await import('./src/api.mjs');
 const { dbs } = await import('./src/db.mjs');
 const { createGo2rtc } = await import('./src/go2rtc.mjs');
 const { createStore } = await import('./src/store.mjs');
+const { BEZPECNOSTNI_HLAVICKY } = await import('./src/csp.mjs');
 const handle = createHandler({
   dbs,
   go2rtc: createGo2rtc(),
@@ -66,9 +67,10 @@ const server = http.createServer(async (req, res) => {
     const file = path.join(PUBLIC, rel === '' ? 'index.html' : rel);
     if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
     const data = await readFile(file);
+    // The login page is on the open internet: no framing, no sniffing, and a
+    // CSP that keeps the browser from talking to anyone but us (src/csp.mjs).
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache',
-      // The login page is on the open internet now: no framing, no sniffing.
-      'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin' });
+      ...BEZPECNOSTNI_HLAVICKY });
     res.end(data);
   } catch (e) {
     if (e && e.code === 'ENOENT') { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Nenalezeno'); }
