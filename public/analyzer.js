@@ -346,9 +346,14 @@ export function fmtDate(date) {
  * Builds one log row. Event text originates from this module, but it is still
  * written with textContent so a future source cannot inject markup.
  */
+/** Where a log entry came from: the camera's own detector or the analysis in the browser. */
+export function eventSource(ev) {
+  return /^cam-/.test(ev.kind || "") ? "kamera" : "analýza";
+}
+
 export function createLogEntry(doc, ev) {
   const li = doc.createElement("li");
-  if (ev.level === "warn") li.className = "warn";
+  li.className = (ev.level === "warn" ? "warn " : "") + (eventSource(ev) === "kamera" ? "src-cam" : "src-ai");
 
   const ts = doc.createElement("span");
   ts.className = "ts";
@@ -363,12 +368,16 @@ export function createLogEntry(doc, ev) {
   const msg = doc.createElement("span");
   msg.textContent = ev.text;
   body.append(msg);
-  if (ev.device?.name) {
-    const cam = doc.createElement("small");
-    cam.className = "cam";
-    cam.textContent = ev.device.name;
-    body.append(cam);
-  }
+  // The source tag tells a caregiver at a glance what wrote the line: the
+  // camera writes on its own around the clock, the analysis only while open.
+  const cam = doc.createElement("small");
+  cam.className = "cam";
+  const tag = doc.createElement("span");
+  tag.className = "srcTag";
+  tag.textContent = eventSource(ev);
+  cam.append(tag);
+  if (ev.device?.name) cam.append(" · " + ev.device.name);
+  body.append(cam);
 
   li.append(ts, body);
   return li;
@@ -411,7 +420,9 @@ function csvCell(value) {
 const KIND_LABEL = {
   state: "poloha", fall: "možný pád", longlie: "dlouhé ležení",
   missing: "ztráta detekce", found: "návrat detekce", abrupt: "prudká změna",
-  stream: "spojení"
+  stream: "spojení",
+  "cam-motion": "pohyb", "cam-person": "osoba", "cam-vehicle": "vozidlo", "cam-pet": "zvíře",
+  "cam-smart": "chytrá detekce", "cam-linecross": "překročení čáry", "cam-tamper": "zakrytí kamery"
 };
 
 /**
@@ -419,12 +430,13 @@ const KIND_LABEL = {
  * a BOM so diacritics survive the round trip.
  */
 export function logToCsv(entries) {
-  const head = ["Datum", "Čas", "Od začátku analýzy", "Kamera", "ID kamery", "Typ", "Závažnost", "Popis"];
+  const head = ["Datum", "Čas", "Od začátku analýzy", "Kamera", "ID kamery", "Zdroj", "Typ", "Závažnost", "Popis"];
   const rows = entries.map((e) => {
     const at = e.at instanceof Date ? e.at : new Date(e.at);
     return [
       fmtDate(at), fmtClock(at), fmtTime(e.t),
       e.device?.name || "", e.device?.id || "",
+      eventSource(e),
       KIND_LABEL[e.kind] || e.kind || "",
       e.level === "warn" ? "varování" : "informace",
       e.text

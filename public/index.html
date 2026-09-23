@@ -141,6 +141,10 @@
   #log .ts small{color:#8494a5;font-weight:400;font-size:.78rem}
   #log .msg{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
   #log .cam{color:#5a6b7d;font-size:.78rem}
+  /* who wrote the line: the camera (24/7, server) or the analysis (browser) */
+  #log .srcTag{display:inline-block;padding:1px 7px;border-radius:8px;font-weight:700;font-size:.72rem;
+               letter-spacing:.02em;text-transform:uppercase;background:#e8eef4;color:#3d4f61}
+  #log li.src-cam .srcTag{background:#e3f0ff;color:#0b4f9c}
 
   .schedRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
             padding:10px 0;border-bottom:1px solid #eef2f6}
