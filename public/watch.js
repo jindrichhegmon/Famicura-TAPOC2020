@@ -34,6 +34,7 @@ export const CAMERA_EVENTS = [
   { kind: 'cam-person',    label: 'Osoba',                        level: 'info' },
   { kind: 'cam-vehicle',   label: 'Vozidlo',                      level: 'info' },
   { kind: 'cam-pet',       label: 'Zvíře',                        level: 'info' },
+  { kind: 'cam-smart',     label: 'Chytrá detekce (vozidlo, zvíře…)', level: 'info' },
   { kind: 'cam-linecross', label: 'Překročení čáry',              level: 'warn' },
   { kind: 'cam-tamper',    label: 'Zakrytí nebo posunutí kamery', level: 'warn' },
 ];

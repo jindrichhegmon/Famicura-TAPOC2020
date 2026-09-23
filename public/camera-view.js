@@ -135,7 +135,10 @@ export class CameraView {
     this.hooks = hooks;
 
     this.pc = null;
+    this.ownStream = null;            // tracks collected when the answer names no stream
     this.sessionUrl = null;
+    this.soundOn = false;             // the viewer's wish; survives a reconnect
+    this.playFailureLogged = false;
     this.wantStream = false;          // the stream stays wanted until Ukončit
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
@@ -212,6 +215,10 @@ export class CameraView {
     e.record.onclick = () => (this.recording ? this.stopRecording() : this.startRecording());
     e.analyze.onclick = () => (this.analyzing ? this.stopAnalysis() : this.startAnalysis());
     e.sound.onclick = () => this.setMuted(!e.video.muted);
+    // "Klepněte na obraz": a real gesture, which is what a refused play() needs.
+    const tap = () => { if (e.video.srcObject && e.video.paused) this.play(); };
+    e.video.addEventListener('click', tap);
+    e.canvas.addEventListener('click', tap);
     e.retry.onclick = () => this.retry();
     e.stop.onclick = (ev) => {
       if (ev && ev.isTrusted === false) return;   // never end a stream from script
@@ -259,16 +266,18 @@ export class CameraView {
       pc.addEventListener('track', (e) => {
         if (this.pc !== pc) return;           // a stale connection must not hijack the player
         const v = this.el.video;
-        // An SDP answer without msid gives no stream on the event, so build one
-        // from the track rather than assigning undefined and showing nothing.
-        v.srcObject = e.streams[0] || new MediaStream([e.track]);
-        // iOS Safari will not start playback on its own in every case; muted
-        // playback is always allowed, so offer sound as a separate tap.
-        v.play().then(() => {
-          this.setMsg(this.reconnectAttempt ? 'Spojení obnoveno, přehrávám.' : 'Přehrávám.');
-          this.reconnectAttempt = 0;
-          this.el.sound.classList.remove('hide');
-        }).catch(() => this.setMsg('Klepněte na obraz pro spuštění.'));
+        // Audio and video arrive as two events on one stream. Assigning that
+        // stream a second time restarts the element and aborts the play() in
+        // flight, so it is assigned once. An SDP answer without msid gives no
+        // stream at all: then the tracks are collected into one of our own.
+        let stream = e.streams[0];
+        if (!stream) {
+          stream = this.ownStream || (this.ownStream = new MediaStream());
+          stream.addTrack(e.track);
+        }
+        if (v.srcObject === stream) return;
+        v.srcObject = stream;
+        this.play();
       });
 
       pc.addEventListener('connectionstatechange', () => {
@@ -315,6 +324,35 @@ export class CameraView {
       if (this.wantStream) this.reconnect(`Nepodařilo se připojit (${e.message})`);
       else { this.setMsg(e.message, true); await this.teardown({ keepIntent: false }); }
     }
+  }
+
+  /*
+   * Playback starts muted: that is allowed everywhere, while sound after an
+   * automatic reconnect is not a user's gesture and Safari or Chrome may refuse
+   * it, leaving a black picture. Sound comes back once the picture runs. If the
+   * browser still refuses, the card says which error, and a tap on the picture
+   * tries again from a real gesture.
+   */
+  async play() {
+    const v = this.el.video;
+    const wantSound = this.soundOn;
+    v.muted = true;
+    try {
+      await v.play();
+    } catch (e) {
+      if (!v.srcObject) return;               // torn down meanwhile
+      this.setMsg(`Prohlížeč obraz nespustil (${e.name}). Klepněte na obraz.`, true);
+      if (!this.playFailureLogged) {
+        this.playFailureLogged = true;
+        this.log({ t: 0, kind: 'stream', level: 'warn', text: `Prohlížeč obraz nespustil (${e.name}: ${e.message}).` });
+      }
+      return;
+    }
+    this.playFailureLogged = false;
+    this.setMsg(this.reconnectAttempt ? 'Spojení obnoveno, přehrávám.' : 'Přehrávám.');
+    this.reconnectAttempt = 0;
+    this.el.sound.classList.remove('hide');
+    if (wantSound) this.setMuted(false);
   }
 
   retry() {
@@ -439,6 +477,7 @@ export class CameraView {
       } catch { /* go2rtc drops the session when the peer closes anyway */ }
     }
     if (this.pc) { this.pc.close(); this.pc = null; }
+    this.ownStream = null;
 
     const v = this.el.video;
     v.srcObject = null;
@@ -470,7 +509,7 @@ export class CameraView {
     if (!this.wantStream) return;
     if (!this.pc) { this.reconnectAttempt = 0; this.start({ isReconnect: true }); return; }
     const v = this.el.video;
-    if (v.srcObject && v.paused) v.play().catch(() => {});
+    if (v.srcObject && v.paused) this.play();
   }
 
   /* ---------- sound ---------- */
@@ -484,8 +523,14 @@ export class CameraView {
 
   setMuted(muted) {
     const v = this.el.video;
+    this.soundOn = !muted;
     v.muted = muted;
-    if (!muted) { v.play().catch(() => {}); this.hooks.onSound(this); }
+    if (!muted) {
+      this.hooks.onSound(this);
+      // A browser that will not unmute without a gesture pauses instead: keep
+      // the picture and let the icon say sound is off.
+      v.play().catch(() => { v.muted = true; this.soundOn = false; this.setSoundIcon(true); });
+    }
     this.setSoundIcon(muted);
   }
 

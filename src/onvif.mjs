@@ -52,6 +52,7 @@ export const DETEKCE = [
   { topic: 'CellMotionDetector/Motion',       item: 'IsMotion',    kind: 'cam-motion' },
   { topic: 'VideoSource/MotionAlarm',         item: 'State',       kind: 'cam-motion' },
   { topic: 'PeopleDetector/People',           item: 'IsPeople',    kind: 'cam-person' },
+  { topic: 'TPSmartEventDetector/TPSmartEvent', item: 'IsTPSmartEvent', kind: 'cam-smart' },   // how a real C2xx declares it
   { topic: 'TPSmartEventDetector/TPSmartEvent', item: 'IsVehicle', kind: 'cam-vehicle' },
   { topic: 'TPSmartEventDetector/TPSmartEvent', item: 'IsPet',     kind: 'cam-pet' },
   { topic: 'LineCrossDetector/LineCross',     item: 'IsLineCross', kind: 'cam-linecross' },
