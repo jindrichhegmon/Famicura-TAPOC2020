@@ -1,3 +1,9 @@
 node_modules/
 .env
 verze.json
+data/
+famicura-wg-u-kamery.conf
+*.conf.tmp
+cameras.json
+go2rtc.yaml
+bin/

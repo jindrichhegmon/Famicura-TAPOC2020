@@ -1,9 +1,8 @@
 /*
- * Recording schedules: validation shared by the API.
+ * Plány nahrávání: kontrola toho, co posílá editor, před uložením.
  *
- * A window is a daily time range. from > to means it crosses midnight, which
- * is what a night watch actually needs, so it is supported rather than
- * rejected.
+ * Interval je denní rozsah. Začátek větší než konec znamená přes půlnoc,
+ * což noční hlídání potřebuje, takže je to platný tvar, ne chyba.
  */
 
 export const MAX_INTERVALS = 5;

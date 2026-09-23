@@ -7,10 +7,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Famicura Ring">
+<meta name="apple-mobile-web-app-title" content="Famicura Tapo">
 <meta name="format-detection" content="telephone=no">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23106fd5' stroke-width='5'/%3E%3C/svg%3E">
-<title>Famicura Ring</title>
+<title>Famicura Tapo</title>
 <style>
   :root{
     color-scheme:light;
@@ -193,8 +193,8 @@
 </head>
 <body>
 <div class="w">
-  <h1>Famicura Ring</h1>
-  <p class="muted">Testovací integrace Ring &rarr; Famicura</p>
+  <h1>Famicura Tapo</h1>
+  <p class="muted">Kamery Tapo &rarr; Famicura</p>
 
   <div class="c" id="loginCard">
     <h2>Přihlášení</h2>
@@ -328,11 +328,6 @@
       <div id="diag"></div>
     </div>
 
-    <div class="c">
-      <h2>Události a log</h2>
-      <button id="loadEvents" class="sec wide">Načíst log</button>
-      <pre id="events" style="margin-top:12px">Zatím nenačteno.</pre>
-    </div>
   </div>
 </div>
 
@@ -347,7 +342,7 @@ import { isSupported as folderSupported, pickFolder, loadHandle, saveHandle,
 
 const $ = (id) => document.getElementById(id);
 
-// Device names and IDs come back from Ring, so never trust them as markup.
+// Camera names come from the server's configuration; never trust them as markup.
 function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -381,11 +376,6 @@ function markActiveCamera() {
   });
 }
 
-function shortId(id) {
-  const v = String(id ?? '');
-  return v.length > 26 ? v.slice(0, 18) + '…' + v.slice(-6) : v;
-}
-
 function kv(rows) {
   return rows.map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join('');
 }
@@ -394,34 +384,32 @@ function kv(rows) {
 
 function renderDiag(s) {
   const rows = [];
-  const yn = (v) => v ? '<span class="ok">ano</span>' : '<span class="bad">ne</span>';
+  const g = s.go2rtc || {};
+  rows.push(['Převodník go2rtc', g.ok
+    ? `<span class="ok">běží</span>${g.version ? ` <span class="muted">${esc(g.version)}</span>` : ''}`
+    : `<span class="bad">neodpovídá</span>${g.error ? `<br><span class="muted">${esc(g.error)}</span>` : ''}`]);
 
-  rows.push(['Ring účet propojen', yn(s.linked)]);
-  if (s.account_id) rows.push(['Account ID', `<code title="${esc(s.account_id)}">${esc(shortId(s.account_id))}</code>`]);
-  if (s.account_id_source) rows.push(['Zdroj account_id', `<code>${esc(s.account_id_source)}</code>`]);
-  if (s.linked_at) rows.push(['Propojeno', new Date(s.linked_at).toLocaleString('cs-CZ')]);
-  if (s.token_expires_at) rows.push(['Token platný do', new Date(s.token_expires_at).toLocaleString('cs-CZ')]);
-  rows.push(['Nevyzvednuté tokeny', String(s.unclaimed_tokens ?? '–')]);
-
-  for (const t of s.tokens || []) {
-    rows.push([
-      `Token <span class="muted">${esc(t.status)}</span>`,
-      `<code title="${esc(t.account_id)}">${esc(shortId(t.account_id))}</code><br>`
-      + `<span class="muted">${esc(t.account_id_source || '?')} · ${t.candidates} kandidát(ů)`
-      + `${t.expired ? ' · <span class="bad">vypršel</span>' : ''}</span>`
-    ]);
+  for (const c of s.cameras || []) {
+    rows.push([`Kamera ${esc(c.name)}`, c.online
+      ? '<span class="ok">posílá obraz</span>'
+      : `<span class="bad">neodpovídá</span>${c.detail ? `<br><span class="muted">${esc(c.detail)}</span>` : ''}`]);
   }
-
-  rows.push(['Netlify Blobs', s.blobs === 'reachable'
-    ? '<span class="ok">dostupné</span>' : '<span class="bad">nedostupné</span>']);
+  if (g.ok && !(s.cameras || []).length) rows.push(['Kamery', '<span class="bad">v go2rtc.yaml není žádná</span>']);
 
   const missing = s.missing || [];
   rows.push(['Konfigurace', missing.length
     ? `<span class="bad">chybí: ${esc(missing.join(', '))}</span>`
     : '<span class="ok">kompletní</span>']);
-  if (s.error) rows.push(['Chyba', `<span class="bad">${esc(s.error)}</span>`]);
+  rows.push(['CLB1', '<span id="diagClb" class="muted">zjišťuji…</span>']);
 
   $('diag').innerHTML = kv(rows);
+
+  // A separate request: the SQL server may take its time, the rest need not wait.
+  api('/api/diag').then(({ res, body }) => {
+    $('diagClb').innerHTML = res.ok
+      ? `<span class="ok">připojeno</span> <span class="muted">${esc(body.log)} událostí, ${esc(body.nahravky)} nahrávek</span>`
+      : `<span class="bad">${esc(body.error || res.status)}</span>`;
+  }).catch(() => { $('diagClb').innerHTML = '<span class="bad">nedostupné</span>'; });
 }
 
 async function refreshStatus() {
@@ -432,7 +420,7 @@ async function refreshStatus() {
     $('app').classList.add('hide');
     const missing = body.missing || [];
     if (missing.length) {
-      $('loginMsg').innerHTML = `<span class="bad">V Netlify chybí proměnné: ${esc(missing.join(', '))}</span>`;
+      $('loginMsg').innerHTML = `<span class="bad">Na serveru chybí nastavení: ${esc(missing.join(', '))}</span>`;
     }
     return;
   }
@@ -501,7 +489,7 @@ $('loadDevices').onclick = async () => {
     return;
   }
   if (!body.devices || !body.devices.length) {
-    $('devices').textContent = 'Ring nevrátil žádné zařízení.';
+    $('devices').textContent = 'V převodníku go2rtc není nastavená žádná kamera.';
     $('views').classList.add('hide');
     return;
   }
@@ -509,7 +497,7 @@ $('loadDevices').onclick = async () => {
   // Same markup for both views; the layout is the container's class.
   knownDevices = body.devices;
 
-  // The Ring id is machine detail. It is a column in the log export, which is
+  // The camera id is machine detail. It is a column in the log export, which is
   // where it is useful; on the card it only produced a huge hover tooltip.
   $('devices').innerHTML = body.devices.map((d) => {
     const planned = (schedules[d.id] || []).length;
@@ -659,9 +647,9 @@ function clbSend(row) {
 }
 
 /*
- * Netlify posílá /api/clb na VPS. Za jedním Caddy tam stojí víc aplikací, a
- * když pro náš hostname chybí blok v /etc/caddy/Caddyfile, odpoví soused –
- * jeho "Neznámá cesta." pak v prohlížeči vypadá jako chyba zápisu do SQL.
+ * Stránka i /api/clb běží na VPS za Caddy. Tam stojí vedle sebe víc aplikací
+ * a když pro náš hostname chybí blok v /etc/caddy/Caddyfile nebo míří na cizí
+ * port, odpoví soused – jeho chyba pak vypadá jako chyba zápisu do SQL.
  * Při první neúspěšné dávce se proto zeptáme /api/clb-health, kdo na té
  * adrese je; odpověď platí, dokud zápis zase nezačne procházet.
  */
@@ -671,15 +659,15 @@ async function clbKdoOdpovida() {
   if (clbKdo) return clbKdo;
   try {
     const { res, body } = await api('/api/clb-health');
-    if (body && body.aplikace === 'famicura-ring') {
+    if (body && body.aplikace === 'famicura-tapo') {
       clbKdo = { nas: true, text: '' };
     } else if (res.ok) {
-      clbKdo = { nas: false, text: 'Na adrese VPS odpovídá aplikace, která se nehlásí jako famicura-ring:'
-        + ' nasaďte znovu ./deploy/vps-deploy.sh, nebo opravte blok famicuraring… v /etc/caddy/Caddyfile.' };
+      clbKdo = { nas: false, text: 'Na adrese VPS odpovídá aplikace, která se nehlásí jako famicura-tapo:'
+        + ' nasaďte znovu ./deploy/vps-deploy.sh, nebo opravte blok famicuratapo… v /etc/caddy/Caddyfile.' };
     } else {
       const co = body && body.error ? ` – ${body.error}` : '';
       clbKdo = { nas: false, text: `Na adrese VPS odpovídá jiná aplikace (HTTP ${res.status}${co}):`
-        + ' v /etc/caddy/Caddyfile chybí blok famicuraring… nebo míří na cizí port.' };
+        + ' v /etc/caddy/Caddyfile chybí blok famicuratapo… nebo míří na cizí port.' };
     }
   } catch {
     clbKdo = { nas: false, text: 'Server na VPS neodpovídá: zkontrolujte pm2 a Caddy.' };
@@ -852,7 +840,7 @@ function addRecording({ blob, device, from, to, ext, zdroj }) {
 async function shareRecording(rec) {
   const file = new File([rec.blob], rec.name, { type: rec.blob.type });
   try {
-    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'Famicura Ring' });
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'Famicura Tapo' });
     else rec.link.click();                  // this recording, not the newest one
   } catch (e) { /* the user dismissed the sheet */ }
 }
@@ -1138,17 +1126,6 @@ async function schedulerTick() {
 }
 
 setInterval(() => { schedulerTick().catch(() => {}); }, SCHED_TICK_MS);
-
-/* ---------- events ---------- */
-
-$('loadEvents').onclick = async () => {
-  $('events').textContent = 'Načítám…';
-  const { res, body } = await api('/api/events');
-  if (!res.ok) { $('events').textContent = body.error || ('HTTP ' + res.status); return; }
-  $('events').textContent = body.items && body.items.length
-    ? JSON.stringify(body.items, null, 2)
-    : 'Zatím žádné události ani diagnostické záznamy.';
-};
 
 refreshStatus();
 </script>

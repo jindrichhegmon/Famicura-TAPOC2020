@@ -33,7 +33,16 @@ process.env.APP_SPUSTENO = new Date().toISOString();
 
 const { createHandler } = await import('./src/api.mjs');
 const { dbs } = await import('./src/db.mjs');
-const handle = createHandler({ dbs });
+const { createGo2rtc } = await import('./src/go2rtc.mjs');
+const { createStore } = await import('./src/store.mjs');
+const handle = createHandler({
+  dbs,
+  go2rtc: createGo2rtc(),
+  store: createStore(process.env.DATA_DIR || path.join(ROOT, 'data')),
+});
+
+// An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
+const MAX_BODY = 256 * 1024;
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
@@ -42,7 +51,12 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
-      const chunks = []; for await (const c of req) chunks.push(c);
+      const chunks = []; let size = 0;
+      for await (const c of req) {
+        size += c.length;
+        if (size > MAX_BODY) { res.writeHead(413, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Příliš velký požadavek'); return; }
+        chunks.push(c);
+      }
       const r = await handle(new Request(url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }));
       res.writeHead(r.status, Object.fromEntries(r.headers));
       res.end(Buffer.from(await r.arrayBuffer()));
@@ -52,7 +66,9 @@ const server = http.createServer(async (req, res) => {
     const file = path.join(PUBLIC, rel === '' ? 'index.html' : rel);
     if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
     const data = await readFile(file);
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache',
+      // The login page is on the open internet now: no framing, no sniffing.
+      'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin' });
     res.end(data);
   } catch (e) {
     if (e && e.code === 'ENOENT') { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Nenalezeno'); }
@@ -60,6 +76,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const port = Number(process.env.PORT || 3111);
+const port = Number(process.env.PORT || 3112);
 const host = process.env.HOST || '127.0.0.1';
-server.listen(port, host, () => console.log(`Famicura Ring – SQL běží na http://${host}:${port}  (CLB1 ${process.env.SQL_SERVER || '?'})`));
+server.listen(port, host, () => console.log(`Famicura Tapo běží na http://${host}:${port}  (go2rtc ${process.env.GO2RTC_URL || 'http://127.0.0.1:1984'}, CLB1 ${process.env.SQL_SERVER || '?'})`));

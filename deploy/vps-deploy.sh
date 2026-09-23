@@ -1,79 +1,89 @@
 #!/usr/bin/env bash
-# Nasazení / aktualizace SQL části Famicura Ring na VPS (spouštět z Macu ve složce projektu):  ./deploy/vps-deploy.sh
-# Poprvé: na VPS vytvořit /opt/famicura-ring/.env podle .env.example a přidat blok z deploy/Caddyfile.snippet.
+# Nasazení / aktualizace Famicura Tapo na VPS (spouštět z Macu ve složce projektu):  ./deploy/vps-deploy.sh
+#
+# Nahraje aplikaci do /opt/famicura-tapo, stáhne go2rtc (s kontrolou součtu),
+# otevře port 8555 pro obraz a spustí obojí pod pm2 jako jhnapps.
+# Stav na serveru nepřepisuje: .env, cameras.json, go2rtc.yaml ani data/.
 set -e
 VPS="${VPS:-root@95.216.201.2}"
 KEY="${KEY:-$HOME/.ssh/id_ed25519_jhnapps}"
-DIR=/opt/famicura-ring
-PORT="${PORT:-3111}"
+DIR=/opt/famicura-tapo
+PORT="${PORT:-3112}"
+WEBRTC_PORT=8555
+VEREJNA="${VEREJNA:-https://famicuratapo.95-216-201-2.sslip.io}"
 SSH="ssh -i $KEY -o BatchMode=yes"
 
-# Port si smí držet jen tahle aplikace. Jinak by se níže ptalo na /api/health
-# cizí aplikace a vypadalo by to, že je vše v pořádku.
-# Porovnává se PID, ne jméno procesu – ss ho zkracuje na 15 znaků, takže
-# "node /opt/famicura-ring" se ve výpisu nikdy celé neobjeví.
-PORT_PID=$($SSH "$VPS" "ss -ltnp 2>/dev/null | grep ':$PORT ' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2" || true)
-if [ -n "$PORT_PID" ]; then
-  NASE_PID=$($SSH "$VPS" "su - jhnapps -c 'pm2 pid famicura-ring' 2>/dev/null | tr -d '\r'" || true)
-  if [ "$PORT_PID" != "$NASE_PID" ]; then
-    echo "Port $PORT na $VPS drží jiná aplikace (pid $PORT_PID):"
-    $SSH "$VPS" "ss -ltnp | grep ':$PORT '" || true
-    echo
-    echo "Vyberte volný port, přepište PORT v /opt/famicura-ring/.env"
-    echo "i v deploy/Caddyfile.snippet a spusťte:  PORT=<cislo> ./deploy/vps-deploy.sh"
+# go2rtc: pevná verze, se kterou je aplikace vyzkoušená, a její SHA-256.
+GO2RTC_VER=1.9.14
+GO2RTC_SHA=32d616af226bd731678ffde328b94cfb94e30339bfefc469cfb76323144615a6
+
+# Porty si smí držet jen tahle aplikace. Porovnává se PID, ne jméno procesu –
+# ss ho zkracuje na 15 znaků.
+hlidej_port() {  # port proto pm2-jmeno
+  local P
+  P=$($SSH "$VPS" "ss -l${2}np 2>/dev/null | grep ':$1 ' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2" || true)
+  [ -z "$P" ] && return 0
+  local NAS
+  NAS=$($SSH "$VPS" "su - jhnapps -c 'pm2 pid $3' 2>/dev/null | tr -d '\r'" || true)
+  if [ "$P" != "$NAS" ]; then
+    echo "Port $1 na $VPS drží jiná aplikace (pid $P):"
+    $SSH "$VPS" "ss -l${2}np | grep ':$1 '" || true
     exit 1
   fi
-fi
+}
+hlidej_port "$PORT" t famicura-tapo
+hlidej_port "$WEBRTC_PORT" t famicura-go2rtc
 
 cd "$(dirname "$0")/.."
-# verze.json: co přesně se nasazuje (commit, větev, čas) – server ji vrací v /api/health
 printf '{"commit":"%s","vetev":"%s","nasazeno":"%s"}\n' "$(git rev-parse --short HEAD 2>/dev/null || echo ?)" "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ?)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > verze.json
-$SSH "$VPS" "mkdir -p $DIR && chown jhnapps:jhnapps $DIR"
-rsync -az -e "$SSH" --exclude node_modules --exclude .git --exclude .DS_Store --exclude .env --exclude .netlify ./ "$VPS:$DIR/"
-# PORT se předává pm2 a --update-env ho vynutí i na už běžícím procesu.
-# Bez toho by v pm2 mohl zůstat port z dřívějška; server.mjs dává prostředí
-# přednost před .env, takže by ho .env nepřebilo a proces by padal na
-# EADDRINUSE. startOrRestart navíc znovu přečte ecosystem.config.cjs.
-$SSH "$VPS" "chown -R jhnapps:jhnapps $DIR && su - jhnapps -c 'cd $DIR && npm install --omit=dev --no-audit --no-fund 2>&1 | tail -1 && PORT=$PORT pm2 startOrRestart deploy/ecosystem.config.cjs --update-env && pm2 save'"
+$SSH "$VPS" "mkdir -p $DIR/bin $DIR/data && chown -R jhnapps:jhnapps $DIR"
+rsync -az -e "$SSH" --exclude node_modules --exclude .git --exclude .DS_Store --exclude .env \
+  --exclude data --exclude bin --exclude cameras.json --exclude go2rtc.yaml ./ "$VPS:$DIR/"
 
-# Naslouchá na $PORT opravdu náš proces? pm2 hlásí "online" i u aplikace,
-# která se po startu v kruhu restartuje.
+# go2rtc: stáhnout, jen když chybí nebo nesedí součet.
+$SSH "$VPS" "cd $DIR/bin && if ! echo '$GO2RTC_SHA  go2rtc' | sha256sum -c --status 2>/dev/null; then
+  curl -fsSL -o go2rtc.new https://github.com/AlexxIT/go2rtc/releases/download/v$GO2RTC_VER/go2rtc_linux_amd64 &&
+  echo '$GO2RTC_SHA  go2rtc.new' | sha256sum -c --status && chmod 755 go2rtc.new && mv go2rtc.new go2rtc && echo 'go2rtc $GO2RTC_VER staženo a ověřeno.' ||
+  { echo 'go2rtc: stažení nebo kontrola součtu selhala.'; rm -f go2rtc.new; exit 1; }
+fi"
+
+# Port pro obraz: TCP i UDP. Jen když na VPS běží ufw; firewall v Hetzner
+# Cloud konzoli (pokud ho používáte) je potřeba otevřít ručně.
+$SSH "$VPS" "if command -v ufw >/dev/null && ufw status | grep -q 'Status: active'; then
+  ufw allow $WEBRTC_PORT/tcp >/dev/null && ufw allow $WEBRTC_PORT/udp >/dev/null && echo 'ufw: port $WEBRTC_PORT otevřen.'; fi"
+
+# .env ze šablony, pokud ještě není; go2rtc.yaml vždy znovu z cameras.json.
+$SSH "$VPS" "chown -R jhnapps:jhnapps $DIR && su - jhnapps -c 'cd $DIR &&
+  ( [ -f .env ] || { cp .env.example .env && chmod 600 .env && echo \".env vytvořen ze šablony – spusťte ./deploy/vps-env.sh\"; } ) &&
+  npm install --omit=dev --no-audit --no-fund 2>&1 | tail -1 &&
+  node scripts/set-camera.mjs obnov &&
+  PORT=$PORT pm2 startOrRestart deploy/ecosystem.config.cjs --update-env >/dev/null && pm2 save >/dev/null'"
+
+# Poslouchají na svých portech opravdu naše procesy? pm2 hlásí "online" i u
+# aplikace, která se po startu v kruhu restartuje.
 sleep 3
-NAS_PID=$($SSH "$VPS" "su - jhnapps -c 'pm2 pid famicura-ring' 2>/dev/null | tr -d '\r'" || true)
-PORT_PID=$($SSH "$VPS" "ss -ltnp 2>/dev/null | grep ':$PORT ' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2" || true)
-if [ -z "$PORT_PID" ] || [ "$PORT_PID" != "$NAS_PID" ]; then
-  echo
-  echo "Aplikace neposlouchá na portu $PORT (pm2 pid ${NAS_PID:-?}, na portu ${PORT_PID:-nikdo})."
-  $SSH "$VPS" "su - jhnapps -c 'pm2 logs famicura-ring --lines 15 --nostream --err'" || true
-  echo
-  echo "Častá příčina: v /opt/famicura-ring/.env je jiný PORT, nebo port drží někdo jiný."
-  exit 1
-fi
-$SSH "$VPS" "su - jhnapps -c 'curl -s localhost:$PORT/api/health'"
-echo
+over() {  # port pm2-jmeno
+  local NAS P
+  NAS=$($SSH "$VPS" "su - jhnapps -c 'pm2 pid $2' 2>/dev/null | tr -d '\r'" || true)
+  P=$($SSH "$VPS" "ss -ltnp 2>/dev/null | grep ':$1 ' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2" || true)
+  if [ -z "$P" ] || [ "$P" != "$NAS" ]; then
+    echo; echo "$2 neposlouchá na portu $1 (pm2 pid ${NAS:-?}, na portu ${P:-nikdo})."
+    $SSH "$VPS" "su - jhnapps -c 'pm2 logs $2 --lines 15 --nostream --err'" || true
+    exit 1
+  fi
+}
+over "$PORT" famicura-tapo
+over "$WEBRTC_PORT" famicura-go2rtc
+$SSH "$VPS" "su - jhnapps -c 'curl -s localhost:$PORT/api/health'"; echo
 
-# Na localhost odpovídáme vždycky; na veřejné adrese nemusíme, když pro ni
-# v Caddy chybí blok a hostname spadne na sousední aplikaci. Odpověď proto
-# musí být naše - poznáme to podle "aplikace":"famicura-ring".
-VEREJNA="${VEREJNA:-https://famicuraring.95-216-201-2.sslip.io}"
+# Veřejná adresa musí vést k nám, ne k sousední aplikaci.
 ODPOVED=$(curl -s -m 15 "$VEREJNA/api/health" || true)
 case "$ODPOVED" in
-  *'"aplikace":"famicura-ring"'*)
-    echo "Veřejná adresa $VEREJNA odpovídá správně."
-    ;;
+  *'"aplikace":"famicura-tapo"'*) echo "Veřejná adresa $VEREJNA odpovídá správně." ;;
   *)
-    echo
-    echo "POZOR: na $VEREJNA neodpovídá tahle aplikace."
-    echo "Vrátilo se: ${ODPOVED:-(nic)}"
-    echo
-    echo "V /etc/caddy/Caddyfile nejspíš chybí blok z deploy/Caddyfile.snippet,"
-    echo "nebo míří na cizí port (3099 pecedoma-sestra, 3101 datec, náš $PORT)."
-    echo "Zkontrolovat:"
-    echo "  ssh -i $KEY $VPS \"grep -n -A3 famicuraring /etc/caddy/Caddyfile\""
-    echo "Po opravě:"
+    echo; echo "POZOR: na $VEREJNA neodpovídá tahle aplikace. Vrátilo se: ${ODPOVED:-(nic)}"
+    echo "Doplňte blok z deploy/Caddyfile.snippet do /etc/caddy/Caddyfile (port $PORT) a:"
     echo "  ssh -i $KEY $VPS \"caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy\""
-    exit 1
-    ;;
+    exit 1 ;;
 esac
-
-echo "Hotovo. Log: ssh -i $KEY $VPS \"su - jhnapps -c 'pm2 logs famicura-ring --lines 50'\""
+echo "Hotovo. Logy: ssh -i $KEY $VPS \"su - jhnapps -c 'pm2 logs famicura-tapo famicura-go2rtc --lines 50'\""

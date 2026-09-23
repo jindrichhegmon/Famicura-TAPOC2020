@@ -11,8 +11,9 @@ import { WatchFilter, defaultWatch, describeWatch } from '/watch.js';
 const ICE = [{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 
 /*
- * Ring live sessions do not last forever, and a phone that changes network or
- * goes to the background loses the peer connection. Both fail quietly: the
+ * A live session does not last forever - the camera, the tunnel or go2rtc can
+ * drop it - and a phone that changes network or goes to the background loses
+ * the peer connection. Both fail quietly: the
  * picture holds its last frame while connectionState still reads "connected",
  * so nothing but the frames themselves proves the stream is alive.
  */
@@ -27,6 +28,9 @@ const MAX_RECONNECTS = 8;
  * "nothing happened". Shorter ones - a glance at another tab - are not news.
  */
 const GAP_MS = 10000;
+
+// Frames in a row that the pose model may fail on before analysis gives up.
+const DETECT_FAILURES_MAX = 20;
 
 function fmtGap(ms) {
   const min = Math.round(ms / 60000);
@@ -43,8 +47,8 @@ const SPEAKER_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
   stroke-linecap="round" aria-hidden="true">${SPEAKER_BODY}
   <path d="M16.5 9.5l5 5"/><path d="M21.5 9.5l-5 5"/></svg>`;
 
-// Ring answers a single SDP offer, so gather ICE candidates before sending
-// rather than trickling them afterwards.
+// go2rtc answers a single SDP offer (WHEP style), so gather ICE candidates
+// before sending rather than trickling them afterwards.
 function waitForIce(peer) {
   if (peer.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise((resolve) => {
@@ -72,15 +76,25 @@ async function createLandmarker() {
     visionPromise.catch(() => { visionPromise = null; });   // let a later attempt retry
   }
   const { mod, vision } = await visionPromise;
-  const landmarker = await mod.PoseLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
-      delegate: 'GPU'
-    },
-    runningMode: 'VIDEO', numPoses: 1,
-    minPoseDetectionConfidence: .55, minPosePresenceConfidence: .55, minTrackingConfidence: .55
-  });
-  return { landmarker, connections: mod.PoseLandmarker.POSE_CONNECTIONS };
+  try {
+    const landmarker = await mod.PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO', numPoses: 1,
+      minPoseDetectionConfidence: .55, minPosePresenceConfidence: .55, minTrackingConfidence: .55
+    });
+    return { landmarker, connections: mod.PoseLandmarker.POSE_CONNECTIONS };
+  } catch (e) {
+    // MediaPipe reads every frame through WebGL, whatever runs the model. A
+    // page without it (remote desktop, some virtual machines, acceleration
+    // turned off) cannot analyse at all - say that, not a graph error.
+    if (/webgl|kGpuService|activeTexture/i.test(String(e?.message || e))) {
+      throw new Error('analýza potřebuje grafiku v prohlížeči (WebGL). Zapněte v nastavení prohlížeče hardwarovou akceleraci, nebo použijte jiný počítač');
+    }
+    throw e;
+  }
 }
 
 function pickMime() {
@@ -243,7 +257,9 @@ export class CameraView {
         else if (pc.connectionState === 'disconnected') this.setMsg('Spojení kolísá…');
       });
 
-      pc.addTransceiver('audio', { direction: 'sendrecv' });
+      // Receive only: a Tapo camera over RTSP has no way back, and offering one
+      // would promise talking to the room.
+      pc.addTransceiver('audio', { direction: 'recvonly' });
       pc.addTransceiver('video', { direction: 'recvonly' });
 
       await pc.setLocalDescription(await pc.createOffer());
@@ -256,7 +272,12 @@ export class CameraView {
       });
 
       if (this.pc !== pc) return;             // superseded while the request was in flight
-      if (!res.ok) throw new Error(body.detail || body.error || ('HTTP ' + res.status));
+      if (!res.ok) {
+        // error is written for people; detail is go2rtc's own wording, for the log.
+        const err = new Error(body.error || body.detail || ('HTTP ' + res.status));
+        err.final = body.retry === false;       // e.g. the browser cannot play H.264
+        throw err;
+      }
 
       this.sessionUrl = body.sessionUrl || null;
       await pc.setRemoteDescription({ type: 'answer', sdp: body.sdpAnswer });
@@ -265,6 +286,11 @@ export class CameraView {
       this.updateRender();
       this.hooks.onChange();
     } catch (e) {
+      if (e.final) {                           // reconnecting cannot help: say why and stop
+        await this.teardown({ keepIntent: false });
+        this.setMsg(e.message, true);
+        return;
+      }
       if (this.wantStream) this.reconnect(`Nepodařilo se připojit (${e.message})`);
       else { this.setMsg(e.message, true); await this.teardown({ keepIntent: false }); }
     }
@@ -329,7 +355,7 @@ export class CameraView {
   }
 
   /**
-   * Releases the Ring session and the peer connection. keepIntent leaves the
+   * Releases the go2rtc session and the peer connection. keepIntent leaves the
    * wish to watch in place, so a reconnect or a return to the tab can pick it
    * back up.
    */
@@ -349,7 +375,7 @@ export class CameraView {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ sessionUrl })
         });
-      } catch { /* the session expires on Ring's side anyway */ }
+      } catch { /* go2rtc drops the session when the peer closes anyway */ }
     }
     if (this.pc) { this.pc.close(); this.pc = null; }
 
@@ -600,6 +626,7 @@ export class CameraView {
     }
     this.analyzer.reset();
     this.resetGap();
+    this.detectFailures = 0;
     this.analysisStartedAt = Date.now();
     this.analyzing = true;
     btn.textContent = 'Zastavit analýzu';
@@ -607,6 +634,14 @@ export class CameraView {
     this.setMsg('Analýza běží.');
     this.updateRender();
     this.hooks.onChange();
+  }
+
+  analysisFailed(e) {
+    const why = String(e?.message || e).slice(0, 200);
+    this.log({ t: (Date.now() - this.analysisStartedAt) / 1000, kind: 'failed', level: 'warn',
+               text: `Analýza se zastavila – snímky z kamery nejde vyhodnotit (${why}).` });
+    this.stopAnalysis();
+    this.setMsg(`Analýza se zastavila: snímky z kamery nejde vyhodnotit (${why}).`, true);
   }
 
   stopAnalysis() {
@@ -621,8 +656,15 @@ export class CameraView {
   detectPose(video) {
     if (!this.landmarker) return;
     let result;
-    try { result = this.landmarker.detectForVideo(video, performance.now()); }
-    catch { return; }
+    try {
+      result = this.landmarker.detectForVideo(video, performance.now());
+      this.detectFailures = 0;
+    } catch (e) {
+      // One bad frame is noise; a run of them means nothing is being analysed.
+      // A fall detector must never read as running then, so it stops and says so.
+      if (++this.detectFailures >= DETECT_FAILURES_MAX) this.analysisFailed(e);
+      return;
+    }
 
     const t = (Date.now() - this.analysisStartedAt) / 1000;
     const lm = result.landmarks?.[0] || null;

@@ -1,63 +1,90 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { createHandler } from '../src/api.mjs';
+import { createHandler, cameraNames } from '../src/api.mjs';
+import { createLimiter } from '../src/limit.mjs';
 import { pripravit } from '../src/zaznamy.mjs';
 import { mockDbs } from './mock-db.mjs';
 
-process.env.RING_HMAC_KEY = 'testovaci-klic';
+process.env.SESSION_KEY = 'testovaci-klic';
+process.env.FAMICURA_PASSWORD = 'spravne-heslo';
 
-/** Stejná cookie, jakou vydává Netlify funkce login. */
-function cookie(expiresAt = Date.now() + 3600_000, key = process.env.RING_HMAC_KEY) {
-  const sig = crypto.createHmac('sha256', key).update(`famicura-session:${expiresAt}`, 'utf8').digest('base64url');
-  return `fam_sess=${expiresAt}.${sig}`;
+/** Stejná cookie, jakou vydává /api/login. */
+function cookie(expiresAt = Date.now() + 3600_000, key = process.env.SESSION_KEY) {
+  const sig = crypto.createHmac('sha256', key).update(`famicura-tapo:${expiresAt}`, 'utf8').digest('base64url');
+  return `fam_tapo=${expiresAt}.${sig}`;
 }
 
-const req = (method, path, { body, cookies } = {}) =>
+const req = (method, path, { body, cookies, ip } = {}) =>
   new Request('http://localhost' + path, {
     method,
-    headers: { 'content-type': 'application/json', ...(cookies ? { cookie: cookies } : {}) },
+    headers: { 'content-type': 'application/json', ...(cookies ? { cookie: cookies } : {}),
+               ...(ip ? { 'x-forwarded-for': ip } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
+/** go2rtc, jak ho vidí server: jedna kamera, odpovídá. */
+function fakeGo2rtc({ streams = ['tapoc2020'], online = true, webrtc } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async streams() { return streams; },
+    async version() { return '1.9.14'; },
+    async webrtc(src, offer) { calls.push({ src, offer }); return webrtc ? webrtc(src, offer) : 'v=0\r\nanswer-for-' + src; },
+    async probe(src) { return { ok: online, status: online ? 200 : 500, detail: online ? null : 'dial tcp: i/o timeout' }; },
+  };
+}
+
+function memStore() {
+  const data = {};
+  return { data, async nacti(n) { return structuredClone(data[n] || {}); }, async uloz(n, v) { data[n] = structuredClone(v); } };
+}
+
+function handler(over = {}) {
+  const db = mockDbs(over.radky);
+  const go2rtc = over.go2rtc || fakeGo2rtc();
+  const store = over.store || memStore();
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter }), ...db, go2rtc, store };
+}
+
 test('health nepotřebuje přihlášení a vrací verzi', async () => {
-  const { dbs } = mockDbs();
-  const r = await createHandler({ dbs })(req('GET', '/api/health'));
+  const { h } = handler();
+  const r = await h(req('GET', '/api/health'));
   assert.equal(r.status, 200);
   const b = await r.json();
   assert.equal(b.ok, true);
   assert.ok(b.cas);
   // Stránka podle toho pozná, že na adrese VPS neodpovídá sousední aplikace.
-  assert.equal(b.aplikace, 'famicura-ring');
+  assert.equal(b.aplikace, 'famicura-tapo');
 });
 
 test('zápis bez přihlášení je odmítnut', async () => {
-  const { dbs, provedene } = mockDbs();
-  const r = await createHandler({ dbs })(req('POST', '/api/clb', { body: { typ: 'udalost', cas: new Date().toISOString() } }));
+  const { h, provedene } = handler();
+  const r = await h(req('POST', '/api/clb', { body: { typ: 'udalost', cas: new Date().toISOString() } }));
   assert.equal(r.status, 401);
   assert.equal(provedene.length, 0, 'nic se nesmí zapsat');
 });
 
 test('zápis s cizím podpisem je odmítnut', async () => {
-  const { dbs, provedene } = mockDbs();
-  const r = await createHandler({ dbs })(req('POST', '/api/clb',
+  const { h, provedene } = handler();
+  const r = await h(req('POST', '/api/clb',
     { body: { typ: 'udalost', cas: new Date().toISOString() }, cookies: cookie(Date.now() + 3600_000, 'jiny-klic') }));
   assert.equal(r.status, 401);
   assert.equal(provedene.length, 0);
 });
 
 test('zápis s prošlou cookie je odmítnut', async () => {
-  const { dbs } = mockDbs();
-  const r = await createHandler({ dbs })(req('POST', '/api/clb',
+  const { h } = handler();
+  const r = await h(req('POST', '/api/clb',
     { body: { typ: 'udalost', cas: new Date().toISOString() }, cookies: cookie(Date.now() - 1000) }));
   assert.equal(r.status, 401);
 });
 
 test('událost se zapíše parametrizovaně', async () => {
-  const { dbs, provedene } = mockDbs();
-  const r = await createHandler({ dbs })(req('POST', '/api/clb', {
+  const { h, provedene } = handler();
+  const r = await h(req('POST', '/api/clb', {
     cookies: cookie(),
-    body: { typ: 'udalost', cas: '2026-09-22T09:04:07.000Z', kameraId: 'ava1.ring.device.A',
+    body: { typ: 'udalost', cas: '2026-09-22T09:04:07.000Z', kameraId: 'tapoc2020',
             kameraNazev: "Vchod 'hlavní'", druh: 'fall', zavaznost: 'varovani',
             popis: 'MOŽNÝ PÁD', odZacatkuS: 95 },
   }));
@@ -71,8 +98,8 @@ test('událost se zapíše parametrizovaně', async () => {
 });
 
 test('nahrávka se zapíše do své tabulky i s odkazem na soubor', async () => {
-  const { dbs, provedene } = mockDbs();
-  const r = await createHandler({ dbs })(req('POST', '/api/clb', {
+  const { h, provedene } = handler();
+  const r = await h(req('POST', '/api/clb', {
     cookies: cookie(),
     body: { typ: 'nahravka', od: '2026-09-22T09:04:07.000Z', do: '2026-09-22T09:14:07.000Z',
             kameraNazev: 'Zahrada', velikostB: 26214400, soubor: 'famicura-Zahrada.mp4',
@@ -86,9 +113,9 @@ test('nahrávka se zapíše do své tabulky i s odkazem na soubor', async () => 
 });
 
 test('pokus o injekci je jen hodnota, dotaz se nemění', async () => {
-  const { dbs, provedene } = mockDbs();
+  const { h, provedene } = handler();
   const utok = "x'); DROP TABLE dbo.FamicuraRingLog; --";
-  await createHandler({ dbs })(req('POST', '/api/clb', {
+  await h(req('POST', '/api/clb', {
     cookies: cookie(),
     body: { typ: 'udalost', cas: new Date().toISOString(), popis: utok },
   }));
@@ -99,8 +126,7 @@ test('pokus o injekci je jen hodnota, dotaz se nemění', async () => {
 });
 
 test('neznámý typ a nesmyslné tělo se odmítnou bez zápisu', async () => {
-  const { dbs, provedene } = mockDbs();
-  const h = createHandler({ dbs });
+  const { h, provedene } = handler();
   assert.equal((await h(req('POST', '/api/clb', { cookies: cookie(), body: { typ: 'neco' } }))).status, 400);
   assert.equal((await h(req('POST', '/api/clb', { cookies: cookie(), body: { typ: 'udalost' } }))).status, 400);
   assert.equal((await h(req('POST', '/api/clb', { cookies: cookie(), body: { typ: 'nahravka' } }))).status, 400);
@@ -108,18 +134,141 @@ test('neznámý typ a nesmyslné tělo se odmítnou bez zápisu', async () => {
 });
 
 test('diagnostika vrací počty řádků', async () => {
-  const { dbs } = mockDbs({ log: 12, nahravky: 4 });
-  const r = await createHandler({ dbs })(req('GET', '/api/diag', { cookies: cookie() }));
+  const { h } = handler({ radky: { log: 12, nahravky: 4 } });
+  const r = await h(req('GET', '/api/diag', { cookies: cookie() }));
   const b = await r.json();
   assert.equal(b.log, 12);
   assert.equal(b.nahravky, 4);
 });
 
-test('neznámá adresa je 404 a řekne, kdo odpověděl', async () => {
-  const { dbs } = mockDbs();
-  const r = await createHandler({ dbs })(req('GET', '/api/neco'));
+test('neznámá adresa je 404 a řekne, kdo odpověděl; bez přihlášení jen 401', async () => {
+  const { h } = handler();
+  assert.equal((await h(req('GET', '/api/neco'))).status, 401);
+  const r = await h(req('GET', '/api/neco', { cookies: cookie() }));
   assert.equal(r.status, 404);
-  assert.equal((await r.json()).aplikace, 'famicura-ring');
+  assert.equal((await r.json()).aplikace, 'famicura-tapo');
+});
+
+/* ---------- přihlášení ---------- */
+
+test('správné heslo vydá cookie, se kterou API pustí dál', async () => {
+  const { h } = handler();
+  const r = await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' } }));
+  assert.equal(r.status, 200);
+  const set = r.headers.get('set-cookie');
+  assert.match(set, /^fam_tapo=\d+\.[\w-]+; Path=\/; HttpOnly; Secure; SameSite=Lax/);
+  const c = set.split(';')[0];
+  assert.equal((await h(req('GET', '/api/devices', { cookies: c }))).status, 200);
+});
+
+test('špatné heslo cookie nevydá', async () => {
+  const { h } = handler();
+  const r = await h(req('POST', '/api/login', { body: { password: 'spatne' } }));
+  assert.equal(r.status, 401);
+  assert.equal(r.headers.get('set-cookie'), null);
+});
+
+test('bez nastaveného hesla se nepřihlásí nikdo, ani prázdným heslem', async () => {
+  const saved = process.env.FAMICURA_PASSWORD;
+  process.env.FAMICURA_PASSWORD = '';
+  try {
+    const { h } = handler();
+    assert.equal((await h(req('POST', '/api/login', { body: { password: '' } }))).status, 401);
+    const s = await (await h(req('GET', '/api/status'))).json();
+    assert.deepEqual(s.missing, ['FAMICURA_PASSWORD']);
+  } finally { process.env.FAMICURA_PASSWORD = saved; }
+});
+
+test('po deseti chybách z jedné adresy se na chvíli nedá zkoušet, jiná adresa může', async () => {
+  let t = 1_000_000;
+  const { h } = handler({ limiter: createLimiter({ now: () => t }) });
+  for (let i = 0; i < 10; i++) await h(req('POST', '/api/login', { body: { password: 'x' }, ip: '1.2.3.4' }));
+  const blocked = await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' }, ip: '1.2.3.4' }));
+  assert.equal(blocked.status, 429, 'ani správné heslo během blokace');
+  assert.equal((await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' }, ip: '5.6.7.8' }))).status, 200);
+  t += 15 * 60 * 1000;
+  assert.equal((await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' }, ip: '1.2.3.4' }))).status, 200);
+});
+
+/* ---------- kamery a stream ---------- */
+
+test('stav bez přihlášení neprozradí kamery', async () => {
+  const { h } = handler();
+  const b = await (await h(req('GET', '/api/status'))).json();
+  assert.equal(b.authenticated, false);
+  assert.equal(b.cameras, undefined);
+});
+
+test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
+  process.env.CAMERA_NAMES = 'tapoc2020=Pokoj 12';
+  try {
+    const { h } = handler({ go2rtc: fakeGo2rtc({ online: false }) });
+    const b = await (await h(req('GET', '/api/status', { cookies: cookie() }))).json();
+    assert.equal(b.go2rtc.ok, true);
+    assert.equal(b.go2rtc.version, '1.9.14');
+    assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', online: false, detail: 'dial tcp: i/o timeout' }]);
+  } finally { delete process.env.CAMERA_NAMES; }
+});
+
+test('seznam kamer bere názvy z CAMERA_NAMES, jinak ID', async () => {
+  process.env.CAMERA_NAMES = 'tapoc2020=Pokoj 12 – okno; x=y';
+  try {
+    const { h } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
+    const b = await (await h(req('GET', '/api/devices', { cookies: cookie() }))).json();
+    assert.deepEqual(b.devices, [{ id: 'tapoc2020', name: 'Pokoj 12 – okno' }, { id: 'druha', name: 'druha' }]);
+  } finally { delete process.env.CAMERA_NAMES; }
+  assert.deepEqual(cameraNames('a=Jméno = s rovnítkem;;  b = B '), { a: 'Jméno = s rovnítkem', b: 'B' });
+});
+
+test('stream: offer jde do go2rtc, answer zpět ve tvaru, který čeká přehrávač', async () => {
+  const { h, go2rtc } = handler();
+  const r = await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'tapoc2020', sdpOffer: 'v=0 offer' } }));
+  assert.equal(r.status, 200);
+  const b = await r.json();
+  assert.equal(b.sdpAnswer, 'v=0\r\nanswer-for-tapoc2020');
+  assert.equal(b.sessionUrl, null);
+  assert.deepEqual(go2rtc.calls, [{ src: 'tapoc2020', offer: 'v=0 offer' }]);
+});
+
+test('stream jen pro kameru, kterou go2rtc zná, a jen po přihlášení', async () => {
+  const { h, go2rtc } = handler();
+  assert.equal((await h(req('POST', '/api/stream', { body: { deviceId: 'tapoc2020', sdpOffer: 'x' } }))).status, 401);
+  assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'cizi', sdpOffer: 'x' } }))).status, 404);
+  assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: '../api/config', sdpOffer: 'x' } }))).status, 400);
+  assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'tapoc2020' } }))).status, 400);
+  assert.equal(go2rtc.calls.length, 0);
+});
+
+test('stream: chyba go2rtc se vrátí čitelně, i s tím, zda má smysl zkoušet znovu', async () => {
+  const { Go2rtcError } = await import('../src/go2rtc.mjs');
+  const { h } = handler({ go2rtc: fakeGo2rtc({ webrtc: () => { throw new Go2rtcError('Tento prohlížeč neumí obraz H.264 z kamery.', 502, 'no codecs', { retry: false }); } }) });
+  const r = await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'tapoc2020', sdpOffer: 'x' } }));
+  assert.equal(r.status, 502);
+  assert.deepEqual(await r.json(), { ok: false, error: 'Tento prohlížeč neumí obraz H.264 z kamery.', detail: 'no codecs', retry: false });
+});
+
+/* ---------- plány a sledované události ---------- */
+
+test('plán se uloží, přečte a prázdný smaže', async () => {
+  const { h, store } = handler();
+  const put = (intervals) => h(req('PUT', '/api/schedules', { cookies: cookie(), body: { deviceId: 'tapoc2020', intervals } }));
+  assert.equal((await put([{ from: '22:00', to: '06:00' }])).status, 200);
+  const b = await (await h(req('GET', '/api/schedules', { cookies: cookie() }))).json();
+  assert.deepEqual(b.schedules, { tapoc2020: [{ from: '22:00', to: '06:00', enabled: true }] });
+  assert.equal(b.max, 5);
+  assert.equal((await put([{ from: '08:00', to: '' }])).status, 400);
+  await put([]);
+  assert.deepEqual(store.data.schedules, {});
+});
+
+test('sledované události: uloží se, výchozí nastavení se nedrží', async () => {
+  const { h, store } = handler();
+  const put = (watch) => h(req('PUT', '/api/watch', { cookies: cookie(), body: { deviceId: 'tapoc2020', watch } }));
+  assert.equal((await put({ state: { enabled: false }, longlie: { after: 300 } })).status, 200);
+  assert.equal(store.data.watch.tapoc2020.longlie.after, 300);
+  assert.equal((await put({ longlie: { after: 7 } })).status, 400);
+  await put(null);
+  assert.deepEqual(store.data.watch, {});
 });
 
 test('příprava ořízne délky a řídicí znaky', () => {

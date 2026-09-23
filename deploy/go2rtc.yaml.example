@@ -1,0 +1,35 @@
+# go2rtc na VPS – převádí RTSP z kamery Tapo (přes tunel WireGuard) na WebRTC.
+#
+# Na VPS jako /opt/famicura-tapo/go2rtc.yaml (práva 600). V repozitáři je jen
+# tato šablona: skutečný soubor obsahuje přihlášení ke kameře.
+
+api:
+  # Bez hesla, a umí přidávat zdroje – proto jen na localhostu. Mluví s ním
+  # pouze server.mjs, který hlídá přihlášení Famicura.
+  listen: "127.0.0.1:1984"
+
+# Vlastní servery go2rtc jsou vypnuté: RTSP by vydal obraz komukoli, kdo zná
+# adresu, a nešifrovaně.
+rtsp:
+  listen: ""
+rtmp:
+  listen: ""
+srtp:
+  listen: ""
+
+webrtc:
+  # Jediný veřejný port (TCP i UDP). Tudy jdou šifrovaná média do prohlížeče;
+  # navázat spojení jde jen s odpovědí, kterou vydá server.mjs po přihlášení.
+  listen: ":8555"
+  candidates:
+    - 95.216.201.2:8555
+
+streams:
+  # Název (tapoc2020) je ID kamery v aplikaci – v plánech, nastavení analýzy
+  # i v CLB1. Po nasazení ho neměňte, jinak se tyto vazby ztratí.
+  #
+  # Tapo: v aplikaci Tapo → kamera → Nastavení → Pokročilá nastavení →
+  # Účet kamery. stream1 = plné rozlišení, stream2 = nízké (pro slabé připojení).
+  # IP je adresa kamery v místní síti, dosažitelná tunelem WireGuard.
+  tapoc2020:
+    - rtsp://UZIVATEL:HESLO@192.168.1.50:554/stream1

@@ -5,17 +5,19 @@
  *   node scripts/set-env.mjs stav                 → které klíče jsou vyplněné (bez hodnot)
  *   node scripts/set-env.mjs nastav KLIC  < hodnota
  *   node scripts/set-env.mjs prevezmi KLIC /opt/jina-aplikace/.env
+ *   node scripts/set-env.mjs generuj KLIC          → náhodná hodnota, jen když je prázdný
  *
  * "prevezmi" kopíruje jen tehdy, když druhá aplikace míří na stejný SQL
  * server a stejného uživatele – jinak by heslo patřilo někomu jinému.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOUBOR = path.join(ROOT, '.env');
-const POVINNE = ['SQL_SERVER', 'SQL_USER', 'SQL_PASSWORD', 'RING_HMAC_KEY'];
+const POVINNE = ['SQL_SERVER', 'SQL_USER', 'SQL_PASSWORD', 'FAMICURA_PASSWORD', 'SESSION_KEY'];
 
 const RADEK = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/;
 
@@ -59,7 +61,7 @@ async function stdin() {
 async function main([akce, klic, zdroj]) {
   if (akce === 'stav') {
     const text = precti(SOUBOR);
-    for (const k of POVINNE) console.log(`${k.padEnd(14)} ${hodnota(text, k) ? 'vyplněno' : 'PRÁZDNÉ'}`);
+    for (const k of POVINNE) console.log(`${k.padEnd(18)} ${hodnota(text, k) ? 'vyplněno' : 'PRÁZDNÉ'}`);
     return;
   }
 
@@ -86,7 +88,17 @@ async function main([akce, klic, zdroj]) {
     return;
   }
 
-  throw new Error('Použití: stav | nastav KLIC | prevezmi KLIC /cesta/.env');
+  if (akce === 'generuj') {
+    // A signing key nobody has to know: made here, never leaves the server.
+    // An existing one is kept, or everybody would be logged out on every run.
+    const text = precti(SOUBOR);
+    if (hodnota(text, klic)) { console.log(`${klic}: už je nastaven, ponechávám.`); return; }
+    zapis(nastavit(text, klic, crypto.randomBytes(32).toString('base64url')));
+    console.log(`${klic}: vygenerován.`);
+    return;
+  }
+
+  throw new Error('Použití: stav | nastav KLIC | prevezmi KLIC /cesta/.env | generuj KLIC');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

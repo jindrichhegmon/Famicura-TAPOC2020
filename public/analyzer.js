@@ -1,5 +1,5 @@
 /*
- * Live pose analysis for the Ring stream.
+ * Live pose analysis for the camera stream.
  *
  * The Fall Analyzer prototype collected a pose timeline while recording and
  * described it once, after the fact. Here the description has to appear while
@@ -271,7 +271,7 @@ export const DISPLAY_MODES = {
 };
 
 /**
- * Paints the frame Ring is sending, in the chosen privacy mode. `blur` scales
+ * Paints the frame the camera is sending, in the chosen privacy mode. `blur` scales
  * the frame down to a handful of pixels and back up without smoothing, which
  * destroys identifying detail rather than just softening it.
  */

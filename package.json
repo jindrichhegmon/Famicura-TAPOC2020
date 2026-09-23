@@ -1,18 +1,14 @@
 {
-  "name": "famicura-ring",
+  "name": "famicura-tapo",
   "version": "1.0.0",
   "private": true,
-  "description": "Ring -> Famicura: živý obraz, nahrávání a analýza pádů na Netlify; zápis do CLB1 přes vlastní Node server na VPS, bez Make",
+  "description": "Kamera Tapo -> Famicura: živý obraz přes go2rtc (WebRTC), nahrávání, analýza pádů, plány a zápis do CLB1; vše na VPS",
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "start": "node server.mjs"
   },
   "dependencies": {
-    "@netlify/blobs": "^9.1.0",
     "mssql": "^11.0.1"
-  },
-  "devDependencies": {
-    "netlify-cli": "^23.0.0"
   }
 }
