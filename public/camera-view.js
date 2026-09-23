@@ -369,15 +369,23 @@ export class CameraView {
    */
   async streamStats() {
     const pc = this.pc;
-    const out = { frames: null, bytes: 0, lost: 0, packets: 0 };
+    const out = { frames: null, bytes: 0, lost: 0, packets: 0, state: pc?.connectionState || '-', path: '' };
     if (!pc) return out;
     try {
-      for (const s of (await pc.getStats()).values()) {
-        if (s.type !== 'inbound-rtp' || (s.kind || s.mediaType) !== 'video') continue;
-        out.frames = s.framesDecoded ?? s.framesReceived ?? null;
-        out.bytes = s.bytesReceived || 0;
-        out.lost = s.packetsLost || 0;
-        out.packets = s.packetsReceived || 0;
+      const all = await pc.getStats();
+      for (const s of all.values()) {
+        if (s.type === 'inbound-rtp' && (s.kind || s.mediaType) === 'video') {
+          out.frames = s.framesDecoded ?? s.framesReceived ?? null;
+          out.bytes = s.bytesReceived || 0;
+          out.lost = s.packetsLost || 0;
+          out.packets = s.packetsReceived || 0;
+        }
+        // Which way the media takes - or that no way was ever agreed on. A
+        // firewall that drops UDP shows here as a missing or TCP-only pair.
+        if (s.type === 'candidate-pair' && (s.selected || s.state === 'succeeded') && !out.path) {
+          const r = all.get(s.remoteCandidateId) || {};
+          out.path = `${r.protocol || '?'} → ${r.address || r.ip || '?'}:${r.port || '?'}`;
+        }
       }
     } catch { /* stats unavailable: fall back to currentTime below */ }
     if (out.frames === null) out.frames = this.el.video.currentTime;
@@ -412,7 +420,8 @@ export class CameraView {
     if (!s || typeof s.frames !== 'number') return '';
     const cz = (n) => Math.round(n).toLocaleString('cs-CZ');
     return `za spojení přišlo ${(s.bytes / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} MB, ` +
-      `${cz(s.frames)} snímků, ztraceno ${cz(s.lost)} z ${cz(s.packets + s.lost)} paketů`;
+      `${cz(s.frames)} snímků, ztraceno ${cz(s.lost)} z ${cz(s.packets + s.lost)} paketů; ` +
+      `spojení ${s.state}, cesta ${s.path || 'nedohodnuta'}`;
   }
 
   reconnect(reason, stats = null) {
