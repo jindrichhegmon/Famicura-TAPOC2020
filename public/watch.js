@@ -28,6 +28,12 @@ const BY_KIND = Object.fromEntries(WATCH_EVENTS.map((e) => [e.kind, e]));
  * has the camera open). One length per camera, chosen on a slider.
  */
 export const RECORD_S = { min: 5, max: 30, default: 15 };
+/*
+ * And the seconds before it: while any event records, the browser keeps encoding
+ * the picture into a rolling buffer, so the file starts before the event happened.
+ * 0 switches the buffer (and its continuous encoding) off.
+ */
+export const PRE_S = { min: 0, max: 10, default: 5 };
 
 /*
  * What the camera itself reports (ONVIF). Which of these a camera has, the
@@ -53,7 +59,7 @@ export const cameraEventLevel = (kind) => BY_CAM[kind]?.level || 'info';
 
 /** Everything on, all day, original durations – how analysis always behaved. */
 export function defaultWatch() {
-  const w = { recordS: RECORD_S.default };
+  const w = { recordS: RECORD_S.default, preS: PRE_S.default };
   for (const e of WATCH_EVENTS) {
     w[e.kind] = { enabled: true, from: '', to: '', record: false };
     if (e.after) w[e.kind].after = e.after[0];
@@ -64,6 +70,12 @@ export function defaultWatch() {
 /** Seconds to record after an event of this kind, or 0 when it should not record. */
 export function recordSeconds(watch, kind) {
   return watch?.[kind]?.record ? (Number(watch.recordS) || RECORD_S.default) : 0;
+}
+
+/** Seconds of picture to keep before an event, or 0 when nothing records (or the buffer is off). */
+export function preRollSeconds(watch) {
+  if (!watch || !Object.keys(watch).some((k) => watch[k] && typeof watch[k] === 'object' && watch[k].record && watch[k].enabled !== false)) return 0;
+  return watch.preS === undefined ? PRE_S.default : Number(watch.preS) || 0;
 }
 
 export function fmtAfter(s) {
@@ -130,6 +142,13 @@ export function normalizeWatch(raw) {
     }
     watch.recordS = s;
   }
+  if (raw.preS !== undefined && raw.preS !== null) {
+    const s = Number(raw.preS);
+    if (!Number.isInteger(s) || s < PRE_S.min || s > PRE_S.max) {
+      return { ok: false, error: `Obraz před událostí musí být ${PRE_S.min}–${PRE_S.max} s.` };
+    }
+    watch.preS = s;
+  }
   return { ok: true, watch };
 }
 
@@ -172,7 +191,10 @@ export function describeWatch(w, cameraEvents = []) {
   if (cam.length) text += ` · kamera hlásí: ${cam.join(', ')}`;
   const rec = [...WATCH_EVENTS.map((e) => [e.kind, e.label]), ...cameraEvents.map((e) => [e.kind, cameraEventLabel(e.kind, e.label)])]
     .filter(([kind]) => w?.[kind]?.record && w[kind].enabled !== false).map(([, label]) => label.toLowerCase());
-  if (rec.length) text += ` · nahrává ${w.recordS || RECORD_S.default} s při: ${rec.join(', ')}`;
+  if (rec.length) {
+    const pre = preRollSeconds(w);
+    text += ` · nahrává ${pre ? `${pre} s před a ` : ''}${w.recordS || RECORD_S.default} s po: ${rec.join(', ')}`;
+  }
   return text;
 }
 

@@ -375,7 +375,7 @@
 import { fmtClock, createLogEntry, boundFrom, filterLog, logToCsv, csvFilename, fmtSize } from '/analyzer.js';
 import { MAX_INTERVALS, isWithin, dueRecordings, fmtInterval, collectIntervals } from '/schedule.js';
 import { CameraView } from '/camera-view.js';
-import { WATCH_EVENTS, RECORD_S, normalizeWatch, fmtAfter, cameraEventLabel } from '/watch.js';
+import { WATCH_EVENTS, RECORD_S, PRE_S, normalizeWatch, fmtAfter, cameraEventLabel } from '/watch.js';
 import { WakeKeeper } from '/wake.js';
 import { isSupported as folderSupported, pickFolder, loadHandle, saveHandle,
          forgetHandle, ensurePermission, writeFile } from '/folder.js';
@@ -906,7 +906,7 @@ function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
   const when = document.createElement('span');
   when.className = 'muted';
   when.textContent = `${fmtClock(from)}–${fmtClock(to)} · ${fmtSize(blob.size)}`
-    + (zdroj === 'plan' ? ' · plán' : udalost ? ` · událost: ${udalost.text || udalost.kind}` : '');
+    + (zdroj === 'plan' ? ' · plán' : udalost ? ` · událost: ${udalost.text || udalost.kind}${udalost.predS ? ` (${udalost.predS} s před ní)` : ''}` : '');
   what.append(title, when);
 
   const a = document.createElement('a');
@@ -1186,14 +1186,26 @@ function watchHead(text) {
 // The camera part lists only what this camera said it can report: a C200
 // gets motion, a C220 gets person, vehicle and pet as well.
 function recordLengthRow(seconds) {
+  return sliderRow('Délka nahrávání události', 'recordS', RECORD_S, seconds, (v) => `${v} s`,
+    'Kolik sekund po události se nahrává');
+}
+
+// 0 switches the buffer off: nothing is encoded until an event comes.
+function preRollRow(seconds) {
+  return sliderRow('Obraz před událostí (nejméně)', 'preS', PRE_S, seconds, (v) => (Number(v) ? `${v} s` : 'vypnuto'),
+    'Prohlížeč průběžně ukládá posledních pár sekund obrazu, aby nahrávka začala před událostí (stojí to trochu výkonu, i když se nic neděje)');
+}
+
+function sliderRow(label, cls, range, value, fmt, title) {
   const row = document.createElement('div');
   row.className = 'recLenRow';
+  row.title = title;
   row.innerHTML = `
-    <label>Délka nahrávání události <output>${seconds} s</output></label>
-    <input type="range" class="recordS" min="${RECORD_S.min}" max="${RECORD_S.max}" step="1" value="${seconds}"
-           aria-label="Délka nahrávání události v sekundách">`;
+    <label>${esc(label)} <output>${fmt(value)}</output></label>
+    <input type="range" class="${cls}" min="${range.min}" max="${range.max}" step="1" value="${value}"
+           aria-label="${esc(label)} v sekundách">`;
   const out = row.querySelector('output');
-  row.querySelector('input').oninput = (ev) => { out.textContent = `${ev.target.value} s`; };
+  row.querySelector('input').oninput = (ev) => { out.textContent = fmt(ev.target.value); };
   return row;
 }
 
@@ -1201,6 +1213,7 @@ function renderWatchRows(watch, device) {
   const box = $('watchRows');
   box.innerHTML = '';
   box.append(recordLengthRow(watch.recordS || RECORD_S.default));
+  box.append(preRollRow(watch.preS === undefined ? PRE_S.default : watch.preS));
   box.append(watchHead('Z analýzy obrazu v prohlížeči (jen když je kamera otevřená):'));
   for (const e of WATCH_EVENTS) box.append(watchRow(e.kind, e.label, watch[e.kind], e.after));
 
@@ -1217,7 +1230,8 @@ function renderWatchRows(watch, device) {
 }
 
 function watchRowValues() {
-  const w = { recordS: Number($('watchRows').querySelector('.recordS')?.value) || RECORD_S.default };
+  const w = { recordS: Number($('watchRows').querySelector('.recordS')?.value) || RECORD_S.default,
+              preS: Number($('watchRows').querySelector('.preS')?.value ?? PRE_S.default) };
   for (const row of $('watchRows').querySelectorAll('.watchRow')) {
     w[row.dataset.kind] = {
       enabled: row.querySelector('.enabled').checked,

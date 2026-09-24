@@ -81,10 +81,19 @@ Délka je pro kameru jedna, posuvník **Délka nahrávání události** 5–30 s
 (výchozí 15). Nahrávka se objeví v seznamu s poznámkou „událost: …“ a do
 CLB1 jde se zdrojem `udalost`. Ručně nebo plánem spuštěné nahrávání má
 přednost (událost ho nepřeruší); nahrávku spuštěnou událostí každá další
-událost prodlouží, takže rušná minuta je jeden soubor. Události kamery
-přicházejí do stránky dotazem každé 3 s, takže taková nahrávka může začít
-až o pár sekund po události; nahrává se jen tam, kde je kamera otevřená –
-server sám nenahrává.
+událost prodlouží, takže rušná minuta je jeden soubor. Nahrává se jen
+tam, kde je kamera otevřená – server sám nenahrává.
+
+**Obraz před událostí** (posuvník 0–10 s, výchozí 5): dokud je u některé
+události zatrženo nahrávat a obraz hraje, prohlížeč obraz průběžně kóduje
+do vyrovnávací paměti (dva střídající se záznamy, ten starší má vždy
+aspoň zvolené sekundy plus 3 s rezervy na to, že událost kamery přichází
+do stránky dotazem každé 3 s). Událost ten starší záznam převezme a jen
+pokračuje, takže soubor začíná nejméně zvolený počet sekund před
+událostí (a nejvýš dvojnásobek plus 6 s) a v seznamu má poznámku „(N s
+před ní)“. Stojí to trochu výkonu, i když se nic neděje; na nule se nic
+dopředu nekóduje a nahrávka začne až událostí. Ruční a plánované nahrávání
+paměť na tu dobu pozastaví.
 
 Diagnostika ukazuje u každé kamery, zda odběr běží, co kamera umí, poslední
 událost, případnou chybu zápisu do CLB1 a **poslední nezapsanou událost s

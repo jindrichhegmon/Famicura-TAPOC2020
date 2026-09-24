@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WATCH_EVENTS, defaultWatch, normalizeWatch, isDefaultWatch, describeWatch, WatchFilter, cameraEventAllowed, cameraEventLabel, recordSeconds }
+import { WATCH_EVENTS, defaultWatch, normalizeWatch, isDefaultWatch, describeWatch, WatchFilter, cameraEventAllowed, cameraEventLabel, recordSeconds, preRollSeconds }
   from '../public/watch.js';
 import { LiveAnalyzer } from '../public/analyzer.js';
 
@@ -191,6 +191,24 @@ test('nahrávat po události: zatržítko u každé události, délka 5–30 s p
   assert.equal(normalizeWatch({ recordS: '10' }).watch.recordS, 10);
   assert.equal(isDefaultWatch({ recordS: 15 }), true);
   assert.equal(isDefaultWatch({ fall: { record: true } }), false);
-  assert.match(describeWatch(r.watch, [{ kind: 'cam-linecross' }]), /nahrává 20 s při: pád, překročení čáry$/);
+  assert.match(describeWatch(r.watch, [{ kind: 'cam-linecross' }]), /nahrává 5 s před a 20 s po: pád, překročení čáry$/);
   assert.doesNotMatch(describeWatch(defaultWatch()), /nahrává/);
+});
+
+test('obraz před událostí: 0–10 s, výchozí 5, jen když se něco nahrává', () => {
+  assert.equal(defaultWatch().preS, 5);
+  assert.equal(preRollSeconds(defaultWatch()), 0, 'nic nenahrává – nic se neukládá dopředu');
+  const r = normalizeWatch({ fall: { record: true } }).watch;
+  assert.equal(preRollSeconds(r), 5);
+  assert.equal(preRollSeconds(normalizeWatch({ fall: { record: true }, preS: 8 }).watch), 8);
+  assert.equal(preRollSeconds(normalizeWatch({ fall: { record: true }, preS: 0 }).watch), 0, 'vypnuto');
+  assert.equal(preRollSeconds(normalizeWatch({ fall: { record: true, enabled: false } }).watch), 0, 'vypnutá událost nenahrává');
+  assert.equal(preRollSeconds(normalizeWatch({ 'cam-linecross': { record: true }, preS: 3 }).watch), 3);
+  assert.equal(normalizeWatch({ preS: 11 }).ok, false);
+  assert.equal(normalizeWatch({ preS: -1 }).ok, false);
+  assert.equal(normalizeWatch({ preS: 2.5 }).ok, false);
+  assert.equal(normalizeWatch({ preS: '4' }).watch.preS, 4);
+  assert.equal(isDefaultWatch({ preS: 5 }), true);
+  assert.match(describeWatch(normalizeWatch({ fall: { record: true } }).watch), /nahrává 5 s před a 15 s po: pád/);
+  assert.match(describeWatch(normalizeWatch({ fall: { record: true }, preS: 0 }).watch), /nahrává 15 s po: pád/);
 });

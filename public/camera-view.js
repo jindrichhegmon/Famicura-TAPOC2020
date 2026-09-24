@@ -6,7 +6,7 @@
  * and the scheduler - stays in index.html and is reached through callbacks.
  */
 import { LiveAnalyzer, fmtTime, fmtClock, fmtSize, drawBackground, drawSkeleton } from '/analyzer.js';
-import { WATCH_EVENTS, WatchFilter, defaultWatch, describeWatch, recordSeconds } from '/watch.js';
+import { WATCH_EVENTS, WatchFilter, defaultWatch, describeWatch, recordSeconds, preRollSeconds } from '/watch.js';
 
 const ICE = [{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 
@@ -132,6 +132,8 @@ async function createLandmarker() {
   }
 }
 
+const PRE_LAG_S = 3;   // a camera-reported event reaches the page up to this late
+
 function pickMime() {
   const choices = [
     ['video/mp4;codecs=avc1.42E01E', 'mp4'], ['video/mp4', 'mp4'],
@@ -185,6 +187,8 @@ export class CameraView {
     this.chunks = [];
     this.recStartedAt = 0;
     this.timerId = null;
+    this.pre = [];                    // rolling buffer: up to two staggered recorders, oldest first
+    this.preTimer = null;
 
     this.lastDrawnAt = null;          // when the canvas last got a new frame
     this.pausedAt = null;             // when the page was hidden, if it was
@@ -236,6 +240,7 @@ export class CameraView {
       this.analysisBroken = false;
       this.autoAnalysis();
     }
+    this.updatePreRoll();
   }
 
   /** Is any event from the analysis switched on for this camera? */
@@ -334,10 +339,12 @@ export class CameraView {
     if (this.recording && !this.eventRecording) return;
     clearTimeout(this.eventRecTimer);
     if (!this.recording) {
-      this.startRecording(null, { event: ev });
+      const pre = this.takePreRoll();
+      this.startRecording(null, { event: ev, buffered: pre });
       if (!this.recording) return;                  // could not start: said on the card
       this.eventRecording = ev;
-      this.setMsg(`Nahrávám ${seconds} s kvůli události: ${ev.text || ev.kind}`);
+      const before = pre ? ` (a ${Math.round((Date.now() - pre.from.getTime()) / 1000)} s před ní)` : '';
+      this.setMsg(`Nahrávám ${seconds} s kvůli události: ${ev.text || ev.kind}${before}`);
     }
     this.eventRecTimer = setTimeout(() => { if (this.eventRecording) this.stopRecording(); }, seconds * 1000);
   }
@@ -452,6 +459,7 @@ export class CameraView {
       + (this.analyzing ? ', analýza běží.' : this.analysisWanted() ? '.' : '. Analýza vypnutá – v Událostech není z analýzy nic zapnuté.'));
     this.reconnectAttempt = 0;
     this.autoAnalysis();
+    this.updatePreRoll();
     if (this.transport === 'webrtc') {
       this.el.sound.classList.remove('hide');
       if (wantSound) this.setMuted(false);
@@ -628,6 +636,7 @@ export class CameraView {
                text: `${reason} – spojení se po ${MAX_RECONNECTS} pokusech nepodařilo obnovit.` });
     this.el.retry.classList.remove('hide');
     if (this.recording) this.stopRecording();
+    this.stopPreRoll();
     if (this.analyzing) this.stopAnalysis();
     this.hooks.onChange();
   }
@@ -673,6 +682,7 @@ export class CameraView {
     clearTimeout(this.pauseTimer);
     this.stopAnalysis();
     if (this.recording) this.stopRecording();
+    this.stopPreRoll();
     await this.teardown({ keepIntent: false });
     try { this.landmarker?.close?.(); } catch { /* already gone */ }
     this.landmarker = null;
@@ -720,7 +730,7 @@ export class CameraView {
   // being altered, recorded or analysed; otherwise the raw video is cheaper and
   // keeps the native iOS controls.
   needsCanvas() {
-    return this.displayMode !== 'normal' || this.analyzing || this.recording || this.showSkeleton();
+    return this.displayMode !== 'normal' || this.analyzing || this.recording || this.pre.length > 0 || this.showSkeleton();
   }
 
   /* ---------- drátěný model (pose skeleton over the picture) ---------- */
@@ -863,14 +873,30 @@ export class CameraView {
 
   /* ---------- recording ---------- */
 
-  /** interval: the schedule interval that started it; event: the event that did; neither: by hand. */
-  startRecording(interval = null, { event = null } = {}) {
+  /** A recorder on the canvas, already running; throws when the browser cannot. */
+  createRecorder() {
+    const fmt = pickMime();
+    const stream = this.el.canvas.captureStream(30);
+    const recorder = fmt.mime
+      ? new MediaRecorder(stream, { mimeType: fmt.mime, videoBitsPerSecond: 3500000 })
+      : new MediaRecorder(stream);
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+    recorder.start(1000);
+    return { recorder, chunks, fmt, from: new Date() };
+  }
+
+  /**
+   * interval: the schedule interval that started it; event: the event that did;
+   * neither: by hand. buffered: a recorder from the rolling buffer to carry on
+   * with, so the file starts before the event.
+   */
+  startRecording(interval = null, { event = null, buffered = null } = {}) {
     const canvas = this.el.canvas;
     if (!canvas.captureStream || !window.MediaRecorder) {
       this.setMsg('Tento prohlížeč neumí nahrávat canvas.', true);
       return;
     }
-    this.chunks = [];
     this.resetGap();
 
     // captureStream only produces frames from a canvas that is visible and being
@@ -880,7 +906,6 @@ export class CameraView {
     this.updateRender();
     this.fitCanvas();
 
-    const fmt = pickMime();
     // Decided now: by the time the recorder hands over the file, a scheduled
     // recording has already had its window cleared.
     const zdroj = interval ? 'plan' : event ? 'udalost' : 'rucne';
@@ -896,18 +921,14 @@ export class CameraView {
       this.setMsg(`Nahrávání se nepodařilo spustit: ${e.message}`, true);
     };
 
-    let recorder;
-    try {
-      const stream = canvas.captureStream(30);
-      recorder = fmt.mime
-        ? new MediaRecorder(stream, { mimeType: fmt.mime, videoBitsPerSecond: 3500000 })
-        : new MediaRecorder(stream);
-    } catch (e) { fail(e); return; }
-
+    let rec = buffered;
+    if (!rec) {
+      try { rec = this.createRecorder(); } catch (e) { fail(e); return; }
+    }
+    const { recorder, chunks, fmt, from } = rec;
     this.recorder = recorder;
-    const chunks = this.chunks;
-    recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-    const from = new Date();
+    this.chunks = chunks;
+    if (udalost && buffered) udalost.predS = Math.round((Date.now() - from.getTime()) / 1000);
 
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: recorder.mimeType || fmt.mime || 'video/mp4' });
@@ -915,13 +936,12 @@ export class CameraView {
       this.setMsg(`Nahrávka hotova (${fmtSize(blob.size)}).`);
       if (this.recorder === recorder) { this.recorder = null; this.recording = false; }
       this.updateRender();
+      this.updatePreRoll();
       // Only now is recording really over; the page lets the screen sleep again on this.
       this.hooks.onChange();
     };
 
-    this.recStartedAt = Date.now();
-    try { recorder.start(1000); } catch (e) { fail(e); return; }
-
+    this.recStartedAt = from.getTime();
     this.tickTimer();
     this.timerId = setInterval(() => this.tickTimer(), 250);
     this.el.record.textContent = '■ Zastavit nahrávání';
@@ -945,6 +965,60 @@ export class CameraView {
     this.el.record.textContent = '● Nahrávat';
     this.el.recBar.classList.add('hide');
     this.hooks.onChange();
+  }
+
+  /* ---------- rolling buffer: the seconds before an event ---------- */
+
+  /*
+   * While any event is set to record and the picture plays, two recorders run
+   * staggered by P seconds; the older one is restarted once it is 2P old, so
+   * at any moment the older holds between P and 2P seconds. An event takes it
+   * over and just keeps recording. P is the wanted seconds plus the lag with
+   * which a camera-reported event reaches the page (it is polled every 3 s).
+   */
+  preRollWanted() {
+    return this.hasPicture() && !this.recording && preRollSeconds(this.filter.watch) > 0;
+  }
+
+  updatePreRoll() {
+    if (this.preRollWanted()) { if (this.preTimer === null) { this.preTimer = setInterval(() => this.preTick(), 500); this.preTick(); } }
+    else this.stopPreRoll();
+  }
+
+  preTick() {
+    if (!this.preRollWanted()) { this.stopPreRoll(); return; }
+    if (!this.el.canvas.captureStream || !window.MediaRecorder) { this.stopPreRoll(); return; }
+    const period = (preRollSeconds(this.filter.watch) + PRE_LAG_S) * 1000;
+    const newest = this.pre[this.pre.length - 1];
+    if (newest && Date.now() - newest.from.getTime() < period) return;
+    if (this.pre.length >= 2) this.discardRecorder(this.pre.shift());
+    this.fitCanvas();
+    try { this.pre.push(this.createRecorder()); }
+    catch (e) { this.stopPreRoll(); this.setMsg(`Obraz před událostí nejde ukládat: ${e.message}`, true); return; }
+    // The first entry is what switches the canvas pipeline on; captureStream
+    // delivers frames from the moment the canvas is drawn.
+    this.updateRender();
+  }
+
+  /** The oldest buffered recorder, taken out of the buffer; the rest is dropped. */
+  takePreRoll() {
+    const oldest = this.pre.shift() || null;
+    if (this.preTimer !== null) { clearInterval(this.preTimer); this.preTimer = null; }
+    for (const r of this.pre.splice(0)) this.discardRecorder(r);
+    return oldest;                                 // the caller starts recording at once: no render toggle in between
+  }
+
+  stopPreRoll() {
+    if (this.preTimer !== null) { clearInterval(this.preTimer); this.preTimer = null; }
+    for (const r of this.pre.splice(0)) this.discardRecorder(r);
+    this.updateRender();
+  }
+
+  discardRecorder(r) {
+    r.recorder.ondataavailable = null;
+    r.recorder.onstop = null;
+    r.chunks.length = 0;
+    try { if (r.recorder.state !== 'inactive') r.recorder.stop(); } catch { /* already gone */ }
   }
 
   /* ---------- live analysis ---------- */
