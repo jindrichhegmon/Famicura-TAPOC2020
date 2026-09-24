@@ -6,7 +6,7 @@
  * and the scheduler - stays in index.html and is reached through callbacks.
  */
 import { LiveAnalyzer, fmtTime, fmtClock, fmtSize, drawBackground, drawSkeleton } from '/analyzer.js';
-import { WatchFilter, defaultWatch, describeWatch, recordSeconds } from '/watch.js';
+import { WATCH_EVENTS, WatchFilter, defaultWatch, describeWatch, recordSeconds } from '/watch.js';
 
 const ICE = [{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 
@@ -191,6 +191,8 @@ export class CameraView {
     this.pauseTimer = null;
 
     this.analyzing = false;
+    this.analysisStarting = false;
+    this.analysisBroken = false;          // failed on this machine: do not keep retrying on every reconnect
     this.skeleton = loadSkeletonPref();   // draw the pose over the picture
     this.detectFailures = 0;
     this.detectOff = false;               // set when the pose model keeps failing
@@ -204,7 +206,7 @@ export class CameraView {
     const q = (sel) => this.card.querySelector(sel);
     this.el = {
       name: q('.name'), video: q('video'), canvas: q('canvas.draw'), small: q('canvas.small'),
-      modes: q('.modes'), paths: q('.paths'), pathInfo: q('.pathInfo'), record: q('.record'), analyze: q('.analyze'), sound: q('.sound'),
+      modes: q('.modes'), paths: q('.paths'), pathInfo: q('.pathInfo'), record: q('.record'), sound: q('.sound'),
       retry: q('.retry'), recBar: q('.recBar'), timer: q('.timer'), stop: q('.stop'), msg: q('.msg'),
       watchInfo: q('.watchInfo'), skeleton: q('input.skeleton'),
     };
@@ -226,6 +228,30 @@ export class CameraView {
     this.filter.set(watch);
     this.analyzer.configure(this.filter.detectorOptions());
     this.el.watchInfo.textContent = 'Sleduje: ' + describeWatch(this.filter.watch, this.device.events || []);
+    // The settings decide whether analysis runs at all: nothing from it
+    // wanted, nothing to compute; something wanted, it runs while the picture does.
+    if (!this.analysisWanted()) {
+      if (this.analyzing) { this.stopAnalysis(); this.setMsg('Analýza vypnutá – v Událostech není z analýzy nic zapnuté.'); }
+    } else {
+      this.analysisBroken = false;
+      this.autoAnalysis();
+    }
+  }
+
+  /** Is any event from the analysis switched on for this camera? */
+  analysisWanted() {
+    return WATCH_EVENTS.some((e) => this.filter.watch[e.kind]?.enabled);
+  }
+
+  /*
+   * Analysis is not a thing to start by hand: it runs whenever the picture
+   * runs and the settings ask for any of its events. A machine that cannot run
+   * it (no WebGL) says so once and is not asked again until the settings change
+   * or the page reloads.
+   */
+  autoAnalysis() {
+    if (!this.hasPicture() || this.analyzing || this.analysisStarting || this.analysisBroken) return;
+    if (this.analysisWanted()) this.startAnalysis();
   }
 
   bind() {
@@ -244,7 +270,6 @@ export class CameraView {
     this.renderPath();
     e.skeleton.onchange = () => this.setSkeleton(e.skeleton.checked);
     e.record.onclick = () => (this.recording ? this.stopRecording() : this.startRecording());
-    e.analyze.onclick = () => (this.analyzing ? this.stopAnalysis() : this.startAnalysis());
     e.sound.onclick = () => this.setMuted(!e.video.muted);
     // "Klepněte na obraz": a real gesture, which is what a refused play() needs.
     const tap = () => { if (this.hasSource() && e.video.paused) this.play(); };
@@ -423,8 +448,10 @@ export class CameraView {
     }
     this.playFailureLogged = false;
     const https = this.transport === 'https' ? ' (náhradní cesta přes HTTPS, bez zvuku)' : '';
-    this.setMsg((this.reconnectAttempt ? 'Spojení obnoveno, přehrávám' : 'Přehrávám') + https + '.');
+    this.setMsg((this.reconnectAttempt ? 'Spojení obnoveno, přehrávám' : 'Přehrávám') + https
+      + (this.analyzing ? ', analýza běží.' : this.analysisWanted() ? '.' : '. Analýza vypnutá – v Událostech není z analýzy nic zapnuté.'));
     this.reconnectAttempt = 0;
+    this.autoAnalysis();
     if (this.transport === 'webrtc') {
       this.el.sound.classList.remove('hide');
       if (wantSound) this.setMuted(false);
@@ -923,20 +950,18 @@ export class CameraView {
   /* ---------- live analysis ---------- */
 
   async startAnalysis() {
-    const btn = this.el.analyze;
-    btn.disabled = true;
-    if (!(await this.ensureLandmarker('Načítám model pro analýzu…'))) {
-      btn.disabled = false;
-      return;
-    }
+    if (this.analyzing || this.analysisStarting) return;
+    this.analysisStarting = true;
+    const ok = await this.ensureLandmarker('Načítám model pro analýzu…');
+    this.analysisStarting = false;
+    if (!ok) { this.analysisBroken = true; return; }   // the card already says why
+    if (!this.hasPicture() || !this.analysisWanted()) return;   // the picture or the wish went away meanwhile
     this.analyzer.reset();
     this.resetGap();
     this.detectFailures = 0;
     this.detectOff = false;
     this.analysisStartedAt = Date.now();
     this.analyzing = true;
-    btn.textContent = 'Zastavit analýzu';
-    btn.disabled = false;
     this.setMsg('Analýza běží.');
     this.updateRender();
     this.hooks.onChange();
@@ -946,6 +971,7 @@ export class CameraView {
     const why = String(e?.message || e).slice(0, 200);
     this.log({ t: (Date.now() - this.analysisStartedAt) / 1000, kind: 'failed', level: 'warn',
                text: `Analýza se zastavila – snímky z kamery nejde vyhodnotit (${why}).` });
+    this.analysisBroken = true;
     this.stopAnalysis();
     this.setMsg(`Analýza se zastavila: snímky z kamery nejde vyhodnotit (${why}).`, true);
   }
@@ -953,7 +979,6 @@ export class CameraView {
   stopAnalysis() {
     if (!this.analyzing) return;
     this.analyzing = false;
-    this.el.analyze.textContent = 'Spustit analýzu';
     this.setMsg('Analýza zastavena.');
     this.updateRender();
     this.hooks.onChange();

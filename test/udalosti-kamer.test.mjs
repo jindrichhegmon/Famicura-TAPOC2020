@@ -80,6 +80,10 @@ test('sledované události platí i pro kameru: vypnutý druh a hodiny mimo se n
     await az(() => u.nedavne().length === 1);
     await chvilku(300);
     assert.deepEqual(u.nedavne().map((e) => e.kind), ['cam-vehicle']);
+    // What was dropped, and why, is visible: the last one was the person outside its hours.
+    const o = u.stav().tapoc2020.odmitnuto;
+    assert.equal(o.kind, 'cam-person');
+    assert.equal(o.duvod, 'mimo hodiny 08:00–20:00 (čas události 03:00)');
     assert.equal(db.provedene.filter((p) => /FamicuraRingLog/.test(p.text)).length, 1);
   } finally { await u.stop(); await chvilku(300); await cam.close(); }
 });

@@ -325,7 +325,6 @@
 
         <div class="row" style="margin-top:12px">
           <button class="record rec">● Nahrávat</button>
-          <button class="analyze">Spustit analýzu</button>
           <button class="retry hide">Připojit znovu</button>
         </div>
         <p class="watchInfo muted"></p>
@@ -433,6 +432,9 @@ function describeEventsState(c) {
     ? `<span class="ok">odebírám</span> <span class="muted">${esc(umi || 'kamera nehlásí nic')}</span>`
     : `<span class="bad">neodebírám</span>${c.eventsError ? `<br><span class="muted">${esc(c.eventsError)}</span>` : ''}`;
   if (c.eventsLast) out += `<br><span class="muted">naposledy ${esc(fmtClock(new Date(c.eventsLast.at)))} – ${esc(c.eventsLast.text)}</span>`;
+  if (c.eventsRejected) {
+    out += `<br><span class="muted">naposledy nezapsáno ${esc(fmtClock(new Date(c.eventsRejected.at)))} – ${esc(c.eventsRejected.label.toLowerCase())}: ${esc(c.eventsRejected.duvod)}</span>`;
+  }
   if (c.clbError) out += `<br><span class="bad">zápis do CLB1 se nedaří: ${esc(c.clbError)}</span>`;
   if (c.eventsOther?.length) {
     out += `<br><span class="muted">kamera hlásila i mimo nabídku: ${esc(c.eventsOther.map((x) => `${x.topic} (${x.item})`).join(', '))}</span>`;
@@ -963,8 +965,15 @@ const EVENTS_POLL_MS = 3000;   // also how late an event-triggered recording can
 let eventsSince = 0;
 let eventsTimer = null;
 
+let eventsPolling = false;
 async function pollCameraEvents() {
-  const { res, body } = await api('/api/events?since=' + eventsSince);
+  // One look at a time: a slow answer overlapping the next poll would hand
+  // the same events to the log twice.
+  if (eventsPolling) return;
+  eventsPolling = true;
+  let res, body;
+  try { ({ res, body } = await api('/api/events?since=' + eventsSince)); }
+  finally { eventsPolling = false; }
   if (!res.ok) return;
   // On the first look the server may hold hours of history; the page shows the tail.
   const fresh = eventsSince !== 0;              // history on the first look must not start recordings

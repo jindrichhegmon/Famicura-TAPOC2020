@@ -84,7 +84,10 @@ až o pár sekund po události; nahrává se jen tam, kde je kamera otevřená �
 server sám nenahrává.
 
 Diagnostika ukazuje u každé kamery, zda odběr běží, co kamera umí, poslední
-událost a případnou chybu zápisu do CLB1. Co kamera pošle pod jménem, které
+událost, případnou chybu zápisu do CLB1 a **poslední nezapsanou událost s
+důvodem** („v Událostech vypnuto“, „mimo hodiny 08:00–20:00 (čas události
+21:14)“); totéž jde do logu serveru. Hodiny se počítají v čase
+Europe/Prague z času události, který uvádí kamera (UTC). Co kamera pošle pod jménem, které
 katalog nezná (jiný detektor, jiná položka), se neztratí: jde do logu
 serveru (`pm2 logs famicura-tapo`, řádek „hlásí mimo katalog“) a do
 Diagnostiky, aby šlo dohledat, jak kamera pojmenovala třeba opuštění
@@ -142,6 +145,16 @@ Kamera posílá H.264. Umí ho Chrome, Edge a Safari, na počítači i na
 iPhonu. Prohlížeč bez H.264 (např. Chromium v některých Linuxech) dostane
 hlášku „Tento prohlížeč neumí obraz H.264 z kamery“. Znovu se pak
 nepřipojuje, protože by to nepomohlo.
+
+### Analýza běží sama
+
+Analýza obrazu (pád, dlouhé ležení, prudký pohyb, odchod ze záběru, změny
+polohy) nemá tlačítko: běží vždy, když běží obraz a v Událostech je z ní
+zapnutá aspoň jedna událost. Vypnete‑li v Událostech všechny, analýza se
+zastaví a karta to řekne. Počítač, který ji nezvládne (bez WebGL), to řekne
+jednou a dál se nezkouší, dokud se nezmění nastavení nebo neobnoví stránka.
+Analýza nic nestojí: model běží v prohlížeči, na VPS ani do internetu nic
+neposílá; stojí jen výkon procesoru/grafiky toho počítače.
 
 ### Drátěný model
 
