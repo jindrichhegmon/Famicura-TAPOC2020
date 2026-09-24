@@ -59,6 +59,19 @@ hodnoty, ne označení zprávy. Jedna detekce je jedna událost, ať přišla v
 jedné nebo ve sto zprávách; stejná detekce do 5 s po sobě se nepočítá
 dvakrát.
 
+### Nahrávka po události
+
+U každé události (z analýzy i z kamery) je zatržítko **nahrávat**: když
+nastane, prohlížeč, který má kameru otevřenou, nahraje následující sekundy.
+Délka je pro kameru jedna, posuvník **Délka nahrávání události** 5–30 s
+(výchozí 15). Nahrávka se objeví v seznamu s poznámkou „událost: …“ a do
+CLB1 jde se zdrojem `udalost`. Ručně nebo plánem spuštěné nahrávání má
+přednost (událost ho nepřeruší); nahrávku spuštěnou událostí každá další
+událost prodlouží, takže rušná minuta je jeden soubor. Události kamery
+přicházejí do stránky dotazem každé 3 s, takže taková nahrávka může začít
+až o pár sekund po události; nahrává se jen tam, kde je kamera otevřená –
+server sám nenahrává.
+
 Diagnostika ukazuje u každé kamery, zda odběr běží, co kamera umí, poslední
 událost a případnou chybu zápisu do CLB1. Co kamera pošle pod jménem, které
 katalog nezná (jiný detektor, jiná položka), se neztratí: jde do logu

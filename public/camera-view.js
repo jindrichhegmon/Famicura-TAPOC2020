@@ -5,8 +5,8 @@
  * Everything shared - the analysis log, the recordings list, CLB1, the folder
  * and the scheduler - stays in index.html and is reached through callbacks.
  */
-import { LiveAnalyzer, fmtTime, fmtClock, drawBackground, drawSkeleton } from '/analyzer.js';
-import { WatchFilter, defaultWatch, describeWatch } from '/watch.js';
+import { LiveAnalyzer, fmtTime, fmtClock, fmtSize, drawBackground, drawSkeleton } from '/analyzer.js';
+import { WatchFilter, defaultWatch, describeWatch, recordSeconds } from '/watch.js';
 
 const ICE = [{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 
@@ -180,6 +180,8 @@ export class CameraView {
     this.recorder = null;
     this.recording = false;
     this.autoWindow = null;           // the schedule interval this recording belongs to
+    this.eventRecording = null;       // the event that started the running recording, if any
+    this.eventRecTimer = null;
     this.chunks = [];
     this.recStartedAt = 0;
     this.timerId = null;
@@ -287,6 +289,32 @@ export class CameraView {
     const at = ev.at || new Date();
     if (!this.filter.accept(ev, at)) return;       // not watched here: neither the log nor CLB1
     this.hooks.onLog({ ...ev, at, device: this.device });
+    const s = recordSeconds(this.filter.watch, ev.kind);
+    if (s) this.recordForEvent(ev, s);
+  }
+
+  /** An event the camera itself reported (the server writes it; this only records). */
+  serverEvent(ev) {
+    const s = recordSeconds(this.filter.watch, ev.kind);
+    if (s) this.recordForEvent(ev, s);
+  }
+
+  /*
+   * Records the next `seconds` after an event. A recording someone started by
+   * hand or the schedule is left alone; one started by an event is extended by
+   * every further event, so a busy minute becomes one file, not five.
+   */
+  recordForEvent(ev, seconds) {
+    if (!this.hasPicture()) return;
+    if (this.recording && !this.eventRecording) return;
+    clearTimeout(this.eventRecTimer);
+    if (!this.recording) {
+      this.startRecording(null, { event: ev });
+      if (!this.recording) return;                  // could not start: said on the card
+      this.eventRecording = ev;
+      this.setMsg(`Nahrávám ${seconds} s kvůli události: ${ev.text || ev.kind}`);
+    }
+    this.eventRecTimer = setTimeout(() => { if (this.eventRecording) this.stopRecording(); }, seconds * 1000);
   }
 
   /* ---------- connection ---------- */
@@ -808,8 +836,8 @@ export class CameraView {
 
   /* ---------- recording ---------- */
 
-  /** interval: the schedule interval that started it, or null when started by hand. */
-  startRecording(interval = null) {
+  /** interval: the schedule interval that started it; event: the event that did; neither: by hand. */
+  startRecording(interval = null, { event = null } = {}) {
     const canvas = this.el.canvas;
     if (!canvas.captureStream || !window.MediaRecorder) {
       this.setMsg('Tento prohlížeč neumí nahrávat canvas.', true);
@@ -828,7 +856,8 @@ export class CameraView {
     const fmt = pickMime();
     // Decided now: by the time the recorder hands over the file, a scheduled
     // recording has already had its window cleared.
-    const zdroj = interval ? 'plan' : 'rucne';
+    const zdroj = interval ? 'plan' : event ? 'udalost' : 'rucne';
+    const udalost = event ? { kind: event.kind, text: event.text || '' } : null;
 
     // If anything here throws, `recording` must not stay true: the button would
     // read as recording for ever and the scheduler would never start again.
@@ -855,8 +884,8 @@ export class CameraView {
 
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: recorder.mimeType || fmt.mime || 'video/mp4' });
-      this.hooks.onRecording({ blob, device: this.device, from, to: new Date(), ext: fmt.ext, zdroj });
-      this.setMsg(`Nahrávka hotova (${(blob.size / 1024 / 1024).toFixed(1)} MB).`);
+      this.hooks.onRecording({ blob, device: this.device, from, to: new Date(), ext: fmt.ext, zdroj, udalost });
+      this.setMsg(`Nahrávka hotova (${fmtSize(blob.size)}).`);
       if (this.recorder === recorder) { this.recorder = null; this.recording = false; }
       this.updateRender();
       // Only now is recording really over; the page lets the screen sleep again on this.
@@ -880,6 +909,9 @@ export class CameraView {
 
   stopRecording() {
     this.autoWindow = null;
+    this.eventRecording = null;
+    clearTimeout(this.eventRecTimer);
+    this.eventRecTimer = null;
     if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop();
     else { this.recorder = null; this.recording = false; this.updateRender(); }
     clearInterval(this.timerId);

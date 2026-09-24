@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WATCH_EVENTS, defaultWatch, normalizeWatch, isDefaultWatch, describeWatch, WatchFilter, cameraEventAllowed, cameraEventLabel }
+import { WATCH_EVENTS, defaultWatch, normalizeWatch, isDefaultWatch, describeWatch, WatchFilter, cameraEventAllowed, cameraEventLabel, recordSeconds }
   from '../public/watch.js';
 import { LiveAnalyzer } from '../public/analyzer.js';
 
@@ -137,8 +137,8 @@ test('události kamery: bez nastavení jsou zapnuté; výchozí se neukládá, z
   const r = normalizeWatch({ 'cam-motion': { enabled: true }, 'cam-person': { enabled: false }, 'cam-pet': { from: '22:00', to: '06:00' } });
   assert.equal(r.ok, true);
   assert.equal('cam-motion' in r.watch, false, 'zapnuté bez hodin je výchozí');
-  assert.deepEqual(r.watch['cam-person'], { enabled: false, from: '', to: '' });
-  assert.deepEqual(r.watch['cam-pet'], { enabled: true, from: '22:00', to: '06:00' });
+  assert.deepEqual(r.watch['cam-person'], { enabled: false, from: '', to: '', record: false });
+  assert.deepEqual(r.watch['cam-pet'], { enabled: true, from: '22:00', to: '06:00', record: false });
   assert.equal(isDefaultWatch({ 'cam-motion': { enabled: true } }), true);
   assert.equal(isDefaultWatch({ 'cam-motion': { enabled: false } }), false);
   // A camera-declared kind outside the catalogue is kept too; junk is not.
@@ -168,4 +168,29 @@ test('popis karty jmenuje i to, co hlásí kamera', () => {
   assert.equal(cameraEventLabel('cam-tamper'), 'Zakrytí nebo posunutí kamery');
   assert.equal(cameraEventLabel('cam-babycry', 'BabyCry (hlásí kamera)'), 'BabyCry (hlásí kamera)');
   assert.equal(cameraEventLabel('cam-neco'), 'neco');
+});
+
+/* ---------- nahrávání po události ---------- */
+
+test('nahrávat po události: zatržítko u každé události, délka 5–30 s pro kameru', () => {
+  const d = defaultWatch();
+  assert.equal(d.recordS, 15);
+  assert.equal(d.fall.record, false);
+  const r = normalizeWatch({ fall: { record: true }, 'cam-linecross': { record: true }, recordS: 20 });
+  assert.equal(r.ok, true);
+  assert.equal(r.watch.fall.record, true);
+  assert.equal(r.watch.recordS, 20);
+  assert.deepEqual(r.watch['cam-linecross'], { enabled: true, from: '', to: '', record: true }, 'kamera: nahrávat se uloží i bez hodin');
+  assert.equal(recordSeconds(r.watch, 'fall'), 20);
+  assert.equal(recordSeconds(r.watch, 'cam-linecross'), 20);
+  assert.equal(recordSeconds(r.watch, 'abrupt'), 0);
+  assert.equal(recordSeconds(undefined, 'fall'), 0);
+  assert.equal(normalizeWatch({ recordS: 31 }).ok, false);
+  assert.equal(normalizeWatch({ recordS: 4 }).ok, false);
+  assert.equal(normalizeWatch({ recordS: 7.5 }).ok, false);
+  assert.equal(normalizeWatch({ recordS: '10' }).watch.recordS, 10);
+  assert.equal(isDefaultWatch({ recordS: 15 }), true);
+  assert.equal(isDefaultWatch({ fall: { record: true } }), false);
+  assert.match(describeWatch(r.watch, [{ kind: 'cam-linecross' }]), /nahrává 20 s při: pád, překročení čáry$/);
+  assert.doesNotMatch(describeWatch(defaultWatch()), /nahrává/);
 });

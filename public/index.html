@@ -177,6 +177,10 @@
   .watchRow.off .opt{opacity:.45}
   .view .watchInfo{margin:10px 0 0;font-size:.85rem}
   .watchHead{margin:12px 0 4px;font-size:.85rem;color:#5a6b7d}
+  .recLenRow{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 0 10px;border-bottom:1px solid #eef2f6}
+  .recLenRow label{flex:1 1 220px;font-weight:700;min-height:44px;display:flex;align-items:center;gap:8px}
+  .recLenRow output{font-weight:400;color:#5a6b7d}
+  .recLenRow input[type=range]{flex:1 1 200px;width:auto;padding:0;border:0;min-height:44px;accent-color:#106fd5}
   .watchHead:first-child{margin-top:0}
   .view .viewHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0 2px}
   .view .skel{display:flex;align-items:center;gap:8px;min-height:44px;font-size:.9rem;cursor:pointer}
@@ -255,7 +259,8 @@
       <p class="muted" style="margin:0 0 6px">
         Co se u této kamery hlásí do logu a do CLB1: události z analýzy obrazu v prohlížeči a události,
         které rozpozná kamera sama (ty zapisuje server i bez otevřeného prohlížeče). Prázdné hodiny
-        znamenají celý den; začátek větší než konec platí přes půlnoc (22:00–06:00).
+        znamenají celý den; začátek větší než konec platí přes půlnoc (22:00–06:00). „Nahrávat“ spustí
+        po události nahrávku zvolené délky – v prohlížeči, který má kameru otevřenou.
       </p>
       <div id="watchRows"></div>
       <div class="row" style="margin-top:12px">
@@ -364,10 +369,10 @@
 </div>
 
 <script type="module">
-import { fmtClock, createLogEntry, boundFrom, filterLog, logToCsv, csvFilename } from '/analyzer.js';
+import { fmtClock, createLogEntry, boundFrom, filterLog, logToCsv, csvFilename, fmtSize } from '/analyzer.js';
 import { MAX_INTERVALS, isWithin, dueRecordings, fmtInterval, collectIntervals } from '/schedule.js';
 import { CameraView } from '/camera-view.js';
-import { WATCH_EVENTS, normalizeWatch, fmtAfter, cameraEventLabel } from '/watch.js';
+import { WATCH_EVENTS, RECORD_S, normalizeWatch, fmtAfter, cameraEventLabel } from '/watch.js';
 import { WakeKeeper } from '/wake.js';
 import { isSupported as folderSupported, pickFolder, loadHandle, saveHandle,
          forgetHandle, ensurePermission, writeFile } from '/folder.js';
@@ -840,7 +845,7 @@ async function writeToFolder(rec) {
 }
 
 // zdroj ('plan' | 'rucne') is fixed by the camera when the recording starts.
-function addRecording({ blob, device, from, to, ext, zdroj }) {
+function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
   const url = URL.createObjectURL(blob);
   const stamp = from.toISOString().replace(/[:.]/g, '-');
   const safe = (device?.name || 'kamera').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
@@ -855,7 +860,8 @@ function addRecording({ blob, device, from, to, ext, zdroj }) {
   title.textContent = device?.name || 'Kamera';
   const when = document.createElement('span');
   when.className = 'muted';
-  when.textContent = `${fmtClock(from)}–${fmtClock(to)} · ${(blob.size / 1024 / 1024).toFixed(1)} MB`;
+  when.textContent = `${fmtClock(from)}–${fmtClock(to)} · ${fmtSize(blob.size)}`
+    + (zdroj === 'plan' ? ' · plán' : udalost ? ` · událost: ${udalost.text || udalost.kind}` : '');
   what.append(title, when);
 
   const a = document.createElement('a');
@@ -908,18 +914,20 @@ async function shareRecording(rec) {
  * CLB1 on its own; the page only asks every few seconds what came in since
  * its last look and shows it in the log with the analysis events.
  */
-const EVENTS_POLL_MS = 5000;
+const EVENTS_POLL_MS = 3000;   // also how late an event-triggered recording can start
 let eventsSince = 0;
 let eventsTimer = null;
 
 async function pollCameraEvents() {
   const { res, body } = await api('/api/events?since=' + eventsSince);
   if (!res.ok) return;
-  eventsSince = body.cas || eventsSince;
   // On the first look the server may hold hours of history; the page shows the tail.
+  const fresh = eventsSince !== 0;              // history on the first look must not start recordings
+  eventsSince = body.cas || eventsSince;
   for (const ev of (body.events || []).slice(-100)) {
     appendLog({ at: new Date(ev.at), t: 0, kind: ev.kind, level: ev.level, text: ev.text,
                 device: { id: ev.kameraId, name: ev.kameraNazev }, server: true });
+    if (fresh) views.get(ev.kameraId)?.serverEvent({ kind: ev.kind, text: ev.text, at: new Date(ev.at) });
   }
 }
 
@@ -1104,6 +1112,7 @@ function watchRow(kind, label, r, afterChoices) {
   row.innerHTML = `
     <label class="on"><input type="checkbox" class="enabled" ${r.enabled ? 'checked' : ''}> ${esc(label)}</label>
     ${after}
+    <label class="opt" title="Po události nahrát následující sekundy"><input type="checkbox" class="record" ${r.record ? 'checked' : ''}> nahrávat</label>
     <span class="opt hours">jen
       <input class="from" type="time" value="${esc(r.from)}" aria-label="${esc(label)} – od">
       –
@@ -1122,9 +1131,22 @@ function watchHead(text) {
 
 // The camera part lists only what this camera said it can report: a C200
 // gets motion, a C220 gets person, vehicle and pet as well.
+function recordLengthRow(seconds) {
+  const row = document.createElement('div');
+  row.className = 'recLenRow';
+  row.innerHTML = `
+    <label>Délka nahrávání události <output>${seconds} s</output></label>
+    <input type="range" class="recordS" min="${RECORD_S.min}" max="${RECORD_S.max}" step="1" value="${seconds}"
+           aria-label="Délka nahrávání události v sekundách">`;
+  const out = row.querySelector('output');
+  row.querySelector('input').oninput = (ev) => { out.textContent = `${ev.target.value} s`; };
+  return row;
+}
+
 function renderWatchRows(watch, device) {
   const box = $('watchRows');
   box.innerHTML = '';
+  box.append(recordLengthRow(watch.recordS || RECORD_S.default));
   box.append(watchHead('Z analýzy obrazu v prohlížeči (jen když je kamera otevřená):'));
   for (const e of WATCH_EVENTS) box.append(watchRow(e.kind, e.label, watch[e.kind], e.after));
 
@@ -1135,16 +1157,17 @@ function renderWatchRows(watch, device) {
   }
   box.append(watchHead('Rozpozná kamera sama (zapisuje server, i bez otevřeného prohlížeče):'));
   for (const e of cam) {
-    const r = watch[e.kind] || { enabled: true, from: '', to: '' };
+    const r = watch[e.kind] || { enabled: true, from: '', to: '', record: false };
     box.append(watchRow(e.kind, cameraEventLabel(e.kind, e.label), r, null));
   }
 }
 
 function watchRowValues() {
-  const w = {};
+  const w = { recordS: Number($('watchRows').querySelector('.recordS')?.value) || RECORD_S.default };
   for (const row of $('watchRows').querySelectorAll('.watchRow')) {
     w[row.dataset.kind] = {
       enabled: row.querySelector('.enabled').checked,
+      record: row.querySelector('.record').checked,
       from: row.querySelector('.from').value,
       to: row.querySelector('.to').value,
       ...(row.querySelector('.after') ? { after: Number(row.querySelector('.after').value) } : {}),

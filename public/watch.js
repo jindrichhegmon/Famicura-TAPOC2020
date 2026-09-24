@@ -24,6 +24,12 @@ export const WATCH_EVENTS = [
 const BY_KIND = Object.fromEntries(WATCH_EVENTS.map((e) => [e.kind, e]));
 
 /*
+ * An event can start a recording of the next few seconds (in the browser that
+ * has the camera open). One length per camera, chosen on a slider.
+ */
+export const RECORD_S = { min: 5, max: 30, default: 15 };
+
+/*
  * What the camera itself reports (ONVIF). Which of these a camera has, the
  * camera says (src/onvif.mjs); the server filters and writes them, so this
  * side only decides and describes. A kind outside the list is one the camera
@@ -47,12 +53,17 @@ export const cameraEventLevel = (kind) => BY_CAM[kind]?.level || 'info';
 
 /** Everything on, all day, original durations – how analysis always behaved. */
 export function defaultWatch() {
-  const w = {};
+  const w = { recordS: RECORD_S.default };
   for (const e of WATCH_EVENTS) {
-    w[e.kind] = { enabled: true, from: '', to: '' };
+    w[e.kind] = { enabled: true, from: '', to: '', record: false };
     if (e.after) w[e.kind].after = e.after[0];
   }
   return w;
+}
+
+/** Seconds to record after an event of this kind, or 0 when it should not record. */
+export function recordSeconds(watch, kind) {
+  return watch?.[kind]?.record ? (Number(watch.recordS) || RECORD_S.default) : 0;
 }
 
 export function fmtAfter(s) {
@@ -82,7 +93,7 @@ export function normalizeWatch(raw) {
     }
     if (from && from === to) return { ok: false, error: `${e.label}: začátek a konec se nesmí rovnat.` };
 
-    const out = { enabled: r.enabled !== false, from, to };
+    const out = { enabled: r.enabled !== false, from, to, record: r.record === true };
     if (e.after) {
       const after = r.after === undefined ? e.after[0] : Number(r.after);
       if (!e.after.includes(after)) return { ok: false, error: `${e.label}: nepodporovaná délka.` };
@@ -107,8 +118,17 @@ export function normalizeWatch(raw) {
     }
     if (from && from === to) return { ok: false, error: `${label}: začátek a konec se nesmí rovnat.` };
     const enabled = r.enabled !== false;
-    if (enabled && !from) continue;
-    watch[kind] = { enabled, from, to };
+    const record = r.record === true;
+    if (enabled && !from && !record) continue;
+    watch[kind] = { enabled, from, to, record };
+  }
+
+  if (raw.recordS !== undefined && raw.recordS !== null) {
+    const s = Number(raw.recordS);
+    if (!Number.isInteger(s) || s < RECORD_S.min || s > RECORD_S.max) {
+      return { ok: false, error: `Délka nahrávání události musí být ${RECORD_S.min}–${RECORD_S.max} s.` };
+    }
+    watch.recordS = s;
   }
   return { ok: true, watch };
 }
@@ -148,8 +168,12 @@ export function describeWatch(w, cameraEvents = []) {
     if (r && r.enabled === false) continue;
     cam.push(cameraEventLabel(e.kind, e.label).toLowerCase() + (r?.from ? ` (${r.from}–${r.to})` : ''));
   }
-  const text = parts.length ? parts.join(' · ') : 'nic – analýza nic nehlásí';
-  return cam.length ? `${text} · kamera hlásí: ${cam.join(', ')}` : text;
+  let text = parts.length ? parts.join(' · ') : 'nic – analýza nic nehlásí';
+  if (cam.length) text += ` · kamera hlásí: ${cam.join(', ')}`;
+  const rec = [...WATCH_EVENTS.map((e) => [e.kind, e.label]), ...cameraEvents.map((e) => [e.kind, cameraEventLabel(e.kind, e.label)])]
+    .filter(([kind]) => w?.[kind]?.record && w[kind].enabled !== false).map(([, label]) => label.toLowerCase());
+  if (rec.length) text += ` · nahrává ${w.recordS || RECORD_S.default} s při: ${rec.join(', ')}`;
+  return text;
 }
 
 /**

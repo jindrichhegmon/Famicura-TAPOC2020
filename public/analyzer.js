@@ -347,6 +347,11 @@ export function fmtDate(date) {
  * written with textContent so a future source cannot inject markup.
  */
 /** Where a log entry came from: the camera's own detector or the analysis in the browser. */
+/** "312 kB" under a megabyte, "2.4 MB" above: a short event clip must not read as "0.0 MB". */
+export function fmtSize(bytes) {
+  return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} kB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export function eventSource(ev) {
   return /^cam-/.test(ev.kind || "") ? "kamera" : "analýza";
 }

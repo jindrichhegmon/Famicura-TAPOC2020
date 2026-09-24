@@ -346,7 +346,7 @@ test('nastavení událostí kamery se ukládá spolu s analýzou', async () => {
   const { h, store } = handler();
   const put = (watch) => h(req('PUT', '/api/watch', { cookies: cookie(), body: { deviceId: 'tapoc2020', watch } }));
   assert.equal((await put({ 'cam-motion': { enabled: false }, fall: { enabled: true } })).status, 200);
-  assert.deepEqual(store.data.watch.tapoc2020['cam-motion'], { enabled: false, from: '', to: '' });
+  assert.deepEqual(store.data.watch.tapoc2020['cam-motion'], { enabled: false, from: '', to: '', record: false });
   assert.equal((await put({ 'cam-motion': { from: '22:00', to: '' } })).status, 400);
 });
 
