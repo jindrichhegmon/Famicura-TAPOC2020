@@ -3,7 +3,9 @@
  *
  * Pro každou kameru z cameras.json běží smyčka: zjistit, co kamera umí, založit
  * odběr, čekat na zprávy, každých ~8 minut odběr obnovit; po chybě chvíli
- * počkat a začít znovu. Odběr běží trvale, tedy i bez otevřeného prohlížeče.
+ * počkat a začít znovu (po výpadku běžícího odběru za pár sekund, když kamera
+ * neodpovídá vůbec, s rostoucím odstupem). Odběr běží trvale, tedy i bez
+ * otevřeného prohlížeče.
  * Každá událost projde nastavením Sledovaných událostí té kamery (hodiny se
  * počítají v čase pečovatelů, ne serveru) a zapíše se do CLB1; posledních pár
  * set si server drží pro stránku (GET /api/events).
@@ -26,7 +28,7 @@ export function mistniCas(ms, casPasmo) {
 export function createCameraEvents({ kamery, store, dbs, onvif = createOnvif, log = console, now = Date.now,
                                      sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
                                      casPasmo = process.env.CAS_PASMO || 'Europe/Prague',
-                                     renewS = 480, pullS = 60, cekaniMs = 15000 }) {
+                                     renewS = 480, pullS = 60, cekaniMs = 15000, znovuMs = 2000 }) {
   const stav = new Map();           // id → { ok, error, events, posledni, clbChyba }
   const smycky = new Map();         // id → { stop, hotovo }
   const nedavne = [];               // newest last
@@ -87,7 +89,10 @@ export function createCameraEvents({ kamery, store, dbs, onvif = createOnvif, lo
         zaznam(kam.id, { ok: true, error: null, events });
         adresa = await klient.subscribe();
         let obnoveno = now();
-        cekani = cekaniMs;
+        // A camera that answered once and then leaves a pull unanswered (the C220
+        // does, now and then, after a burst) gets a new subscription within seconds:
+        // every second of waiting here is a second in which its events are lost.
+        cekani = znovuMs;
         while (!ctl.stop) {
           const jine = [];
           const zpravy = await klient.pull(adresa, { timeoutS: pullS, nezarazene: jine });
@@ -107,7 +112,7 @@ export function createCameraEvents({ kamery, store, dbs, onvif = createOnvif, lo
       } finally {
         if (adresa) await klient.unsubscribe(adresa).catch(() => {});
       }
-      if (!ctl.stop) { await sleep(cekani); cekani = Math.min(cekani * 2, 120000); }
+      if (!ctl.stop) { await sleep(cekani); cekani = Math.min(Math.max(cekani * 2, cekaniMs), 120000); }
     }
   }
 

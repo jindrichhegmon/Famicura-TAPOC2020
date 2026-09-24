@@ -45,7 +45,10 @@ umí. Server na VPS se ke kameře přihlásí účtem kamery (tím samým, co
 go2rtc), založí odběr (PullPoint) a drží ho trvale: každou událost projde
 nastavením Sledovaných událostí té kamery a zapíše do CLB1 sám, **i když
 nikdo nemá otevřený prohlížeč**. Stránka se každých pár sekund zeptá, co
-přišlo, a ukáže to v logu vedle událostí z analýzy.
+přišlo, a ukáže to v logu vedle událostí z analýzy. Tapo C220 občas na
+jeden dotaz (typicky hned po sérii hlášení) neodpoví; server pak odběr
+založí znovu do pár sekund, ztratí se jen to, co kamera hlásila v těch
+sekundách. Kamera, která neodpovídá vůbec, se zkouší s rostoucím odstupem.
 
 V kartě **Události** u kamery jsou dvě části: „Z analýzy obrazu v
 prohlížeči“ (pád, dlouhé ležení… – běží jen s otevřenou kamerou) a
@@ -98,7 +101,8 @@ dál, jen události chybí – stav to řekne.
 Když kamera nic nehlásí, `./deploy/vps-diag.sh` (z Macu; na VPS spustí
 `scripts/onvif-diag.mjs`) vypíše model a firmware, všechna témata ONVIF,
 jak je kamera pojmenovala, a minutu každou zprávu tak, jak přišla –
-i takovou, kterou katalog nezná. Firmware Tapo 1.3.4 a 1.3.5 (jaro 2023)
+i takovou, kterou katalog nezná; když kamera na dotaz neodpoví, vypíše
+to a odběr založí znovu, stejně jako server. Firmware Tapo 1.3.4 a 1.3.5 (jaro 2023)
 události ONVIF neposílal; novější i starší ano. Kdyby diagnostika hlásila odběr v pořádku, ale žádná událost
 nechodila, zkontrolujte v aplikaci Tapo, že je detekce zapnutá, a verzi
 firmwaru.

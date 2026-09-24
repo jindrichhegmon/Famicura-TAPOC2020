@@ -15,9 +15,11 @@ const az = async (co, ms = 3000) => { const t = Date.now(); while (!co()) { if (
 function sestav(cam, { watch = {}, casPasmo = 'Europe/Prague', now } = {}) {
   const db = mockDbs();
   const store = memStore({ watch });
+  const cekani = [];                // how long the loop wanted to wait before each retry
   const kamery = async () => [{ id: 'tapoc2020', name: 'Pokoj 12', ip: '127.0.0.1', onvifPort: cam.port, user: cam.user, pass: cam.pass }];
-  const u = createCameraEvents({ kamery, store, dbs: db.dbs, log: ticho, casPasmo, now, pullS: 1, sleep: (ms) => chvilku(Math.min(ms, 100)) });
-  return { u, db, store };
+  const u = createCameraEvents({ kamery, store, dbs: db.dbs, log: ticho, casPasmo, now, pullS: 1,
+    sleep: (ms) => { cekani.push(ms); return chvilku(Math.min(ms, 100)); } });
+  return { u, db, store, cekani };
 }
 
 test('místní čas: hodiny pečovatelů, ne serveru (UTC)', () => {
@@ -98,6 +100,21 @@ test('výpadek CLB1 událost nezahodí a hlásí se ve stavu', async () => {
     cam.motion();
     await az(() => u.nedavne().length === 1);
     await az(() => /Login failed/.test(u.stav().tapoc2020.clbChyba || ''));
+  } finally { await u.stop(); await chvilku(300); await cam.close(); }
+});
+
+test('kamera přestane odpovídat na dotaz: nový odběr za pár sekund, události pak chodí dál', async () => {
+  const cam = await startFakeOnvif();
+  const { u, cekani } = sestav(cam);
+  try {
+    await u.start();
+    await az(() => u.stav().tapoc2020?.ok);
+    cam.mlci();
+    await az(() => cam.calls.filter((c) => c.op === 'CreatePullPointSubscription').length === 2);
+    assert.deepEqual(cekani, [2000], 'po výpadku běžícího odběru se nečeká 15 s');
+    await az(() => u.stav().tapoc2020.ok);
+    cam.motion();
+    await az(() => u.nedavne().length === 1);
   } finally { await u.stop(); await chvilku(300); await cam.close(); }
 });
 

@@ -65,6 +65,7 @@ export async function startFakeOnvif({ user = 'famicura', pass = 'Tajne:heslo/1'
   const waiters = [];
   const subs = new Map();           // idx → expires (ms)
   let nextIdx = 1;
+  let neodpovi = 0;                 // PullMessages requests to leave unanswered (C220 does this after a burst)
 
   const zprava = (topic, items, { op = 'Changed', time } = {}) =>
     `<wsnt:NotificationMessage><wsnt:Topic Dialect="http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet">${topic}</wsnt:Topic>
@@ -127,6 +128,7 @@ export async function startFakeOnvif({ user = 'famicura', pass = 'Tajne:heslo/1'
       const idx = Number((req.url.match(/Idx=(\d+)/) || [])[1]);
       if (!subs.has(idx) || subs.get(idx) < Date.now()) return send(fault('ter:InvalidArgVal', 'no such subscription', 400));
       if (op === 'PullMessages') {
+        if (neodpovi > 0) { neodpovi--; return req.socket.destroy(); }
         if (!queue.length) await new Promise((r) => { waiters.push(r); setTimeout(r, 150); });
         const msgs = queue.splice(0);
         return send({ status: 200, body: env(`<tev:PullMessagesResponse><tev:CurrentTime>${new Date().toISOString()}</tev:CurrentTime>
@@ -152,6 +154,8 @@ export async function startFakeOnvif({ user = 'famicura', pass = 'Tajne:heslo/1'
     tooDark: () => push('tns1:VideoSource/ImageTooDark', { State: true }),
     initialized: () => push('tns1:RuleEngine/CellMotionDetector/Motion', { IsMotion: true }, { op: 'Initialized' }),
     motion1970: () => push('tns1:RuleEngine/CellMotionDetector/Motion', { IsMotion: true }, { time: '1970-01-01T00:00:00Z' }),
+    /** Kamera na příštích n dotazů PullMessages neodpoví (spojení spadne). */
+    mlci: (n = 1) => { neodpovi = n; },
     close: () => new Promise((r) => server.close(r)),
   };
 }

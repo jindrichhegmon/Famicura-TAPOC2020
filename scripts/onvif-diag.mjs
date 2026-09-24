@@ -42,10 +42,23 @@ for (const k of kamery) {
     console.log(`odběr založen: ${adresa}`);
     console.log(`čekám ${sekund} s na zprávy – teď se před kamerou hýbejte…`);
     const konec = Date.now() + sekund * 1000;
-    let prazdnych = 0, zprav = 0;
+    let prazdnych = 0, zprav = 0, vypadku = 0;
     while (Date.now() < konec) {
       const vse = [];
-      const ev = await c.pull(adresa, { timeoutS: Math.min(10, Math.ceil((konec - Date.now()) / 1000)), vse });
+      let ev;
+      try {
+        ev = await c.pull(adresa, { timeoutS: Math.min(10, Math.ceil((konec - Date.now()) / 1000)), vse });
+      } catch (e) {
+        // The C220 now and then leaves one PullMessages unanswered (typically right
+        // after a burst). The server survives that by subscribing again; so does this.
+        vypadku++;
+        if (prazdnych) { console.log(''); prazdnych = 0; }
+        console.log(`${cas()}  kamera na dotaz neodpověděla: ${e.message}${e.detail ? ` (${e.detail})` : ''} – zakládám odběr znovu`);
+        await c.unsubscribe(adresa).catch(() => {});
+        adresa = null;
+        adresa = await c.subscribe();
+        continue;
+      }
       if (!vse.length) { prazdnych++; process.stdout.write('.'); continue; }
       if (prazdnych) { console.log(''); prazdnych = 0; }
       for (const m of vse) {
@@ -54,7 +67,7 @@ for (const k of kamery) {
       }
       for (const e of ev) console.log(`${cas()}    → událost aplikace: ${e.kind}`);
     }
-    console.log(`\nhotovo: ${zprav} zpráv za ${sekund} s`);
+    console.log(`\nhotovo: ${zprav} zpráv za ${sekund} s${vypadku ? `, ${vypadku}× kamera na dotaz neodpověděla (server to řeší sám, ztratí se tím jen události v těch pár sekundách)` : ''}`);
     if (!zprav) {
       console.log('Kamera neposlala nic. Zkontrolujte v aplikaci Tapo: Nastavení kamery → Detekce → zapnutou detekci pohybu/osob,');
       console.log('a verzi firmwaru (1.3.4 a 1.3.5 z jara 2023 události ONVIF neposílaly – aktualizace je v aplikaci Tapo).');
