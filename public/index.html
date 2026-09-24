@@ -278,6 +278,10 @@
           <button id="pickFolder" class="sec">Vybrat složku pro videa</button>
           <button id="forgetFolder" class="sec hide">Zapomenout složku</button>
         </div>
+        <label class="muted hide" id="autoDlBox" style="display:flex;align-items:center;gap:8px;margin-top:8px;min-height:44px">
+          <input type="checkbox" id="autoDl" style="width:22px;height:22px;min-height:22px;margin:0">
+          Každou hotovou nahrávku rovnou stáhnout (do složky Stažené soubory)
+        </label>
       </div>
 
       <p id="clbMsg" class="muted" style="margin:10px 0 0"></p>
@@ -788,11 +792,32 @@ function showFolder(text, bad) {
   $('folderMsg').innerHTML = bad ? `<span class="bad">${esc(text)}</span>` : esc(text);
 }
 
+/*
+ * Safari (Mac and iPhone) cannot write into a folder; the nearest thing is to
+ * download every finished recording at once, into the browser's downloads
+ * folder. A per-browser preference, off until the person turns it on.
+ */
+const AUTO_DL_KEY = 'famicura.autoStahovat';
+function autoDownloadOn() {
+  try { return localStorage.getItem(AUTO_DL_KEY) === '1'; } catch { return false; }
+}
+$('autoDl').onchange = () => {
+  try { localStorage.setItem(AUTO_DL_KEY, $('autoDl').checked ? '1' : '0'); } catch { /* private mode */ }
+  if ($('autoDl').checked) for (const rec of recordings) if (!rec.saved) downloadRecording(rec);
+};
+function downloadRecording(rec) {
+  rec.link.click();
+  rec.saved = 'stažené soubory';
+  rec.savedEl.textContent = 'staženo';
+}
+
 async function initFolder() {
   if (!folderSupported()) {
     $('pickFolder').classList.add('hide');
+    $('autoDlBox').classList.remove('hide');
+    $('autoDl').checked = autoDownloadOn();
     showFolder('Tento prohlížeč neumí zapisovat do složky. Videa zůstanou ke stažení '
-             + 'v seznamu níže. Přímý zápis do složky na Disku umí Chrome nebo Edge na počítači.');
+             + 'v seznamu níže, nebo se stáhnou samy (zatržítko). Přímý zápis do složky na Disku umí Chrome nebo Edge na počítači.');
     return;
   }
 
@@ -808,18 +833,36 @@ async function initFolder() {
   showFolder(granted
     ? `Videa se ukládají do složky ${folderHandle.name}.`
     : `Složka ${folderHandle.name} čeká na potvrzení – klepněte na Vybrat složku.`, !granted);
+  if (granted) saveUnsaved();
 }
+
+/*
+ * Whatever finished while the folder was not available - before it was picked,
+ * or before the browser re-granted access after a reload - is written as soon
+ * as it is. Checked again every minute, so a failed write gets another go.
+ */
+async function saveUnsaved() {
+  if (!folderHandle || !await ensurePermission(folderHandle, false)) return;
+  for (const rec of recordings) {
+    if (rec.saved) continue;
+    const folder = await writeToFolder(rec);
+    if (folder) { rec.saved = folder; rec.savedEl.textContent = `uloženo do ${folder}`; }
+  }
+}
+setInterval(() => { saveUnsaved().catch(() => {}); }, 60000);
 
 $('pickFolder').onclick = async () => {
   try {
     // An existing handle only needs the permission renewing, not re-picking.
     if (folderHandle && await ensurePermission(folderHandle, true)) {
       showFolder(`Videa se ukládají do složky ${folderHandle.name}.`);
+      saveUnsaved();
       return;
     }
     folderHandle = await pickFolder();
     $('forgetFolder').classList.remove('hide');
     showFolder(`Videa se ukládají do složky ${folderHandle.name}.`);
+    saveUnsaved();
   } catch (e) {
     if (e.name !== 'AbortError') showFolder(`Složku se nepodařilo použít: ${e.message}`, true);
   }
@@ -849,7 +892,7 @@ function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
   const url = URL.createObjectURL(blob);
   const stamp = from.toISOString().replace(/[:.]/g, '-');
   const safe = (device?.name || 'kamera').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
-  const rec = { url, blob, device, from, to,
+  const rec = { url, blob, device, from, to, saved: null,
                 name: `famicura-${safe}-${stamp}.${ext}` };
   recordings.unshift(rec);
 
@@ -877,6 +920,7 @@ function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
 
   const saved = document.createElement('span');
   saved.className = 'saved';
+  rec.savedEl = saved;
 
   const actions = document.createElement('div');
   actions.className = 'row';
@@ -888,8 +932,9 @@ function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
   $('recEmpty').classList.add('hide');
 
   // Put it in the folder, then tell CLB1 where it went.
+  if (!folderSupported() && autoDownloadOn()) downloadRecording(rec);
   writeToFolder(rec).then((folder) => {
-    if (folder) saved.textContent = `uloženo do ${folder}`;
+    if (folder) { rec.saved = folder; saved.textContent = `uloženo do ${folder}`; }
     clbSend({
       typ: 'nahravka',
       od: from.toISOString(), do: to.toISOString(),

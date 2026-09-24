@@ -59,6 +59,17 @@ hodnoty, ne označení zprávy. Jedna detekce je jedna událost, ať přišla v
 jedné nebo ve sto zprávách; stejná detekce do 5 s po sobě se nepočítá
 dvakrát.
 
+### Ukládání nahrávek
+
+V Chromu a Edgi na počítači se každá hotová nahrávka zapíše hned do složky
+zvolené tlačítkem **Vybrat složku pro videa** (typicky složka Disku Google,
+která ji sama nahraje). Co se nestihlo – nahrávky z doby, než byla složka
+vybraná, nebo než prohlížeč po obnovení stránky znovu potvrdil přístup – se
+dopíše, jakmile je složka k dispozici, a každou minutu se to zkouší znovu.
+Safari (Mac i iPhone) do složky zapisovat neumí; místo toho je tam
+zatržítko **Každou hotovou nahrávku rovnou stáhnout**, po němž jde každá
+nahrávka sama do složky Stažené soubory prohlížeče.
+
 ### Nahrávka po události
 
 U každé události (z analýzy i z kamery) je zatržítko **nahrávat**: když
