@@ -119,6 +119,8 @@ export function detekceZTopicSet(topicSet) {
  * katalogu nevešlo, přijde do `nezarazene`, aby šlo z logu serveru zjistit, co
  * kamera vlastně posílá.
  */
+const ZNOVU_MS = 10_000;     // "true" this long after the previous "true", with no "false" between, is a new detection
+
 export function udalostiZeZprav(doc, now = Date.now, nezarazene = [], vse = null, stavy = new Map()) {
   const out = [];
   for (const nm of vsechny(doc, 'NotificationMessage')) {
@@ -141,8 +143,12 @@ export function udalostiZeZprav(doc, now = Date.now, nezarazene = [], vse = null
       if (val !== 'true' && val !== 'false') continue;          // tokens and the like carry no state
       const klic = `${topic}|${name}`;
       const drive = stavy.get(klic);
-      stavy.set(klic, val);
-      if (val !== 'true' || drive === 'true') continue;          // still on, or switched off
+      stavy.set(klic, { val, at });
+      if (val !== 'true') continue;                              // switched off
+      // Still on: the camera repeats "true" every ~100 ms while it detects. A
+      // "true" long after the last one is a new detection whose "false" was
+      // missed - otherwise one lost message would silence that kind for good.
+      if (drive?.val === 'true' && at - drive.at < ZNOVU_MS) continue;
       const d = druhDetekce(topic, name);
       if (d) out.push({ kind: d.kind, label: d.label, at });
       else nezarazene.push({ topic: topic.replace(/^.*?:/, ''), item: name });

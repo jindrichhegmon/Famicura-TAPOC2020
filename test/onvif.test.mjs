@@ -165,4 +165,7 @@ test('Tapo C220: každá zpráva „Initialized“, true každých 100 ms, false
   assert.deepEqual(udalostiZeZprav(b, Date.now, [], null, stavy), [], 'pokračování a konec nejsou nová událost');
   const c = parseXml(`<r>${zprava(true, '2026-09-23T14:30:00Z')}</r>`);
   assert.deepEqual(udalostiZeZprav(c, Date.now, [], null, stavy).map((e) => e.kind), ['cam-person'], 'další příchod je nová událost');
+  // The "false" ending a detection got lost: a "true" 12 s after the last one still counts as new.
+  const d = parseXml(`<r>${zprava(true, '2026-09-23T14:30:03Z')}${zprava(true, '2026-09-23T14:30:15Z')}</r>`);
+  assert.deepEqual(udalostiZeZprav(d, Date.now, [], null, stavy).map((e) => e.kind), ['cam-person'], 'po 12 s bez false je to nová detekce, 3 s po ní ne');
 });
