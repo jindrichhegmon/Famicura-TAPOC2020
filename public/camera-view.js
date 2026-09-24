@@ -133,6 +133,7 @@ async function createLandmarker() {
 }
 
 const PRE_LAG_S = 3;   // a camera-reported event reaches the page up to this late
+const PRE_DEAD_MS = 4000;   // a picture standing still this long feeds the buffer nothing
 
 function pickMime() {
   const choices = [
@@ -187,8 +188,11 @@ export class CameraView {
     this.chunks = [];
     this.recStartedAt = 0;
     this.timerId = null;
+    this.recorderSource = 'canvas';   // 'stream' when the running recording takes the live stream itself
     this.pre = [];                    // rolling buffer: up to two staggered recorders, oldest first
     this.preTimer = null;
+    this.preDeadLogged = 0;
+    this.preClock = { t: -1, at: 0 };  // the video clock as last seen by the buffer, and when it moved
 
     this.lastDrawnAt = null;          // when the canvas last got a new frame
     this.pausedAt = null;             // when the page was hidden, if it was
@@ -268,6 +272,9 @@ export class CameraView {
         this.renderSkeleton();
         // The privacy modes apply at once; the model for the skeleton follows.
         this.updateRender();
+        // The buffer records what the mode shows, so it starts over in the new one.
+        this.stopPreRoll();
+        this.updatePreRoll();
         if (this.displayMode === 'black') this.ensureLandmarker('Načítám model pro drátěný model…');
       };
     });
@@ -730,7 +737,8 @@ export class CameraView {
   // being altered, recorded or analysed; otherwise the raw video is cheaper and
   // keeps the native iOS controls.
   needsCanvas() {
-    return this.displayMode !== 'normal' || this.analyzing || this.recording || this.pre.length > 0 || this.showSkeleton();
+    return this.displayMode !== 'normal' || this.analyzing || this.showSkeleton()
+      || (this.recording && this.recorderSource === 'canvas') || this.pre.some((r) => r.source === 'canvas');
   }
 
   /* ---------- drátěný model (pose skeleton over the picture) ---------- */
@@ -873,17 +881,44 @@ export class CameraView {
 
   /* ---------- recording ---------- */
 
-  /** A recorder on the canvas, already running; throws when the browser cannot. */
+  /*
+   * Where a recording takes its frames from. The live stream itself whenever
+   * the picture is shown as it is: that goes on when the window is not visible
+   * (covered by another window, minimised, locked screen), where the canvas is
+   * no longer drawn and a recording made from it ends up empty. The privacy
+   * modes and the skeleton exist only on the canvas, so those record the canvas.
+   */
+  recordingSource() {
+    const v = this.el.video;
+    const nic = () => {};
+    if (this.displayMode === 'normal' && !this.showSkeleton()) {
+      const track = v.srcObject?.getVideoTracks?.()[0];
+      // The live track is shared with the player: never stopped by us.
+      if (track && track.readyState === 'live') return { stream: new MediaStream([track]), source: 'stream', release: nic };
+      if (!v.srcObject && v.captureStream) {           // the HTTPS path (Chrome, Edge)
+        const s = v.captureStream();
+        const t = s.getVideoTracks()[0];
+        if (t) return { stream: new MediaStream([t]), source: 'stream', release: () => s.getTracks().forEach((x) => x.stop()) };
+      }
+    }
+    const s = this.el.canvas.captureStream(30);
+    return { stream: s, source: 'canvas', release: () => s.getTracks().forEach((x) => x.stop()) };
+  }
+
+  /** A recorder, already running; throws when the browser cannot. */
   createRecorder() {
     const fmt = pickMime();
-    const stream = this.el.canvas.captureStream(30);
-    const recorder = fmt.mime
-      ? new MediaRecorder(stream, { mimeType: fmt.mime, videoBitsPerSecond: 3500000 })
-      : new MediaRecorder(stream);
-    const chunks = [];
-    recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-    recorder.start(1000);
-    return { recorder, chunks, fmt, from: new Date() };
+    const { stream, source, release } = this.recordingSource();
+    let recorder;
+    try {
+      recorder = fmt.mime
+        ? new MediaRecorder(stream, { mimeType: fmt.mime, videoBitsPerSecond: 3500000 })
+        : new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      recorder.start(1000);
+      return { recorder, chunks, fmt, source, release, from: new Date() };
+    } catch (e) { release(); throw e; }
   }
 
   /**
@@ -902,6 +937,7 @@ export class CameraView {
     // captureStream only produces frames from a canvas that is visible and being
     // drawn, so switch the pipeline on before grabbing the stream.
     this.recording = true;
+    this.recorderSource = buffered ? buffered.source : 'canvas';
     this.autoWindow = interval;
     this.updateRender();
     this.fitCanvas();
@@ -925,15 +961,27 @@ export class CameraView {
     if (!rec) {
       try { rec = this.createRecorder(); } catch (e) { fail(e); return; }
     }
-    const { recorder, chunks, fmt, from } = rec;
+    const { recorder, chunks, fmt, from, source, release } = rec;
     this.recorder = recorder;
+    this.recorderSource = source;
     this.chunks = chunks;
     if (udalost && buffered) udalost.predS = Math.round((Date.now() - from.getTime()) / 1000);
 
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: recorder.mimeType || fmt.mime || 'video/mp4' });
-      this.hooks.onRecording({ blob, device: this.device, from, to: new Date(), ext: fmt.ext, zdroj, udalost });
-      this.setMsg(`Nahrávka hotova (${fmtSize(blob.size)}).`);
+      if (blob.size > 0) {
+        this.hooks.onRecording({ blob, device: this.device, from, to: new Date(), ext: fmt.ext, zdroj, udalost });
+        this.setMsg(`Nahrávka hotova (${fmtSize(blob.size)}).`);
+      } else {
+        // No frame ever reached the recorder: a canvas that was not drawn
+        // (window hidden) or a stream that had already stopped. An empty file
+        // would only mislead; the log says what happened instead.
+        const proc = source === 'canvas' ? 'okno prohlížeče nebylo vidět (zakryté, minimalizované nebo zamčená obrazovka)' : 'obraz v tu dobu nešel';
+        this.setMsg(`Nahrávka je prázdná – ${proc}.`, true);
+        this.log({ t: this.sinceStart(Date.now()), kind: 'stream', level: 'warn',
+                   text: `Nahrávka ${fmtClock(from)}–${fmtClock(new Date())} je prázdná – ${proc}.` });
+      }
+      release();                                    // capture tracks would otherwise keep capturing for ever
       if (this.recorder === recorder) { this.recorder = null; this.recording = false; }
       this.updateRender();
       this.updatePreRoll();
@@ -989,7 +1037,24 @@ export class CameraView {
     if (!this.preRollWanted()) { this.stopPreRoll(); return; }
     if (!this.el.canvas.captureStream || !window.MediaRecorder) { this.stopPreRoll(); return; }
     const period = (preRollSeconds(this.filter.watch) + PRE_LAG_S) * 1000;
+    // A recorder on a stream that ended (reconnect) stopped by itself and holds nothing usable.
+    for (const r of this.pre.filter((r) => r.recorder.state === 'inactive')) { this.pre.splice(this.pre.indexOf(r), 1); this.discardRecorder(r); }
     const newest = this.pre[this.pre.length - 1];
+    // A picture whose clock stands still feeds the recorders nothing (Chrome's
+    // MP4 recorder hands its data over only at the end, so the chunks cannot
+    // tell). Say so, once a minute, and start over rather than keep a buffer
+    // that would make the recording taken from it empty as well.
+    const v = this.el.video;
+    if (v.currentTime !== this.preClock.t) this.preClock = { t: v.currentTime, at: Date.now() };
+    if (newest && Date.now() - this.preClock.at > PRE_DEAD_MS) {
+      if (Date.now() - this.preDeadLogged > 60000) {
+        this.preDeadLogged = Date.now();
+        this.log({ t: this.sinceStart(Date.now()), kind: 'stream', level: 'warn',
+                   text: `Obraz stojí (${Math.round((Date.now() - this.preClock.at) / 1000)} s), do nahrávání nic nepřichází – vyrovnávací paměť začíná znovu.` });
+      }
+      for (const r of this.pre.splice(0)) this.discardRecorder(r);
+      return;
+    }
     if (newest && Date.now() - newest.from.getTime() < period) return;
     if (this.pre.length >= 2) this.discardRecorder(this.pre.shift());
     this.fitCanvas();
@@ -1002,6 +1067,7 @@ export class CameraView {
 
   /** The oldest buffered recorder, taken out of the buffer; the rest is dropped. */
   takePreRoll() {
+    for (const r of this.pre.filter((r) => r.recorder.state === 'inactive')) { this.pre.splice(this.pre.indexOf(r), 1); this.discardRecorder(r); }
     const oldest = this.pre.shift() || null;
     if (this.preTimer !== null) { clearInterval(this.preTimer); this.preTimer = null; }
     for (const r of this.pre.splice(0)) this.discardRecorder(r);
@@ -1019,6 +1085,7 @@ export class CameraView {
     r.recorder.onstop = null;
     r.chunks.length = 0;
     try { if (r.recorder.state !== 'inactive') r.recorder.stop(); } catch { /* already gone */ }
+    r.release();
   }
 
   /* ---------- live analysis ---------- */

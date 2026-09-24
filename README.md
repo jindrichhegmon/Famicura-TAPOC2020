@@ -62,6 +62,18 @@ hodnoty, ne označení zprávy. Jedna detekce je jedna událost, ať přišla v
 jedné nebo ve sto zprávách; stejná detekce do 5 s po sobě se nepočítá
 dvakrát.
 
+### Odkud nahrávka bere obraz
+
+Když je obraz zobrazený tak, jak je (bez rozostření, černého pozadí a
+drátěného modelu), nahrává se přímo přenos z kamery. Takové nahrávání
+běží i ve chvíli, kdy okno prohlížeče není vidět – zakryté jiným oknem,
+minimalizované, zamčená obrazovka. Režimy soukromí a drátěný model
+existují jen na kresleném plátně, takže ty se nahrávají z plátna; plátno
+se ve skrytém okně nekreslí a nahrávka by byla prázdná. Prázdná nahrávka
+se do seznamu ani do složky nedává, místo ní je v logu řádek „Nahrávka …
+je prázdná – okno prohlížeče nebylo vidět“. Obnova spojení ukončí
+nahrávku běžící z přenosu (další událost začne novou).
+
 ### Ukládání nahrávek
 
 V Chromu a Edgi na počítači se každá hotová nahrávka zapíše hned do složky
