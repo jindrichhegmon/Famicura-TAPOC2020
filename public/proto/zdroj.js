@@ -76,16 +76,44 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
   video.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:-10px;top:-10px';
   document.body.appendChild(video);
 
-  const st = { status: 'idle', error: null, landmarks: null, poseState: 'none', synthetic: true, syntheticPose: null, frames: 0 };
+  const st = { status: 'idle', error: null, landmarks: null, poseState: 'none', synthetic: true, syntheticPose: null, frames: 0, path: null, auth: null };
   const tiles = new Set();          // { canvas, ctx, small, sctx, getMode }
   const listeners = new Set();
   let pc = null, landmarker = null, connections = SYN_CONNECTIONS, poseTried = false, lastDetect = 0, raf = null;
 
   const notify = () => listeners.forEach((f) => f(st));
 
+  /** The main app's choice of path (Cesta obrazu) is honoured: a network that drops WebRTC goes straight to HTTPS. */
+  function preferredPath() {
+    try { const p = JSON.parse(localStorage.getItem('famicura.cesta') || '{}'); if (p.mode === 'https' || (p.mode === 'auto' && p.httpsUntil > Date.now())) return 'https'; if (p.mode === 'webrtc') return 'webrtc'; } catch { /* none */ }
+    return 'auto';
+  }
+
+  /*
+   * The picture over HTTPS as a plain <video src>: go2rtc's MP4 (Chrome, Edge)
+   * or HLS (Safari). Video only, a few seconds behind, but it passes every
+   * network that lets the page itself through.
+   */
+  let httpsTimer = null;
+  function startHttps(reason) {
+    if (st.path === 'https') return;
+    pc?.close(); pc = null;
+    st.path = 'https'; st.status = 'connecting'; st.error = reason || null; st.frames = 0; notify();
+    const hls = navigator.vendor === 'Apple Computer, Inc.';
+    video.srcObject = null;
+    video.src = `/api/stream.${hls ? 'm3u8' : 'mp4'}?deviceId=${encodeURIComponent(deviceId)}&t=${Date.now()}`;
+    video.play().catch(() => {});
+    const onPlaying = () => { st.status = 'live'; st.synthetic = false; st.error = null; notify(); };
+    video.addEventListener('playing', onPlaying, { once: true });
+    video.addEventListener('error', () => { if (st.path !== 'https') return; st.status = 'offline'; st.synthetic = true; st.error = 'Obraz nejde ani přes HTTPS (kamera nebo server nedostupné).'; notify(); }, { once: true });
+    clearTimeout(httpsTimer);
+    httpsTimer = setTimeout(() => { if (st.path === 'https' && st.status !== 'live') { st.status = 'offline'; st.synthetic = true; st.error = 'Přes HTTPS nepřišel obraz do 20 s.'; notify(); } }, 20000);
+  }
+
   async function connect() {
-    if (pc) return;
+    if (pc || st.path === 'https') return;
     st.status = 'connecting'; st.error = null; notify();
+    if (preferredPath() === 'https') { startHttps(); return; }
     try {
       const c = new RTCPeerConnection({ iceServers: ICE });
       pc = c;
@@ -95,8 +123,8 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
       });
       c.addEventListener('connectionstatechange', () => {
         if (pc !== c) return;
-        if (c.connectionState === 'connected') { st.status = 'live'; st.synthetic = false; notify(); }
-        if (c.connectionState === 'failed') { st.status = 'offline'; st.error = 'WebRTC spojení selhalo (síť blokuje UDP 8555?)'; st.synthetic = true; notify(); }
+        if (c.connectionState === 'connected') { st.path = 'webrtc'; st.status = 'live'; st.synthetic = false; notify(); }
+        if (c.connectionState === 'failed') startHttps('WebRTC neprošlo (síť nejspíš blokuje UDP 8555), zkouším náhradní cestu HTTPS…');
       });
       c.addTransceiver('audio', { direction: 'recvonly' });
       c.addTransceiver('video', { direction: 'recvonly' });
@@ -105,12 +133,14 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
       const res = await fetch('/api/stream', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ deviceId, sdpOffer: c.localDescription.sdp }) });
       const body = await res.json().catch(() => ({}));
-      if (res.status === 401) throw new Error('Nejste přihlášeni v aplikaci Famicura.');
+      st.auth = res.status !== 401;
+      if (res.status === 401) throw Object.assign(new Error('Nejste přihlášeni v aplikaci Famicura.'), { auth: true });
       if (!res.ok) throw new Error(body.error || body.detail || ('HTTP ' + res.status));
       await c.setRemoteDescription({ type: 'answer', sdp: body.sdpAnswer });
-      // No frame within 12 s: the network drops WebRTC; the synthetic scene stays.
-      setTimeout(() => { if (pc === c && st.frames === 0) { st.status = 'offline'; st.error = 'Přes WebRTC nepřišel obraz (síť nejspíš blokuje UDP 8555).'; st.synthetic = true; notify(); } }, 12000);
+      // No frame within 8 s: the network drops WebRTC; the picture takes the HTTPS path instead.
+      setTimeout(() => { if (pc === c && st.frames === 0 && preferredPath() !== 'webrtc') startHttps('Přes WebRTC nepřišel obraz (síť nejspíš blokuje UDP 8555), zkouším náhradní cestu HTTPS…'); }, 8000);
     } catch (e) {
+      pc?.close(); pc = null;
       st.status = 'offline'; st.error = e.message; st.synthetic = true; notify();
     }
   }
@@ -207,6 +237,6 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
     onChange(f) { listeners.add(f); f(st); return () => listeners.delete(f); },
     /** Synthetic scene only: force the figure's pose (standing, seated, lying) or null for its own rhythm. */
     setSyntheticPose(p) { st.syntheticPose = p; },
-    stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; pc?.close(); pc = null; video.srcObject = null; },
+    stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); },
   };
 }

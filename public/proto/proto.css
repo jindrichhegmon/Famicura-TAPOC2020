@@ -226,3 +226,9 @@ table.watch input[type=checkbox]{width:18px;height:18px}
 .demo b{display:block;font-size:1rem}
 .demo span{font-size:.9rem;color:var(--muted)}
 .demo .btn.yt{background:#c4302b;color:#fff;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:12px;white-space:nowrap}
+
+/* lišta „přihlaste se“ nahoře */
+#authBar{position:fixed;left:0;right:0;top:0;z-index:100;background:#fdf1e3;border-bottom:2px solid #e0a03a;color:var(--ink);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.92rem;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+#authBar .btnlike{background:var(--blue);color:#fff;text-decoration:none;font-weight:700;padding:7px 12px;border-radius:9px;white-space:nowrap}
+body.withAuth{padding-top:56px}
+body.withAuth .apphead,body.withAuth .deskbar{top:56px}

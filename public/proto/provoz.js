@@ -1,4 +1,4 @@
-import { sim, KINDS, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 const GATE = { tapoc2020: 'Windows PC', p2: 'GL.iNet Mango', p3: 'Raspberry Pi 5 + AI HAT', p4: 'GL.iNet Mango', p5: 'Raspberry Pi 5 + AI HAT', p6: 'GL.iNet Mango', p7: 'GL.iNet Mango', p8: 'GL.iNet Beryl AX' };
@@ -6,6 +6,7 @@ const FW = { tapoc2020: 'C220 1.0.3', p2: 'C210 1.3.9', p3: 'C220 1.0.3', p4: 'C
 let real = null;           // /api/status of the real site
 let selected = null;
 mountPanel({ role: 'provoz' });
+mountAuthBanner(null);
 sim.startRealEvents('tapoc2020');
 
 async function loadReal() {

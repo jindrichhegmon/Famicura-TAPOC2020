@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 const ME = 'Jana Nováková';
@@ -13,7 +13,8 @@ let detailUnreg = null;
 const src = createSource({ deviceId: 'tapoc2020' });
 window.__zdroj = src;
 src.connect();
-src.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? 'obraz: skutečná kamera' : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
+mountAuthBanner(src);
+src.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'obraz: skutečná kamera (HTTPS)' : 'obraz: skutečná kamera') : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
 sim.startRealEvents('tapoc2020');
 const panel = mountPanel({ role: 'dispecink', onPatient: () => {} });
 

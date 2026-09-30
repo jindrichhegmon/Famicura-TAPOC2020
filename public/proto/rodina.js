@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 const FAMILY = ['tapoc2020', 'p2'];
@@ -13,9 +13,10 @@ const src = createSource({ deviceId: 'tapoc2020' });
 window.__zdroj = src;
 src.register($('cv'), () => viewMode);
 src.connect();
+mountAuthBanner(src);
 src.onChange((s) => {
   $('liveTag').classList.toggle('hide', s.status !== 'live');
-  $('srcNote').textContent = s.status === 'live' ? 'Obraz z vaší kamery (WebRTC).'
+  $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'Obraz z vaší kamery náhradní cestou přes HTTPS (bez zvuku, o pár sekund pozadu).' : 'Obraz z vaší kamery (WebRTC).')
     : s.status === 'connecting' ? 'Připojuji obraz z kamery…'
     : `Náhradní scéna: ${s.error || 'kamera nedostupná'}${s.error?.includes('přihlášeni') ? ' Přihlaste se v hlavní aplikaci a obnovte stránku.' : ''}`;
 });

@@ -250,6 +250,35 @@ export function toast(text, level = 'info', onOpen = null) {
   setTimeout(() => { if (toastEl === t) t.remove(); }, 8000);
 }
 
+/*
+ * The bar at the very top when the real camera cannot show: not logged in
+ * (the main app is the only place to log in), or no picture at all. Hidden
+ * as soon as the picture is live.
+ */
+export function mountAuthBanner(src) {
+  const el = document.createElement('div'); el.id = 'authBar'; el.className = 'hide';
+  el.innerHTML = `<span class="grow" id="authText"></span><a class="sm btnlike" href="/" target="_blank" id="authLogin">Přihlásit se</a><button class="sm sec" id="authRetry">Mám přihlášeno, načíst znovu</button>`;
+  document.body.prepend(el);
+  el.querySelector('#authRetry').onclick = () => location.reload();
+  const show = (text, login) => { el.querySelector('#authText').innerHTML = text; el.querySelector('#authLogin').classList.toggle('hide', !login); el.classList.remove('hide'); document.body.classList.add('withAuth'); };
+  const hide = () => { el.classList.add('hide'); document.body.classList.remove('withAuth'); };
+  const check = async () => {
+    try {
+      const r = await fetch('/api/devices');
+      if (r.status === 401) { show('<b>Demo s reálnou kamerou:</b> přihlaste se v hlavní aplikaci (stejný prohlížeč), jinak vidíte jen náhradní scénu.', true); return false; }
+    } catch { /* server away: the source will say */ }
+    return true;
+  };
+  check();
+  src?.onChange((s) => {
+    if (s.status === 'live') { hide(); return; }
+    if (s.status === 'offline' && /přihlášeni/.test(s.error || '')) show('<b>Demo s reálnou kamerou:</b> přihlaste se v hlavní aplikaci (stejný prohlížeč), jinak vidíte jen náhradní scénu.', true);
+    else if (s.status === 'offline') show(`<b>Obraz z kamery teď nejde:</b> ${esc(s.error || 'kamera nedostupná')} Ukazuji náhradní scénu.`, false);
+    else if (s.status === 'connecting' && s.path === 'https') show(`<b>Zkouším náhradní cestu HTTPS…</b> ${esc(s.error || '')}`, false);
+  });
+  return { check };
+}
+
 /** The floating simulation panel: events, requests, night, reset. `role` decides which controls make sense. */
 export function mountPanel({ role, patientIds, onPatient }) {
   const el = document.createElement('div'); el.id = 'simPanel';
