@@ -6,7 +6,7 @@
 import http from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -82,8 +82,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
-    const file = path.join(PUBLIC, rel === '' ? 'index.html' : rel);
+    let file = path.join(PUBLIC, rel === '' ? 'index.html' : rel);
     if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
+    // A folder (/proto/) serves its index.html, like any web server.
+    if (await stat(file).then((st) => st.isDirectory(), () => false)) file = path.join(file, 'index.html');
     const data = await readFile(file);
     // The login page is on the open internet: no framing, no sniffing, and a
     // CSP that keeps the browser from talking to anyone but us (src/csp.mjs).

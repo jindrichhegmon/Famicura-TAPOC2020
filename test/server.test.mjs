@@ -54,6 +54,16 @@ async function cookie() {
   return r.headers.get('set-cookie').split(';')[0];
 }
 
+test('složka s prototypem se otevře na /proto/ i bez index.html v adrese; mimo public nic', async () => {
+  const r = await fetch(`http://127.0.0.1:${port}/proto/`);
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /text\/html/);
+  assert.match(await r.text(), /prototyp prostředí/);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/proto/rodina.html`)).status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/neexistuje/`)).status, 404);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/src/`)).status, 404);
+});
+
 test('obraz přes HTTPS jde průběžně a skončí s klientem', async () => {
   const c = await cookie();
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/stream.mp4?deviceId=tapoc2020`)).status, 401, 'jen po přihlášení');
