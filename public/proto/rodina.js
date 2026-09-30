@@ -29,6 +29,29 @@ src.onChange((s) => {
 });
 sim.startRealEvents('tapoc2020');
 
+/* ---------- aplikace na ploše telefonu ---------- */
+// Servisní skript nic nekešuje (obraz i události jsou živé); je tu kvůli
+// instalaci na plochu a stránce „jste offline“.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/proto/sw.js').catch(() => {});
+const naPlose = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+if (!naPlose) {
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/.test(ua);
+  $('install').classList.remove('hide');
+  if (ios) $('installIos').classList.remove('hide');
+  else if (android) $('installAndroid').classList.remove('hide');
+  else $('installHint').textContent = 'Na telefonu si Famicuru uložte na plochu: otevřete tuhle adresu v Safari (iPhone) nebo Chromu (Android) a zvolte Přidat na plochu.';
+  // Chrome/Android nabídne instalaci sám; pak stačí tlačítko místo návodu.
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    $('installAndroid').classList.add('hide');
+    const b = $('installBtn'); b.classList.remove('hide');
+    b.onclick = async () => { b.disabled = true; await e.prompt(); const r = await e.userChoice; if (r.outcome === 'accepted') $('install').classList.add('hide'); b.disabled = false; };
+  });
+  window.addEventListener('appinstalled', () => $('install').classList.add('hide'));
+}
+
 const panel = mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) => { patientId = id; render(); } });
 
 $('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');

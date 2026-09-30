@@ -58,7 +58,8 @@ const handle = createHandler({ dbs, go2rtc: createGo2rtc(), store, udalosti });
 const MAX_BODY = 256 * 1024;
 
 const PUBLIC = path.join(ROOT, 'public');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 
 const server = http.createServer(async (req, res) => {
   try {

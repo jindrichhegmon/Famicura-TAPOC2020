@@ -259,6 +259,13 @@ export function mountAuthBanner(src) {
   const el = document.createElement('div'); el.id = 'authBar'; el.className = 'hide';
   el.innerHTML = `<span class="grow" id="authText"></span><a class="sm btnlike" href="/" target="_blank" id="authLogin">Přihlásit se</a><a class="sm btnlike sec2 hide" href="/" target="_blank" id="authApp">Hlavní aplikace a diagnostika</a><button class="sm sec" id="authRetry">Načíst znovu</button>`;
   document.body.prepend(el);
+  // Přihlášení vede do hlavní aplikace; ta se po něm vrátí sem (?zpet=). Na
+  // ploše telefonu (standalone) se nesmí otevřít nové okno: iPhone by ho
+  // poslal do Safari a přihlášení by zůstalo tam, ne v aplikaci.
+  const zpet = location.pathname + location.search;
+  const login = el.querySelector('#authLogin');
+  login.href = '/?zpet=' + encodeURIComponent(zpet);
+  if (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) login.removeAttribute('target');
   el.querySelector('#authRetry').onclick = () => location.reload();
   const show = (text, login) => { el.querySelector('#authText').innerHTML = text; el.querySelector('#authLogin').classList.toggle('hide', !login); el.querySelector('#authApp').classList.toggle('hide', login); el.classList.remove('hide'); document.body.classList.add('withAuth'); };
   const hide = () => { el.classList.add('hide'); document.body.classList.remove('withAuth'); };

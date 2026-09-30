@@ -220,6 +220,22 @@ o plný obraz nebo noc; skutečné události kamery se do prototypu
 propisují také. Prototyp na server nic nezapisuje a nastavení aplikace
 nemění.
 
+### Aplikace rodiny na ploše telefonu
+
+`/proto/rodina.html` jde uložit na plochu jako aplikace: má manifest
+(`public/proto/rodina.webmanifest`, ikony v `public/proto/ikony/`),
+ikonu pro iPhone (`apple-touch-icon`) a servisní skript `public/proto/sw.js`.
+Ten nic nekešuje, obraz i události jsou živé; je tu kvůli instalaci a
+stránce „jste bez připojení“. Stránka sama ukáže kartu **Aplikace na
+telefonu** s postupem pro iPhone (Sdílet → Přidat na plochu) a Android
+(nabídka → Přidat na plochu, nebo rovnou tlačítko Nainstalovat), a skryje
+ji, jakmile běží z plochy. Přihlášení z plochy otevře hlavní aplikaci ve
+stejném okně (nové okno by iPhone poslal do Safari a přihlášení by zůstalo
+tam) a ta se po přihlášení vrátí zpět (`/?zpet=/proto/rodina.html`;
+přijímá jen cesty do `/proto/`). Cookie platí 12 h. Ikony vznikly
+skriptem v Pillow (srdce s křivkou tepu v modré Famicury); zdroj je
+v historii gitu u tohoto commitu.
+
 ## Nastavení krok za krokem
 
 Všechny příkazy spouštějte na Macu ve složce projektu, pokud není

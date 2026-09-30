@@ -236,3 +236,8 @@ table.watch input[type=checkbox]{width:18px;height:18px}
 body.withAuth{padding-top:56px}
 body.withAuth .apphead,body.withAuth .deskbar{top:56px}
 #authBar .btnlike.sec2{background:#e6ecf2;color:var(--ink)}
+
+/* instalace na plochu (aplikace rodiny) */
+.install .steps{margin:6px 0 10px;padding-left:22px;font-size:.9rem;line-height:1.5}
+.install .steps li{margin:4px 0}
+.btn.wide{display:block;width:100%;text-align:center;margin:8px 0}

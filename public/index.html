@@ -486,6 +486,10 @@ async function refreshStatus() {
     return;
   }
 
+  // Aplikace rodiny (/proto/) posílá na přihlášení sem a čeká, že se k ní vrátíme.
+  const zpet = new URLSearchParams(location.search).get('zpet');
+  if (zpet && /^\/proto\/[a-z0-9_.-]+\.html(\?[^\s#]*)?$/i.test(zpet)) { location.replace(zpet); return; }
+
   $('loginCard').classList.add('hide');
   $('app').classList.remove('hide');
   renderDiag(body);

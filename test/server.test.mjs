@@ -60,6 +60,14 @@ test('složka s prototypem se otevře na /proto/ i bez index.html v adrese; mimo
   assert.match(r.headers.get('content-type'), /text\/html/);
   assert.match(await r.text(), /prototyp prostředí/);
   assert.equal((await fetch(`http://127.0.0.1:${port}/proto/rodina.html`)).status, 200);
+  // aplikace rodiny na ploše telefonu: manifest se správným typem, ikona, servisní skript
+  const m = await fetch(`http://127.0.0.1:${port}/proto/rodina.webmanifest`);
+  assert.equal(m.status, 200);
+  assert.equal(m.headers.get('content-type'), 'application/manifest+json');
+  const manifest = await m.json();
+  assert.equal(manifest.display, 'standalone');
+  for (const ic of manifest.icons) assert.equal((await fetch(`http://127.0.0.1:${port}${ic.src}`)).headers.get('content-type'), 'image/png', ic.src);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/proto/sw.js`)).headers.get('content-type'), 'text/javascript');
   assert.equal((await fetch(`http://127.0.0.1:${port}/neexistuje/`)).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${port}/src/`)).status, 404);
 });
