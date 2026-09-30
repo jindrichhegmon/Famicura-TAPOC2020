@@ -4,6 +4,12 @@
 #   ./deploy/vps-kamera.sh seznam     (kamery bez hesel)
 #   ./deploy/vps-kamera.sh smaz ID
 #
+# Kam go2rtc na kameru chodí, pozná ze souboru /etc/wireguard/famicura-rezim na VPS:
+#   linux    přímo na IP kamery tunelem WireGuard
+#   windows  na Windows server v tunelu (10.77.0.2), ten porty předává kameře
+#   ssh      na 127.0.0.1:10554 a :12020, kam kameru přivedl Windows server tunelem SSH
+#            (deploy/ssh-tunel-vps.sh); přepínač --ssh to vynutí i bez toho souboru
+#
 # Účet kamery založíte v aplikaci Tapo: kamera → Nastavení → Pokročilá
 # nastavení → Účet kamery. IP adresu kamery si v routeru zarezervujte, aby
 # se neměnila – jinak ji tunel a go2rtc přestanou nacházet.
@@ -27,6 +33,8 @@ restart() {
   $SSH "$VPS" "$JAKO 'cd $DIR && PORT=$PORT pm2 startOrRestart deploy/ecosystem.config.cjs --update-env >/dev/null && pm2 save >/dev/null'"
 }
 
+VYNUTIT_SSH=
+[ "$1" = "--ssh" ] && { VYNUTIT_SSH=1; shift; }
 case "$1" in
   seznam) $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs seznam'"; exit 0 ;;
   smaz)   platne_id "$2"
@@ -38,7 +46,12 @@ read -r -p "Název v aplikaci [Tapo C2020]: " NAZEV;  NAZEV="${NAZEV:-Tapo C2020
 # Přes Windows server go2rtc nechodí na kameru, ale na server v tunelu:
 # ten předává svůj port 554 kameře (u-kamery-windows.ps1).
 REZIM=$($SSH "$VPS" "cat /etc/wireguard/famicura-rezim 2>/dev/null" || true)
-if [ "$REZIM" = windows ]; then
+[ -n "$VYNUTIT_SSH" ] && REZIM=ssh
+RTSP_PORT=554; ONVIF_PORT=2020
+if [ "$REZIM" = ssh ]; then
+  IP=127.0.0.1; RTSP_PORT=10554; ONVIF_PORT=12020
+  echo "Kameru přivádí Windows server tunelem SSH – obraz půjde z $IP:$RTSP_PORT, události z :$ONVIF_PORT. IP kamery zná server."
+elif [ "$REZIM" = windows ]; then
   IP=10.77.0.2
   echo "Kamera je za Windows serverem – obraz půjde přes něj ($IP). IP kamery zná server."
 else
@@ -52,9 +65,10 @@ read -r -p "Kvalita – 1 = plné rozlišení, 2 = nízké [1]: " Q
 
 # JSON skládá node z proměnných prostředí: heslo s uvozovkou nebo lomítkem
 # tak nerozbije ani JSON, ani příkaz – a do ssh jde přes stdin.
-ID="$ID" NAZEV="$NAZEV" IP="$IP" UZIV="$UZIV" HESLO="$HESLO" STREAM="$STREAM" node -e '
+ID="$ID" NAZEV="$NAZEV" IP="$IP" UZIV="$UZIV" HESLO="$HESLO" STREAM="$STREAM" RTSP_PORT="$RTSP_PORT" ONVIF_PORT="$ONVIF_PORT" node -e '
   const e = process.env;
-  process.stdout.write(JSON.stringify({ id: e.ID, name: e.NAZEV, ip: e.IP, user: e.UZIV, pass: e.HESLO, stream: e.STREAM }));
+  process.stdout.write(JSON.stringify({ id: e.ID, name: e.NAZEV, ip: e.IP, user: e.UZIV, pass: e.HESLO, stream: e.STREAM,
+    rtspPort: Number(e.RTSP_PORT), onvifPort: Number(e.ONVIF_PORT) }));
 ' | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs nastav'"
 unset HESLO
 
@@ -67,7 +81,11 @@ if [ "$KOD" = "200" ]; then
   echo "Události, které kamera hlásí sama (port 2020), uvidíte v Diagnostice do půl minuty."
 else
   echo "Kamera $ID neodpovídá (go2rtc vrátil ${KOD:-nic}). Zkontrolujte:"
-  echo "  tunel:  ssh -i $KEY $VPS \"wg show wg-famicura && ping -c 2 $IP\""
+  if [ "$REZIM" = ssh ]; then
+    echo "  tunel:  ./deploy/ssh-tunel-vps.sh stav   a na Windows serveru .\\u-kamery-windows-ssh.ps1 -Stav"
+  else
+    echo "  tunel:  ssh -i $KEY $VPS \"wg show wg-famicura && ping -c 2 $IP\""
+  fi
   echo "  go2rtc: ssh -i $KEY $VPS \"su - jhnapps -c 'pm2 logs famicura-go2rtc --lines 20 --nostream'\""
   [ "$REZIM" = windows ] && echo "  Windows server: PowerShell jako správce → netsh interface portproxy show v4tov4"
   echo "  a v aplikaci Tapo, že účet kamery a heslo sedí."

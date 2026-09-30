@@ -275,6 +275,61 @@ Skript jde spustit opakovaně. Co už je nastavené, jen znovu nastaví.
 Router, který umí klienta WireGuard, to zvládne také, ale nastavuje se
 u každého výrobce jinak.
 
+### 2b. Když firewall serveru tunel nepustí: tunel SSH
+
+Příznak: tunel WireGuard na obou stranách hlásí čerstvý handshake, server
+z VPS ping dostane (počítadlo *received* v `wg show` roste), ale sám nic
+neodpoví a porty 554 a 2020 z VPS nejdou. Tak se chová firewall třetí
+strany na serveru (typicky ESET), který síť tunelu bere jako veřejnou a
+příchozí spojení zahodí, i když ho pravidla firewallu Windows pouštějí.
+Bez hesla k tomu firewallu to nikdo neopraví.
+
+Řešení bez zásahu do firewallu: spojení navazuje **server směrem ven**
+na port 22 VPS (odchozí spojení firewally pouštějí) a tímhle spojením
+přivede kameru na VPS. Nic se na serveru neotevírá zvenku.
+
+| na VPS | vede na |
+|---|---|
+| `127.0.0.1:10554` | kamera, port 554 (obraz, RTSP) |
+| `127.0.0.1:12020` | kamera, port 2020 (události, ONVIF) |
+
+1. Na **Windows serveru** (PowerShell jako správce, ve složce se skriptem
+   `deploy/wireguard/u-kamery-windows-ssh.ps1`):
+   ```
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+   .\u-kamery-windows-ssh.ps1 -Kamera 192.168.10.109
+   ```
+   Doinstaluje klienta OpenSSH (součást Windows), vytvoří klíč serveru
+   v `C:\ProgramData\Famicura\ssh` (přístup jen správci a SYSTEM), založí
+   úlohu plánovače „Famicura Tapo – tunel SSH“ (běží jako SYSTEM, naběhne po
+   restartu, po výpadku se připojí znovu do 10 s) a **vypíše veřejný klíč**
+   (dá ho i do schránky). Když už na serveru byl tunel WireGuard, IP kamery
+   si vezme z jeho konfigurace a `-Kamera` netřeba.
+2. Na **Macu** klíč zaregistrujte na VPS:
+   ```
+   ./deploy/ssh-tunel-vps.sh "ssh-ed25519 AAAA… famicura-tunel@windows"
+   ./deploy/ssh-tunel-vps.sh stav        # za chvíli: drží server tunel?
+   ```
+   Na VPS vznikne účet `famicura-tunel` bez hesla a bez shellu. Jeho klíč má
+   v `authorized_keys` `restrict,port-forwarding,permitlisten=…` a sshd má
+   pro něj blok `Match User` (`AllowTcpForwarding remote`, `PermitListen`
+   jen 10554 a 12020, `PermitOpen none`, `GatewayPorts no`, žádný terminál,
+   agent ani X11). Smí tedy jen přivést tyhle dva porty na localhost VPS;
+   kam vedou na druhé straně, určuje server u kamery a VPS z jeho sítě nic
+   jiného nevidí. `ClientAliveInterval 15` uvolní port po spadlém spojení
+   do minuty, jinak by se server po výpadku nemohl připojit znovu.
+3. Kameru nastavte jako obvykle: `./deploy/vps-kamera.sh`. Režim `ssh`
+   pozná sám (soubor `/etc/wireguard/famicura-rezim` na VPS) a go2rtc i
+   odběr událostí pošle na 127.0.0.1:10554 a :12020 (`rtspPort` a
+   `onvifPort` v `cameras.json`). Vynucení: `./deploy/vps-kamera.sh --ssh`.
+
+Stav a hledání chyb: na serveru `.\u-kamery-windows-ssh.ps1 -Stav` (úloha,
+spojení, konec `tunel.log`), na Macu `./deploy/ssh-tunel-vps.sh stav`.
+Dokud VPS klíč nezná, je v logu serveru „Permission denied“; to je před
+krokem 2 v pořádku. Odebrání: `.\u-kamery-windows-ssh.ps1 -Odebrat` na
+serveru a `./deploy/ssh-tunel-vps.sh odebrat` na Macu. Tunel WireGuard
+může zůstat nainstalovaný; nepřekáží.
+
 ### 3. Aplikace a go2rtc na VPS
 
 ```
@@ -285,7 +340,8 @@ u každého výrobce jinak.
 
 `vps-kamera.sh` na konci ověří, že kamera posílá obraz. S Windows
 serverem se na IP kamery neptá: go2rtc chodí na server v tunelu
-(10.77.0.2) a IP kamery zná jen server. Přihlášení ke
+(10.77.0.2), nebo s tunelem SSH na 127.0.0.1:10554, a IP kamery zná jen
+server. Přihlášení ke
 kameře je na VPS jen v `cameras.json` a `go2rtc.yaml`, oba s právy 600.
 `go2rtc.yaml` se z `cameras.json` vždy generuje, ručně se needituje.
 
@@ -359,6 +415,11 @@ založil `node scripts/init-db.mjs`.
   u Linuxu jsou jiný port kamery, jiný počítač i zařízení samotné
   zablokované. U Windows přišel obraz přes předávání TCP, i když VPS
   kameru napřímo vůbec neviděl.
+* Tunel SSH (2b) otáčí jen směr navázání spojení, ne co je dostupné:
+  účet `famicura-tunel` na VPS nemá heslo ani shell a sshd mu dovolí jen
+  přivést porty 10554 a 12020 na localhost VPS. Z VPS tunelem ven nic
+  nejde (`PermitOpen none`), zvenku na VPS nic nového nevede. Klíč
+  serveru leží jen v `C:\ProgramData\Famicura\ssh` s právy pro správce.
 
 ## Vývoj a testy
 

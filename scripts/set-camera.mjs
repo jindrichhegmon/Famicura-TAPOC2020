@@ -2,7 +2,7 @@
  * Kamery Tapo na VPS: cameras.json → go2rtc.yaml a CAMERA_NAMES v .env.
  * Volá ho deploy/vps-kamera.sh a deploy/vps-deploy.sh; běží na VPS jako jhnapps:
  *
- *   node scripts/set-camera.mjs nastav  < {"id","name","ip","user","pass","stream"}
+ *   node scripts/set-camera.mjs nastav  < {"id","name","ip","user","pass","stream"[,"rtspPort","onvifPort"]}
  *   node scripts/set-camera.mjs seznam           → kamery bez hesel
  *   node scripts/set-camera.mjs smaz ID
  *   node scripts/set-camera.mjs obnov            → jen znovu vygeneruje go2rtc.yaml
@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizeCamera, go2rtcYaml, cameraNamesLine } from '../src/kamery.mjs';
+import { normalizeCamera, go2rtcYaml, cameraNamesLine, cameraAddress } from '../src/kamery.mjs';
 import { hodnota, nastavit } from './set-env.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,7 +45,7 @@ async function main([akce, id]) {
   if (akce === 'seznam') {
     const k = nacti();
     if (!k.length) console.log('Zatím žádná kamera.');
-    for (const x of k) console.log(`${x.id.padEnd(16)} ${x.name}  (${x.ip}, ${x.stream}, uživatel ${x.user})`);
+    for (const x of k) console.log(`${x.id.padEnd(16)} ${x.name}  (${cameraAddress(x)}, ${x.stream}, uživatel ${x.user})`);
     return;
   }
   if (akce === 'obnov') { obnov(nacti()); console.log('go2rtc.yaml vygenerován.'); return; }
@@ -64,7 +64,7 @@ async function main([akce, id]) {
     const k = nacti().filter((x) => x.id !== r.kamera.id).concat(r.kamera);
     zapis(KAMERY, JSON.stringify(k, null, 2));
     obnov(k);
-    console.log(`Kamera ${r.kamera.id} („${r.kamera.name}“, ${r.kamera.ip}, ${r.kamera.stream}) uložena.`);
+    console.log(`Kamera ${r.kamera.id} („${r.kamera.name}“, ${cameraAddress(r.kamera)}, ${r.kamera.stream}) uložena.`);
     return;
   }
   throw new Error('Použití: nastav | seznam | smaz ID | obnov');

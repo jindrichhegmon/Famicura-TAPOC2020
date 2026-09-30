@@ -10,6 +10,16 @@
 const ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const STREAMS = ['stream1', 'stream2'];
+// Kam go2rtc a odběr událostí chodí: přímo na kameru (554, 2020), nebo na
+// port VPS, kam je Windows server přivedl tunelem SSH (127.0.0.1:10554, :12020).
+export const RTSP_PORT = 554;
+export const ONVIF_PORT = 2020;
+
+function port(raw, vychozi) {
+  if (raw === undefined || raw === null || raw === '') return vychozi;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : null;
+}
 
 /** Ověří kameru z formuláře/stdin; vrací { ok, kamera } nebo { ok: false, error }. */
 export function normalizeCamera(raw) {
@@ -20,6 +30,8 @@ export function normalizeCamera(raw) {
   const user = String(raw.user ?? '');
   const pass = String(raw.pass ?? '');
   const stream = String(raw.stream ?? 'stream1').trim();
+  const rtspPort = port(raw.rtspPort, RTSP_PORT);
+  const onvifPort = port(raw.onvifPort, ONVIF_PORT);
 
   if (!ID.test(id)) return { ok: false, error: 'ID kamery: malá písmena, číslice, - a _, nejvýš 40 znaků.' };
   // CAMERA_NAMES is "id=name; id=name", one line of .env.
@@ -30,14 +42,20 @@ export function normalizeCamera(raw) {
   // RTSP Basic auth splits "user:password" at the first colon.
   if (user.includes(':')) return { ok: false, error: 'Uživatel kamery nesmí obsahovat dvojtečku.' };
   if (!STREAMS.includes(stream)) return { ok: false, error: 'Stream musí být stream1 (plné rozlišení) nebo stream2 (nízké).' };
+  if (!rtspPort || !onvifPort) return { ok: false, error: 'Port RTSP a ONVIF musí být číslo 1–65535 (běžně 554 a 2020).' };
 
-  return { ok: true, kamera: { id, name, ip, user, pass, stream } };
+  return { ok: true, kamera: { id, name, ip, user, pass, stream, rtspPort, onvifPort } };
+}
+
+/** „192.168.1.50“ pro kameru napřímo, „127.0.0.1:10554“ pro tunel SSH. */
+export function cameraAddress(k) {
+  return (k.rtspPort || RTSP_PORT) === RTSP_PORT ? k.ip : `${k.ip}:${k.rtspPort}`;
 }
 
 export function rtspUrl(k) {
   // Percent-encoding keeps ":", "@", "/" and quotes in a password from ending the
   // credentials early - and removes every character YAML would care about.
-  return `rtsp://${encodeURIComponent(k.user)}:${encodeURIComponent(k.pass)}@${k.ip}:554/${k.stream}`;
+  return `rtsp://${encodeURIComponent(k.user)}:${encodeURIComponent(k.pass)}@${k.ip}:${k.rtspPort || RTSP_PORT}/${k.stream}`;
 }
 
 /** CAMERA_NAMES pro .env serveru. */
