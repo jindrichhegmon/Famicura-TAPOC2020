@@ -26,6 +26,29 @@ export const KINDS = {
 export const LEVEL_LABEL = { crit: 'kritická', warn: 'varování', info: 'informativní', tech: 'technická' };
 export const CONSENT = { none: 'žádný obraz (jen události)', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' };
 
+/** What the provider watches for a patient: on/off, hours, recording. The family only reads it. */
+export const WATCH_KINDS = ['fall', 'longlie', 'sos', 'devfall', 'inactivity', 'linecross', 'tamper', 'missing', 'state', 'person', 'motion'];
+export function defaultWatch() {
+  const w = {};
+  for (const k of WATCH_KINDS) w[k] = { on: true, from: '', to: '', rec: KINDS[k].level === 'crit' || k === 'linecross' };
+  w.linecross = { on: true, from: '07:00', to: '20:00', rec: true };
+  w.motion = { on: false, from: '', to: '', rec: false };
+  w.state = { on: false, from: '', to: '', rec: false };
+  return w;
+}
+export function describeWatch(w) {
+  const hodiny = (r) => (r.from ? ` ${r.from}–${r.to}` : '');
+  const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : ''));
+  return on.length ? on.join(', ') : 'nic';
+}
+function withinHours(r, d = new Date()) {
+  if (!r.from || !r.to) return true;
+  const m = d.getHours() * 60 + d.getMinutes();
+  const [fh, fm] = r.from.split(':').map(Number), [th, tm] = r.to.split(':').map(Number);
+  const f = fh * 60 + fm, t = th * 60 + tm;
+  return f < t ? (m >= f && m < t) : (m >= f || m < t);
+}
+
 const FAKE = [
   ['p2', 'Babička Marie', 'Byt 7, Kladno', 'Pečovatelská služba Kladno'],
   ['p3', 'Pan Josef', 'Pokoj 12, DS Slunečnice', 'DS Slunečnice'],
@@ -40,10 +63,10 @@ function seed() {
   const now = Date.now();
   const patients = [
     { id: 'tapoc2020', name: 'TAPO Test', place: 'Kancelář Famicura (skutečná kamera)', provider: 'Pečovatelská služba Kladno', real: true,
-      consent: { den: 'full', noc: 'full', nouze: true }, night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
+      consent: { den: 'full', noc: 'full', nouze: true }, watch: defaultWatch(), night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
     ...FAKE.map(([id, name, place, provider], i) => ({ id, name, place, provider, real: false,
       consent: { den: ['skeleton', 'blur', 'none', 'full', 'skeleton', 'skeleton', 'blur'][i], noc: ['skeleton', 'skeleton', 'none', 'skeleton', 'none', 'skeleton', 'skeleton'][i], nouze: i % 3 !== 2 },
-      night: false, offline: i === 5, note: '' })),
+      watch: defaultWatch(), night: false, offline: i === 5, note: '' })),
   ];
   const events = [];
   const add = (minsAgo, patientId, kind, state = 'uzavřen', result = 'planý poplach') => events.push({
@@ -58,7 +81,7 @@ function seed() {
 }
 
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.patients) return s; } catch { /* fresh */ }
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.patients) { for (const p of s.patients) p.watch = p.watch || defaultWatch(); return s; } } catch { /* fresh */ }
   const s = seed(); save(s); return s;
 }
 function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* private mode */ } }
@@ -98,7 +121,13 @@ export const sim = {
 
   emit(patientId, kind, extra = {}) {
     const k = KINDS[kind]; if (!k) return null;
-    const ev = { id: nid(), at: Date.now(), patientId, kind, state: k.level === 'info' ? 'uzavřen' : 'nový', by: null, result: null, note: '', ...extra };
+    const pw = this.patient(patientId)?.watch?.[kind];
+    if (pw && (!pw.on || !withinHours(pw))) {
+      // dropped by the provider's settings; the panel says so, the history stays clean
+      state.lastDropped = { at: Date.now(), patientId, kind, reason: !pw.on ? 'poskytovatel událost vypnul' : `mimo hodiny ${pw.from}–${pw.to}` };
+      commit(); return null;
+    }
+    const ev = { id: nid(), at: Date.now(), patientId, kind, state: k.level === 'info' ? 'uzavřen' : 'nový', by: null, result: null, note: '', rec: !!pw?.rec, ...extra };
     state.events.unshift(ev);
     if (state.events.length > 400) state.events.length = 400;
     const p = this.patient(patientId);
@@ -115,6 +144,12 @@ export const sim = {
   ackNotification(id) { const n = state.notifications.find((x) => x.id === id); if (n) { n.ack = true; commit(); } },
   ackAll(patientId) { for (const n of state.notifications) if (n.patientId === patientId) n.ack = true; commit(); },
 
+  setWatch(patientId, kind, patch) {
+    const p = this.patient(patientId); if (!p || !WATCH_KINDS.includes(kind)) return;
+    p.watch = p.watch || defaultWatch();
+    p.watch[kind] = { ...p.watch[kind], ...patch };
+    commit();
+  },
   setConsent(patientId, consent) {
     const p = this.patient(patientId); if (!p) return;
     p.consent = { ...p.consent, ...consent };
@@ -253,6 +288,7 @@ export function mountPanel({ role, patientIds, onPatient }) {
         <span class="grow"></span>
         <button class="sm sec" data-act="reset">Vynulovat</button>
       </div>
+      <div class="small muted" id="simDropped"></div>
       <div class="small muted">Otevřete role v dalších oknech vedle sebe: změna v jednom se hned projeví v ostatních.</div>
     </div>`;
   document.body.append(el);
@@ -264,7 +300,7 @@ export function mountPanel({ role, patientIds, onPatient }) {
   el.querySelector('[data-act=request]').onclick = () => sim.requestFull(pat(), 'Dispečerka Jana Nováková', 'ověření alertu');
   el.querySelector('[data-act=reset]').onclick = () => { if (confirm('Vynulovat simulaci ve všech oknech?')) sim.reset(); };
   const night = el.querySelector('.night'); night.checked = sim.state.night; night.onchange = () => sim.setNight(night.checked);
-  sim.subscribe((s) => { night.checked = s.night; });
+  sim.subscribe((s) => { night.checked = s.night; const d = s.lastDropped; el.querySelector('#simDropped').textContent = d && Date.now() - d.at < 20000 ? `Událost „${KINDS[d.kind]?.label}“ se nezapsala: ${d.reason} (nastavení poskytovatele).` : ''; });
   el.classList.add('min');
   return { patient: pat, select: (id) => { el.querySelector('.pat').value = id; } };
 }

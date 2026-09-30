@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml } from '/proto/sim.js';
+import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 const FAMILY = ['tapoc2020', 'p2'];
@@ -63,6 +63,7 @@ function render() {
   $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
   $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', skeleton: 'jen drátěný model' }[viewMode];
   $('effective').innerHTML = `Teď poskytovatel vidí: <strong>${esc(sim.modeReason(patientId))}</strong>`;
+  $('watchInfo').textContent = describeWatch(p.watch || {});
 
   // provider watching
   const g = s.grants[patientId], w = s.watching[patientId];

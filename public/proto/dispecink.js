@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo } from '/proto/sim.js';
+import { sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 const ME = 'Jana Nováková';
@@ -132,8 +132,16 @@ function renderDetail(rebuild = false) {
       <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
       <div class="row" id="dbtn"></div>
       <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(p.provider)}</dd><dt>Rodina</dt><dd>Petr Novák (syn), 777 123 456</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
+      <h3 style="margin-top:12px">Sledování a nahrávání <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí</span></h3>
+      <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td></tr>`).join('')}</tbody></table>
       <h3 style="margin-top:12px">Historie</h3><ul class="list" id="dhist"></ul>`;
     detailUnreg = src.register(d.querySelector('#dcv'), () => detailMode(selected));
+    d.querySelectorAll('#dwatch tr').forEach((tr) => {
+      const k = tr.dataset.k, w = p.watch?.[k] || { on: true, from: '', to: '', rec: false };
+      tr.querySelector('.on').checked = w.on; tr.querySelector('.from').value = w.from; tr.querySelector('.to').value = w.to; tr.querySelector('.rec').checked = w.rec;
+      const push = () => sim.setWatch(p.id, k, { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, rec: tr.querySelector('.rec').checked });
+      tr.querySelectorAll('input').forEach((i) => { i.onchange = push; });
+    });
     d.querySelector('#closeD').onclick = () => { selected = null; renderDetail(); renderTiles(); };
     const ovl = d.querySelector('#ovl'); ovl.checked = overlay; ovl.onchange = () => { overlay = ovl.checked; };
   }

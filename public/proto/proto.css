@@ -219,3 +219,10 @@ body.app #notifs .banner,body.app #requests .banner{box-shadow:0 2px 10px rgba(2
 .path li span:not(.n){font-size:.9rem;color:var(--muted);line-height:1.45}
 .devices{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .devices .dev{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:600}
+table.watch td,table.watch th{padding:5px 6px;font-size:.85rem}
+table.watch input[type=time]{min-height:30px;padding:2px 6px;font-size:.8rem;width:88px}
+table.watch input[type=checkbox]{width:18px;height:18px}
+.demo{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#e7f1fb;border:1px solid #c7ddf3;border-radius:14px;padding:12px 14px;margin-top:14px}
+.demo b{display:block;font-size:1rem}
+.demo span{font-size:.9rem;color:var(--muted)}
+.demo .btn.yt{background:#c4302b;color:#fff;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:12px;white-space:nowrap}
