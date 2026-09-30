@@ -36,10 +36,10 @@ document.querySelectorAll('[data-klid]').forEach((b) => { b.onclick = () => {
   else if (v === 'morning') { const d = new Date(); if (d.getHours() >= 7) d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0); sim.setKlid(patientId, d.getTime()); }
   else sim.setKlid(patientId, Date.now() + Number(v) * 60000);
 }; });
-$('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('sec', o !== b); }); render(); }; });
+$('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('on', o === b); }); render(); }; });
 $('ackAll').onclick = () => sim.ackAll(patientId);
 $('rec').onclick = () => { sim.emit(patientId, 'state', { text: 'Ruční nahrávka 15 s (uložena do historie).' }); toast('Nahrávám 15 s…'); };
-$('sound').onclick = () => { $('sound').textContent = $('sound').textContent.startsWith('🔇') ? '🔊 Zvuk' : '🔇 Zvuk'; };
+$('sound').onclick = () => { const ic = $('sound').querySelector('.ic'); ic.textContent = ic.textContent === '🔇' ? '🔊' : '🔇'; };
 
 function levelClass(l) { return l === 'crit' ? 'crit' : l === 'warn' ? 'warn' : l === 'tech' ? 'tech' : 'info'; }
 
@@ -52,7 +52,15 @@ function render() {
   const open = s.events.filter((e) => e.patientId === patientId && e.state !== 'uzavřen' && KINDS[e.kind]);
   const worst = open.some((e) => KINDS[e.kind].level === 'crit') ? 'crit' : open.some((e) => KINDS[e.kind].level === 'warn') ? 'warn' : null;
   $('pstatus').textContent = p.offline ? 'kamera nedostupná' : worst === 'crit' ? 'kritická událost' : worst === 'warn' ? 'varování' : 'klid';
-  $('pstatus').className = 'badge ' + (p.offline ? 'tech' : worst || 'ok');
+  $('pstatus').className = 'badge hide ' + (p.offline ? 'tech' : worst || 'ok');
+  $('avatar').textContent = p.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const hero = $('hero');
+  const lastEv = s.events.find((e) => e.patientId === patientId && e.kind !== 'consent');
+  const heroKind = p.offline ? 'off' : worst || 'ok';
+  hero.className = 'hero-' + heroKind;
+  $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁' }[heroKind];
+  $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
+  $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
   $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', skeleton: 'jen drátěný model' }[viewMode];
   $('effective').innerHTML = `Teď poskytovatel vidí: <strong>${esc(sim.modeReason(patientId))}</strong>`;
 
@@ -90,7 +98,8 @@ function render() {
     const badge = e.kind === 'consent' ? '<span class="badge">souhlas</span>' : `<span class="badge ${levelClass(k.level)}">${esc(k.source)}</span>`;
     const tail = e.state && e.state !== 'uzavřen' && k ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : '';
     const rec = k && k.level !== 'info' && k.level !== 'tech' && e.kind !== 'consent' ? ' · <a href="#" class="small">nahrávka 20 s (5 s před)</a>' : '';
-    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge} ${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''}${tail}${rec}</span></li>`;
+    const cls = e.kind === 'consent' ? 'consent' : k.level;
+    return `<li class="${cls}"><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge} ${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''}${tail}${rec}</span></li>`;
   }).join('') || '<li class="muted">Zatím nic.</li>');
 }
 

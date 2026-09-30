@@ -3,67 +3,105 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Famicura · Rodina (prototyp)</title>
+<title>Famicura · Rodina</title>
 <link rel="stylesheet" href="/proto/proto.css">
 </head>
-<body>
+<body class="app">
 <div class="phone">
-  <div class="topbar">
-    <div><h1>Famicura</h1><div class="who">Rodina · Petr Novák (správce)</div></div>
-    <select id="patient" aria-label="Pacient"></select>
-  </div>
+  <header class="apphead">
+    <div class="me">
+      <div class="avatar" id="avatar">TT</div>
+      <div>
+        <div class="t" id="pname">…</div>
+        <div class="s">Rodina · Petr Novák (správce)</div>
+      </div>
+    </div>
+    <select id="patient" class="pill" aria-label="Pacient"></select>
+  </header>
+
+  <section id="hero" class="hero-ok">
+    <div class="hero-ic" id="heroIc">✓</div>
+    <div class="grow">
+      <div class="hero-t" id="heroT">Vše v pořádku</div>
+      <div class="hero-s" id="heroS">Poslední událost: –</div>
+    </div>
+    <span class="badge hide" id="pstatus"></span>
+  </section>
 
   <div id="notifs"></div>
   <div id="requests"></div>
 
-  <div class="c">
-    <div class="row"><h2 id="pname" class="grow">…</h2><span class="badge" id="pstatus">klid</span></div>
-    <div class="stage"><canvas id="cv"></canvas><span class="tag" id="modeTag"></span><span class="live hide" id="liveTag">ŽIVĚ</span></div>
-    <div class="seg" id="modes">
-      <button data-mode="full" aria-pressed="true">Normální</button>
-      <button data-mode="blur" aria-pressed="false">Rozostření</button>
-      <button data-mode="fullskel" aria-pressed="false">Drátěný model</button>
-      <button data-mode="skeleton" aria-pressed="false">Černé pozadí</button>
+  <section class="card pic" id="domu">
+    <div class="stage">
+      <canvas id="cv"></canvas>
+      <span class="tag" id="modeTag"></span>
+      <span class="live hide" id="liveTag">● ŽIVĚ</span>
     </div>
     <div id="watching"></div>
-    <p class="small muted" id="srcNote"></p>
-    <div class="row"><button class="sm sec" id="rec">● Nahrát 15 s</button><button class="sm sec" id="sound">🔇 Zvuk</button><button class="sm sec" id="ackAll">Vše v pořádku</button></div>
-  </div>
-
-  <div class="c">
-    <h2>Co smí vidět poskytovatel</h2>
-    <p class="small muted" id="provider"></p>
-    <div class="kv">
-      <dt>Ve dne</dt><dd><select id="cDen"><option value="none">žádný obraz (jen události)</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></dd>
-      <dt>V noci</dt><dd><select id="cNoc"><option value="none">žádný obraz (jen události)</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></dd>
-      <dt>V nouzi</dt><dd><label class="small"><input type="checkbox" id="cNouze"> při pádu nebo SOS smí otevřít plný obraz na 10 min bez čekání (dozvím se to hned)</label></dd>
+    <div class="modesel" id="modes">
+      <button data-mode="full" aria-pressed="true"><span class="ic">🎥</span>Normální</button>
+      <button data-mode="blur" aria-pressed="false"><span class="ic">🌫️</span>Rozostření</button>
+      <button data-mode="fullskel" aria-pressed="false"><span class="ic">🩻</span>Drátěný model</button>
+      <button data-mode="skeleton" aria-pressed="false"><span class="ic">⬛</span>Černé pozadí</button>
     </div>
-    <p class="small" id="effective"></p>
-  </div>
-
-  <div class="c">
-    <h2>Klid</h2>
-    <p class="small muted">Informativní události a varování nechodí; kritické (pád, SOS) vždy.</p>
-    <div class="row"><button class="sm sec" data-klid="60">Na 1 hodinu</button><button class="sm sec" data-klid="morning">Do 7:00</button><button class="sm sec" data-klid="0">Vypnout</button><span class="small muted" id="klidState"></span></div>
-  </div>
-
-  <div class="c">
-    <h2>Historie</h2>
-    <div class="row" id="filters">
-      <button class="sm" data-f="all" aria-pressed="true">Vše</button>
-      <button class="sm sec" data-f="crit" aria-pressed="false">Kritické</button>
-      <button class="sm sec" data-f="kamera" aria-pressed="false">Kamera</button>
-      <button class="sm sec" data-f="analýza" aria-pressed="false">Analýza</button>
-      <button class="sm sec" data-f="consent" aria-pressed="false">Souhlasy</button>
+    <p class="hint" id="srcNote"></p>
+    <div class="actions">
+      <button class="act" id="rec"><span class="ic">⏺</span>Nahrát 15 s</button>
+      <button class="act" id="sound"><span class="ic">🔇</span>Zvuk</button>
+      <button class="act" id="ackAll"><span class="ic">✓</span>Vše v pořádku</button>
     </div>
-    <ul class="list" id="history"></ul>
-  </div>
+  </section>
 
-  <div class="c">
-    <h2>Sledované události</h2>
-    <p class="small muted">Nastavení převzaté z aplikace: možný pád, dlouhé ležení, překročení čáry 07:00–20:00 s nahrávkou 15 s a 5 s před událostí. Upravuje se v <a href="/" target="app">hlavní aplikaci</a>.</p>
-  </div>
+  <section class="card" id="soukromi">
+    <div class="cardhead"><span class="ic">🔒</span><h2>Co smí vidět poskytovatel</h2></div>
+    <p class="hint" id="provider"></p>
+    <div class="consent">
+      <label class="crow"><span class="cl"><span class="ic">☀️</span>Ve dne</span>
+        <select id="cDen"><option value="none">žádný obraz, jen události</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></label>
+      <label class="crow"><span class="cl"><span class="ic">🌙</span>V noci</span>
+        <select id="cNoc"><option value="none">žádný obraz, jen události</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></label>
+      <label class="crow sw"><span class="cl"><span class="ic">🚨</span>V nouzi plný obraz<small>při pádu nebo SOS na 10 minut bez čekání, dozvíte se to hned</small></span>
+        <span class="switch"><input type="checkbox" id="cNouze"><i></i></span></label>
+    </div>
+    <p class="now" id="effective"></p>
+  </section>
+
+  <section class="card" id="klid">
+    <div class="cardhead"><span class="ic">🔕</span><h2>Klid</h2><span class="hint grow" id="klidState"></span></div>
+    <p class="hint">Informativní zprávy a varování nechodí. Kritické (pád, SOS) vždy.</p>
+    <div class="chips">
+      <button class="chip" data-klid="60">Na 1 hodinu</button>
+      <button class="chip" data-klid="morning">Do 7:00</button>
+      <button class="chip" data-klid="0">Vypnout</button>
+    </div>
+  </section>
+
+  <section class="card" id="historie">
+    <div class="cardhead"><span class="ic">🕓</span><h2>Historie</h2></div>
+    <div class="chips scroll" id="filters">
+      <button class="chip on" data-f="all" aria-pressed="true">Vše</button>
+      <button class="chip" data-f="crit" aria-pressed="false">Kritické</button>
+      <button class="chip" data-f="kamera" aria-pressed="false">Kamera</button>
+      <button class="chip" data-f="analýza" aria-pressed="false">Analýza</button>
+      <button class="chip" data-f="consent" aria-pressed="false">Souhlasy</button>
+    </div>
+    <ul class="timeline" id="history"></ul>
+  </section>
+
+  <section class="card" id="nastaveni">
+    <div class="cardhead"><span class="ic">⚙️</span><h2>Sledované události</h2></div>
+    <p class="hint">Možný pád, dlouhé ležení, překročení čáry 07:00–20:00; nahrávka 15 s a 5 s před událostí. Upravuje se v <a href="/" target="_blank">hlavní aplikaci</a>.</p>
+  </section>
+
+  <p class="foot small">© 2026 Jindřich Hegmon · Famicura · prototyp</p>
 </div>
+
+<nav class="bottomnav">
+  <a href="#domu"><span class="ic">🏠</span>Domů</a>
+  <a href="#soukromi"><span class="ic">🔒</span>Soukromí</a>
+  <a href="#historie"><span class="ic">🕓</span>Historie</a>
+  <a href="#nastaveni"><span class="ic">⚙️</span>Nastavení</a>
+</nav>
 <script type="module" src="/proto/rodina.js"></script>
 </body>
 </html>
