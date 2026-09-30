@@ -4,14 +4,21 @@ import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, f
 const $ = (id) => document.getElementById(id);
 const FAMILY = ['tapoc2020', 'p2'];
 let patientId = FAMILY[0];
-const REZIM = { full: 'full', normal: 'full', blur: 'blur', fullskel: 'fullskel', model: 'fullskel', skeleton: 'skeleton', black: 'skeleton' };
-let viewMode = REZIM[new URLSearchParams(location.search).get('rezim')] || 'full';
+// Zobrazení = podklad (normální, rozostření, černé pozadí) + drátěný model přes
+// něj. Model jde zapnout k normálnímu i rozostřenému obrazu; na černém pozadí je vždy.
+const REZIM = { full: ['full', false], normal: ['full', false], blur: ['blur', false], blurskel: ['blur', true],
+  fullskel: ['full', true], model: ['full', true], skeleton: ['skeleton', true], black: ['skeleton', true] };
+const SKEL_KEY = 'famicura.proto.skel';
+const zRezimu = REZIM[new URLSearchParams(location.search).get('rezim')];
+let baseMode = zRezimu ? zRezimu[0] : 'full';
+let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) === '1';
+const viewMode = () => baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
 let filter = 'all';
 const seen = new Set(sim.state.notifications.map((n) => n.id));
 
 const src = createSource({ deviceId: 'tapoc2020' });
 window.__zdroj = src;
-src.register($('cv'), () => viewMode);
+src.register($('cv'), viewMode);
 src.connect();
 mountAuthBanner(src);
 src.onChange((s) => {
@@ -27,7 +34,16 @@ const panel = mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) =
 $('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');
 $('patient').onchange = () => { patientId = $('patient').value; panel.select(patientId); render(); };
 
-$('modes').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.mode === viewMode)); b.onclick = () => { viewMode = b.dataset.mode; $('modes').querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', String(o === b))); render(); }; });
+function renderModes() {
+  $('modes').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === baseMode)));
+  const sw = $('skelSw');
+  sw.disabled = baseMode === 'skeleton';
+  sw.checked = baseMode === 'skeleton' || skel;
+  $('skelHint').textContent = baseMode === 'skeleton' ? 'na černém pozadí je drátěný model vždy' : 'kostra postavy přes normální i rozostřený obraz';
+}
+$('modes').querySelectorAll('button').forEach((b) => { b.onclick = () => { baseMode = b.dataset.mode; renderModes(); render(); }; });
+$('skelSw').onchange = () => { skel = $('skelSw').checked; localStorage.setItem(SKEL_KEY, skel ? '1' : '0'); renderModes(); render(); };
+renderModes();
 $('cDen').onchange = () => sim.setConsent(patientId, { den: $('cDen').value });
 $('cNoc').onchange = () => sim.setConsent(patientId, { noc: $('cNoc').value });
 $('cNouze').onchange = () => sim.setConsent(patientId, { nouze: $('cNouze').checked });
@@ -62,7 +78,7 @@ function render() {
   $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁' }[heroKind];
   $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
   $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
-  $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', skeleton: 'jen drátěný model' }[viewMode];
+  $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
   $('effective').innerHTML = `Teď poskytovatel vidí: <strong>${esc(sim.modeReason(patientId))}</strong>`;
   $('watchInfo').textContent = describeWatch(p.watch || {});
 

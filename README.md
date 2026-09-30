@@ -202,8 +202,9 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 Na `/proto/` (po přihlášení v aplikaci, stejný prohlížeč) jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
-obraz ve všech režimech, notifikace, co smí vidět poskytovatel, žádosti
-o plný obraz, historie), **dispečink poskytovatele** (dlaždice všech
+obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
+zapnout k normálnímu i rozostřenému obrazu a na černém pozadí je vždy;
+notifikace, co smí vidět poskytovatel, žádosti o plný obraz, historie), **dispečink poskytovatele** (dlaždice všech
 pacientů v režimu, který rodina povolila, fronta alertů s převzetím a
 uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup)
 a **provoz** (flotila míst, provozní alarmy, diagnostika, průvodce novým

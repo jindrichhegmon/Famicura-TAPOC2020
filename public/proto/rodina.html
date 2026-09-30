@@ -38,12 +38,13 @@
       <span class="live hide" id="liveTag">● ŽIVĚ</span>
     </div>
     <div id="watching"></div>
-    <div class="modesel" id="modes">
+    <div class="modesel three" id="modes">
       <button data-mode="full" aria-pressed="true"><span class="ic">🎥</span>Normální</button>
       <button data-mode="blur" aria-pressed="false"><span class="ic">🌫️</span>Rozostření</button>
-      <button data-mode="fullskel" aria-pressed="false"><span class="ic">🩻</span>Drátěný model</button>
       <button data-mode="skeleton" aria-pressed="false"><span class="ic">⬛</span>Černé pozadí</button>
     </div>
+    <label class="crow sw skelrow" id="skelRow"><span class="cl"><span class="ic">🩻</span>Drátěný model<small id="skelHint">kostra postavy přes normální i rozostřený obraz</small></span>
+      <span class="switch"><input type="checkbox" id="skelSw"><i></i></span></label>
     <p class="hint" id="srcNote"></p>
     <div class="actions">
       <button class="act" id="rec"><span class="ic">⏺</span>Nahrát 15 s</button>
