@@ -257,10 +257,10 @@ export function toast(text, level = 'info', onOpen = null) {
  */
 export function mountAuthBanner(src) {
   const el = document.createElement('div'); el.id = 'authBar'; el.className = 'hide';
-  el.innerHTML = `<span class="grow" id="authText"></span><a class="sm btnlike" href="/" target="_blank" id="authLogin">Přihlásit se</a><button class="sm sec" id="authRetry">Mám přihlášeno, načíst znovu</button>`;
+  el.innerHTML = `<span class="grow" id="authText"></span><a class="sm btnlike" href="/" target="_blank" id="authLogin">Přihlásit se</a><a class="sm btnlike sec2 hide" href="/" target="_blank" id="authApp">Hlavní aplikace a diagnostika</a><button class="sm sec" id="authRetry">Načíst znovu</button>`;
   document.body.prepend(el);
   el.querySelector('#authRetry').onclick = () => location.reload();
-  const show = (text, login) => { el.querySelector('#authText').innerHTML = text; el.querySelector('#authLogin').classList.toggle('hide', !login); el.classList.remove('hide'); document.body.classList.add('withAuth'); };
+  const show = (text, login) => { el.querySelector('#authText').innerHTML = text; el.querySelector('#authLogin').classList.toggle('hide', !login); el.querySelector('#authApp').classList.toggle('hide', login); el.classList.remove('hide'); document.body.classList.add('withAuth'); };
   const hide = () => { el.classList.add('hide'); document.body.classList.remove('withAuth'); };
   const check = async () => {
     try {
@@ -273,7 +273,7 @@ export function mountAuthBanner(src) {
   src?.onChange((s) => {
     if (s.status === 'live') { hide(); return; }
     if (s.status === 'offline' && /přihlášeni/.test(s.error || '')) show('<b>Demo s reálnou kamerou:</b> přihlaste se v hlavní aplikaci (stejný prohlížeč), jinak vidíte jen náhradní scénu.', true);
-    else if (s.status === 'offline') show(`<b>Obraz z kamery teď nejde:</b> ${esc(s.error || 'kamera nedostupná')} Ukazuji náhradní scénu.`, false);
+    else if (s.status === 'offline') show(`<b>Obraz z kamery teď nejde:</b> ${esc(s.error || 'kamera nedostupná')} Přihlášení je v pořádku; podívejte se do Diagnostiky v hlavní aplikaci (kamera, tunel, go2rtc). Ukazuji náhradní scénu.`, false);
     else if (s.status === 'connecting' && s.path === 'https') show(`<b>Zkouším náhradní cestu HTTPS…</b> ${esc(s.error || '')}`, false);
   });
   return { check };

@@ -232,3 +232,4 @@ table.watch input[type=checkbox]{width:18px;height:18px}
 #authBar .btnlike{background:var(--blue);color:#fff;text-decoration:none;font-weight:700;padding:7px 12px;border-radius:9px;white-space:nowrap}
 body.withAuth{padding-top:56px}
 body.withAuth .apphead,body.withAuth .deskbar{top:56px}
+#authBar .btnlike.sec2{background:#e6ecf2;color:var(--ink)}
