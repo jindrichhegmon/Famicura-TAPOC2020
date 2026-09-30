@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Famicura · Provoz (prototyp)</title>
+<link rel="stylesheet" href="/proto/proto.css">
+</head>
+<body>
+<div class="wide">
+  <div class="deskbar" style="margin:0 0 12px;border-radius:0 0 16px 16px">
+    <div><h1>Famicura · Provoz</h1><div class="small">Technik Tomáš Král · bez přístupu k obrazu pacientů</div></div>
+    <div class="stats"><span>míst <strong id="nSites">0</strong></span><span>v pořádku <strong id="nOk">0</strong></span><span>s poruchou <strong id="nBad">0</strong></span></div>
+  </div>
+  <div id="alarms"></div>
+  <div class="c">
+    <div class="row"><h2 class="grow">Flotila míst</h2><button class="sm" id="newSite">+ Nové místo (průvodce)</button></div>
+    <table><thead><tr><th>Místo</th><th>Pacient</th><th>Brána</th><th>Tunel</th><th>Kamera</th><th>Události</th><th>Firmware</th><th>Poslední hlášení</th><th></th></tr></thead><tbody id="fleet"></tbody></table>
+    <p class="small muted">Řádek „Kancelář Famicura“ je skutečné místo: stav čte z vaší aplikace (go2rtc, kamera, odběr událostí). Ostatní jsou simulace.</p>
+  </div>
+  <div class="cols">
+    <div class="c" id="diagCard"><h2>Diagnostika</h2><p class="muted small">Vyberte místo v tabulce.</p></div>
+    <div>
+      <div class="c"><h2>Kapacita</h2><dl class="kv"><dt>Server obrazu eu-1</dt><dd>8 kamer z 80 · 4 diváci · CPU 12 %</dd><dt>Aplikační server</dt><dd>2 uzly · 1 200 požadavků/min</dd><dt>Úložiště nahrávek</dt><dd>41 GB z 2 TB · retence 30 dnů</dd><dt>Notifikace dnes</dt><dd>push 214 · SMS 3 · hovor 0</dd></dl></div>
+      <div class="c"><h2>Aktualizace bran</h2><p class="small">Verze 1.4.2 · 7 z 8 bran aktuální · 1 čeká (Byt 21, Beroun – offline). Podepsaný balíček, návrat k předchozí verzi při neúspěchu.</p><button class="sm sec">Naplánovat aktualizaci</button></div>
+    </div>
+  </div>
+  <div class="c hide" id="wizard">
+    <div class="row"><h2 class="grow">Nové místo – průvodce</h2><button class="sm sec" id="closeW">Zavřít</button></div>
+    <ol class="steps">
+      <li><strong>Pacient a rodina</strong><br><span class="small muted">Jméno nebo přezdívka, časové pásmo, e-mail správce rodiny (pozvánka odejde po dokončení).</span></li>
+      <li><strong>Brána</strong><br><span class="small muted">Typ: GL.iNet Mango / Raspberry Pi 5 / Windows PC. Aplikace vygeneruje jednorázový instalační balíček (platí 24 h, klíč tunelu se po instalaci smaže).</span><br><button class="sm sec" id="genPkg">Vygenerovat balíček</button> <span class="small" id="pkgState"></span></li>
+      <li><strong>Kamera</strong><br><span class="small muted">Model, IP v místní síti, účet kamery (uloží se do trezoru, technik ho dál nevidí).</span></li>
+      <li><strong>Kontrola po instalaci</strong><br><button class="sm" id="runCheck">Otestovat</button><ul class="list small" id="checks"></ul></li>
+      <li><strong>Zóny a čára</strong><br><span class="small muted">Postel a křeslo se kreslí přes drátěný model (bez souhlasu se snímkem) nebo přes jeden snímek se souhlasem rodiny na místě.</span></li>
+    </ol>
+  </div>
+</div>
+<script type="module" src="/proto/provoz.js"></script>
+</body>
+</html>

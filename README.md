@@ -198,6 +198,27 @@ hned při spuštění, proč neběží. Když by detekce za běhu opakovaně
 selhávala (20 snímků po sobě), analýza se zastaví a zapíše to do logu
 i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocuje.
 
+## Prototyp prostředí pro role (rodina, dispečink, provoz)
+
+Na `/proto/` (po přihlášení v aplikaci, stejný prohlížeč) jsou tři
+simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
+obraz ve všech režimech, notifikace, co smí vidět poskytovatel, žádosti
+o plný obraz, historie), **dispečink poskytovatele** (dlaždice všech
+pacientů v režimu, který rodina povolila, fronta alertů s převzetím a
+uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup)
+a **provoz** (flotila míst, provozní alarmy, diagnostika, průvodce novým
+místem). Obraz je skutečný, z vaší kamery, kreslený jednou a do každé
+dlaždice zvlášť v jejím režimu (`public/proto/zdroj.js`); drátěný model
+se počítá jednou a sdílí. Bez přihlášení nebo bez kamery kreslí náhradní
+scénu s animovanou postavou (stojí, sedí, leží). Všechno ostatní je
+simulace v prohlížeči (`public/proto/sim.js`): stav se sdílí mezi okny
+přes localStorage a BroadcastChannel, takže změna souhlasu v okně rodiny
+se do 1 s projeví v dispečinku. Panel **Simulace** vlevo dole vyvolá
+pád, překročení čáry, SOS z náramku, výpadek kamery, žádost dispečera
+o plný obraz nebo noc; skutečné události kamery se do prototypu
+propisují také. Prototyp na server nic nezapisuje a nastavení aplikace
+nemění.
+
 ## Nastavení krok za krokem
 
 Všechny příkazy spouštějte na Macu ve složce projektu, pokud není

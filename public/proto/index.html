@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Famicura Kamera – prototyp prostředí</title>
+<link rel="stylesheet" href="/proto/proto.css">
+</head>
+<body>
+<div class="chooser">
+  <h1>Famicura Kamera – prototyp prostředí</h1>
+  <p class="muted">Jedna skutečná kamera z vaší aplikace, zobrazená tolikrát, kolik je potřeba, a kolem ní tři prostředí podle zadání. Vše ostatní (pacienti, alerty, souhlasy, notifikace) je simulace v prohlížeči. Otevřete role ve více oknech vedle sebe: co změníte v jednom, uvidíte hned v ostatních.</p>
+  <div class="grid">
+    <div class="card">
+      <h2>Rodina</h2>
+      <p class="small muted">Telefon. Živý obraz ve všech režimech, notifikace, rozhodnutí, co smí vidět poskytovatel, žádosti o plný obraz, historie.</p>
+      <a class="btn" href="/proto/rodina.html" target="rodina">Otevřít jako rodina</a>
+    </div>
+    <div class="card">
+      <h2>Dispečink poskytovatele</h2>
+      <p class="small muted">Počítač. Dlaždice všech pacientů v režimu, který rodina povolila, fronta alertů, eskalace, žádost o plný obraz, nouzový přístup.</p>
+      <a class="btn" href="/proto/dispecink.html" target="dispecink">Otevřít jako dispečink</a>
+    </div>
+    <div class="card">
+      <h2>Provoz (technik)</h2>
+      <p class="small muted">Flotila míst, stav tunelů a kamer, provozní alarmy, průvodce novým místem, diagnostika. Bez obrazu pacientů.</p>
+      <a class="btn" href="/proto/provoz.html" target="provoz">Otevřít jako provoz</a>
+    </div>
+  </div>
+  <div class="c">
+    <h2>Jak to používat</h2>
+    <ol>
+      <li>Přihlaste se v <a href="/" target="app">hlavní aplikaci</a> (stejný prohlížeč). Prototyp pak dostane obraz z vaší kamery. Bez přihlášení kreslí náhradní scénu s animovanou postavou.</li>
+      <li>Vpravo dole je panel <strong>Simulace</strong>: vyvolá pád, překročení čáry, SOS z náramku, výpadek kamery, žádost dispečera o plný obraz, noc.</li>
+      <li>V okně rodiny změňte, co smí poskytovatel vidět. V okně dispečinku se dlaždice do 1 s přepne.</li>
+      <li>Skutečné události kamery (osoba, překročení čáry) se do prototypu propisují také, u pacienta „TAPO Test“.</li>
+    </ol>
+    <p class="small muted">Prototyp neukládá nic na server a nemění nastavení aplikace. Tlačítko Vynulovat v panelu vrátí simulaci na začátek.</p>
+  </div>
+</div>
+</body>
+</html>

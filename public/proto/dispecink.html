@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Famicura · Dispečink (prototyp)</title>
+<link rel="stylesheet" href="/proto/proto.css">
+</head>
+<body>
+<div class="desk">
+  <div class="deskbar">
+    <div><h1>Famicura · Dispečink</h1><div class="small">Pečovatelská služba Kladno · Jana Nováková · denní směna · záloha: Petr Dvořák</div></div>
+    <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
+  </div>
+  <div id="critBanner"></div>
+  <div class="cols">
+    <div>
+      <div class="row"><span class="small muted grow">Dlaždice ukazují jen to, co rodina povolila. Klepnutím otevřete detail.</span>
+        <label class="small"><input type="checkbox" id="onlyOpen"> jen s otevřeným alertem</label></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="c detail hide" id="detail"></div>
+    </div>
+    <div>
+      <div class="c"><h2>Fronta alertů</h2><ul class="list queue" id="queue"></ul></div>
+      <div class="c"><h2>Směna</h2><p class="small">Nepřevzatý kritický alert po 2 minutách eskaluje na zálohu a vedoucí (push, SMS, hovor). Doba převzetí dnes: <strong>0:48 min</strong>, plané poplachy 31 %.</p></div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/proto/dispecink.js"></script>
+</body>
+</html>
