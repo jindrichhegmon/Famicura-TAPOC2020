@@ -120,6 +120,15 @@ if (-not (Test-Path $Klic)) {
   & $SshKeygen --% -q -t ed25519 -N "" -C famicura-tunel@windows -f "%FAMICURA_KLIC%"
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$Klic.pub")) { Konec 'ssh-keygen klíč nevytvořil.' }
 }
+# ssh-keygen dá klíč účtu, který skript spustil. Když ssh běží jako SYSTEM,
+# bere to OpenSSH jako přístup pro někoho dalšího a klíč odmítne („bad
+# permissions“). Vlastník i práva proto jen SYSTEM a Administrators.
+foreach ($soubor in @($Klic, "$Klic.pub")) {
+  icacls $soubor /setowner '*S-1-5-32-544' | Out-Null
+  if ($LASTEXITCODE -ne 0) { Konec "Nepodařilo se nastavit vlastníka souboru $soubor." }
+  icacls $soubor /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+  if ($LASTEXITCODE -ne 0) { Konec "Nepodařilo se nastavit práva souboru $soubor." }
+}
 $verejny = (Get-Content "$Klic.pub" -Raw).Trim()
 
 # Skript, který tunel drží: po pádu spojení (výpadek internetu, restart VPS)
