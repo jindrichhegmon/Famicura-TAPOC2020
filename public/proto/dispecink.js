@@ -17,6 +17,14 @@ src.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? 'obraz: s
 sim.startRealEvents('tapoc2020');
 const panel = mountPanel({ role: 'dispecink', onPatient: () => {} });
 
+// ?rezim=full|blur|skeleton|none opens the real camera in that mode (as if the
+// family had set it for day and night) and straight in the detail.
+const rezim = new URLSearchParams(location.search).get('rezim');
+if (rezim && ['full', 'blur', 'skeleton', 'none'].includes(rezim)) {
+  sim.setConsent('tapoc2020', { den: rezim, noc: rezim });
+  selected = 'tapoc2020';
+}
+
 /** What the tile of this patient may draw. */
 function tileMode(pid) {
   const m = sim.effectiveMode(pid);
@@ -52,7 +60,8 @@ function renderTiles() {
   const only = $('onlyOpen').checked;
   const list = s.patients.filter((p) => !only || openAlerts(p.id).length || p.offline);
   const order = { crit: 0, warn: 1, off: 2, klid: 3 };
-  list.sort((a, b) => order[statusOf(a)] - order[statusOf(b)]);
+  // the real camera first, always; the rest by how urgent they are
+  list.sort((a, b) => (b.real ? 1 : 0) - (a.real ? 1 : 0) || order[statusOf(a)] - order[statusOf(b)]);
   const box = $('tiles');
   // keep canvases: rebuild only when the set or order changed
   const key = list.map((p) => p.id).join(',');
@@ -162,6 +171,7 @@ function renderDetail(rebuild = false) {
 }
 
 $('onlyOpen').onchange = renderTiles;
+if (selected) { renderDetail(true); panel.select(selected); }
 sim.subscribe((s) => {
   for (const e of s.events) {
     if (seen.has(e.id)) continue; seen.add(e.id);

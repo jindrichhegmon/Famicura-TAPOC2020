@@ -40,7 +40,7 @@ function seed() {
   const now = Date.now();
   const patients = [
     { id: 'tapoc2020', name: 'TAPO Test', place: 'Kancelář Famicura (skutečná kamera)', provider: 'Pečovatelská služba Kladno', real: true,
-      consent: { den: 'skeleton', noc: 'skeleton', nouze: true }, night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
+      consent: { den: 'full', noc: 'full', nouze: true }, night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
     ...FAKE.map(([id, name, place, provider], i) => ({ id, name, place, provider, real: false,
       consent: { den: ['skeleton', 'blur', 'none', 'full', 'skeleton', 'skeleton', 'blur'][i], noc: ['skeleton', 'skeleton', 'none', 'skeleton', 'none', 'skeleton', 'skeleton'][i], nouze: i % 3 !== 2 },
       night: false, offline: i === 5, note: '' })),

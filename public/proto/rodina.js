@@ -4,7 +4,8 @@ import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, 
 const $ = (id) => document.getElementById(id);
 const FAMILY = ['tapoc2020', 'p2'];
 let patientId = FAMILY[0];
-let viewMode = 'full';
+const REZIM = { full: 'full', normal: 'full', blur: 'blur', fullskel: 'fullskel', model: 'fullskel', skeleton: 'skeleton', black: 'skeleton' };
+let viewMode = REZIM[new URLSearchParams(location.search).get('rezim')] || 'full';
 let filter = 'all';
 const seen = new Set(sim.state.notifications.map((n) => n.id));
 
@@ -25,7 +26,7 @@ const panel = mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) =
 $('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');
 $('patient').onchange = () => { patientId = $('patient').value; panel.select(patientId); render(); };
 
-$('modes').querySelectorAll('button').forEach((b) => { b.onclick = () => { viewMode = b.dataset.mode; $('modes').querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', String(o === b))); render(); }; });
+$('modes').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.mode === viewMode)); b.onclick = () => { viewMode = b.dataset.mode; $('modes').querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', String(o === b))); render(); }; });
 $('cDen').onchange = () => sim.setConsent(patientId, { den: $('cDen').value });
 $('cNoc').onchange = () => sim.setConsent(patientId, { noc: $('cNoc').value });
 $('cNouze').onchange = () => sim.setConsent(patientId, { nouze: $('cNouze').checked });
