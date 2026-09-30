@@ -6,51 +6,129 @@
 <title>Famicura Kamera – prototyp prostředí</title>
 <link rel="stylesheet" href="/proto/proto.css">
 </head>
-<body>
-<div class="chooser">
-  <h1>Famicura Kamera – prototyp prostředí</h1>
-  <p class="muted">Jedna skutečná kamera z vaší aplikace, zobrazená tolikrát, kolik je potřeba, a kolem ní tři prostředí podle zadání. Vše ostatní (pacienti, alerty, souhlasy, notifikace) je simulace v prohlížeči. Otevřete role ve více oknech vedle sebe: co změníte v jednom, uvidíte hned v ostatních.</p>
-  <div class="grid">
-    <div class="card">
+<body class="home">
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Famicura Kamera · prototyp</p>
+    <h1>Jedna kamera, tři prostředí</h1>
+    <p class="lead">Skutečný obraz z vaší kamery, zobrazený tolikrát, kolik je potřeba, a kolem něj tři prostředí podle zadání: pro rodinu, pro dispečink poskytovatele a pro provoz. Všechno ostatní (pacienti, alerty, souhlasy, notifikace) je simulace v prohlížeči.</p>
+    <p class="note" id="stav">Zjišťuji, zda je k dispozici obraz z kamery…</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="roles">
+    <article class="role">
+      <div class="icon" aria-hidden="true">📱</div>
       <h2>Rodina</h2>
-      <p class="small muted">Telefon. Živý obraz ve všech režimech, notifikace, rozhodnutí, co smí vidět poskytovatel, žádosti o plný obraz, historie.</p>
+      <p class="who">Telefon · syn, dcera, partner</p>
+      <ul class="feats">
+        <li>živý obraz ve čtyřech režimech</li>
+        <li>zpráva do 10 s, když se něco děje</li>
+        <li>rozhodnutí, co smí vidět poskytovatel (den, noc, nouze)</li>
+        <li>žádost poskytovatele o plný obraz: povolit, odmítnout, ukončit</li>
+        <li>historie událostí a nahrávek</li>
+      </ul>
       <a class="btn" href="/proto/rodina.html" target="_blank">Otevřít jako rodina</a>
-      <p class="small muted">Rovnou v režimu (nové okno):</p>
-      <div class="row">
-        <a class="btn sm" href="/proto/rodina.html?rezim=full" target="_blank">Normální obraz</a>
-        <a class="btn sm" href="/proto/rodina.html?rezim=blur" target="_blank">Rozostření</a>
-        <a class="btn sm" href="/proto/rodina.html?rezim=fullskel" target="_blank">Drátěný model</a>
-        <a class="btn sm" href="/proto/rodina.html?rezim=skeleton" target="_blank">Černé pozadí</a>
+      <p class="sub">Nebo rovnou ve zvoleném zobrazení (nové okno):</p>
+      <div class="modes">
+        <a href="/proto/rodina.html?rezim=full" target="_blank"><b>Normální</b><span>ostrý obraz z kamery</span></a>
+        <a href="/proto/rodina.html?rezim=blur" target="_blank"><b>Rozostření</b><span>hrubá mozaika, bez detailů</span></a>
+        <a href="/proto/rodina.html?rezim=fullskel" target="_blank"><b>Drátěný model</b><span>kostra postavy přes obraz</span></a>
+        <a href="/proto/rodina.html?rezim=skeleton" target="_blank"><b>Černé pozadí</b><span>jen kostra, žádný obraz</span></a>
       </div>
-    </div>
-    <div class="card">
+    </article>
+
+    <article class="role">
+      <div class="icon" aria-hidden="true">🖥️</div>
       <h2>Dispečink poskytovatele</h2>
-      <p class="small muted">Počítač. Dlaždice všech pacientů v režimu, který rodina povolila, fronta alertů, eskalace, žádost o plný obraz, nouzový přístup. Skutečná kamera je vždy první dlaždice, ve výchozím stavu v plném obrazu.</p>
+      <p class="who">Počítač · dispečerka ve směně</p>
+      <ul class="feats">
+        <li>dlaždice všech pacientů, každá jen v režimu, který rodina povolila</li>
+        <li>fronta alertů: nový → převzat → řešen → uzavřen</li>
+        <li>eskalace nepřevzatého kritického alertu po 2 minutách</li>
+        <li>žádost rodině o plný obraz, nouzový přístup při pádu</li>
+        <li>skutečná kamera vždy jako první dlaždice</li>
+      </ul>
       <a class="btn" href="/proto/dispecink.html" target="_blank">Otevřít jako dispečink</a>
-      <p class="small muted">Skutečná kamera rovnou v režimu (nové okno, nastaví se jako souhlas rodiny):</p>
-      <div class="row">
-        <a class="btn sm" href="/proto/dispecink.html?rezim=full" target="_blank">Plný obraz</a>
-        <a class="btn sm" href="/proto/dispecink.html?rezim=blur" target="_blank">Rozostření</a>
-        <a class="btn sm" href="/proto/dispecink.html?rezim=skeleton" target="_blank">Drátěný model</a>
-        <a class="btn sm" href="/proto/dispecink.html?rezim=none" target="_blank">Bez obrazu</a>
+      <p class="sub">Skutečná kamera rovnou v režimu (nastaví se jako souhlas rodiny):</p>
+      <div class="modes">
+        <a href="/proto/dispecink.html?rezim=full" target="_blank"><b>Plný obraz</b><span>rodina povolila vše</span></a>
+        <a href="/proto/dispecink.html?rezim=blur" target="_blank"><b>Rozostření</b><span>dění ano, detaily ne</span></a>
+        <a href="/proto/dispecink.html?rezim=skeleton" target="_blank"><b>Drátěný model</b><span>výchozí pro poskytovatele</span></a>
+        <a href="/proto/dispecink.html?rezim=none" target="_blank"><b>Bez obrazu</b><span>jen události</span></a>
       </div>
-    </div>
-    <div class="card">
-      <h2>Provoz (technik)</h2>
-      <p class="small muted">Flotila míst, stav tunelů a kamer, provozní alarmy, průvodce novým místem, diagnostika. Bez obrazu pacientů.</p>
+    </article>
+
+    <article class="role">
+      <div class="icon" aria-hidden="true">🛠️</div>
+      <h2>Provoz</h2>
+      <p class="who">Počítač · technik Famicura</p>
+      <ul class="feats">
+        <li>flotila míst: tunel, kamera, události, firmware</li>
+        <li>provozní alarmy a diagnostika na dálku</li>
+        <li>průvodce novým místem s kontrolou po instalaci</li>
+        <li>kapacita serverů a aktualizace bran</li>
+        <li>bez přístupu k obrazu pacientů</li>
+      </ul>
       <a class="btn" href="/proto/provoz.html" target="_blank">Otevřít jako provoz</a>
-    </div>
-  </div>
-  <div class="c">
+    </article>
+  </section>
+
+  <section class="c">
     <h2>Jak to používat</h2>
-    <ol>
-      <li>Přihlaste se v <a href="/" target="app">hlavní aplikaci</a> (stejný prohlížeč). Prototyp pak dostane obraz z vaší kamery. Bez přihlášení kreslí náhradní scénu s animovanou postavou.</li>
-      <li>Vpravo dole je panel <strong>Simulace</strong>: vyvolá pád, překročení čáry, SOS z náramku, výpadek kamery, žádost dispečera o plný obraz, noc.</li>
-      <li>V okně rodiny změňte, co smí poskytovatel vidět. V okně dispečinku se dlaždice do 1 s přepne.</li>
-      <li>Skutečné události kamery (osoba, překročení čáry) se do prototypu propisují také, u pacienta „TAPO Test“.</li>
+    <ol class="howto">
+      <li><b>Přihlaste se v <a href="/" target="_blank">hlavní aplikaci</a></b> ve stejném prohlížeči. Prototyp pak dostane obraz z vaší kamery. Bez přihlášení kreslí náhradní scénu s animovanou postavou, takže jde předvést i bez kamery.</li>
+      <li><b>Otevřete dvě role vedle sebe</b>, například rodinu a dispečink. Co změníte v jednom okně, uvidíte do sekundy v druhém.</li>
+      <li><b>V okně rodiny změňte, co smí poskytovatel vidět.</b> Dlaždice v dispečinku se přepne do povoleného režimu.</li>
+      <li><b>Rozbalte panel Simulace</b> (lišta vlevo dole) a vyvolejte událost: pád, překročení čáry, SOS z náramku, výpadek kamery. Sledujte frontu alertů v dispečinku a notifikaci u rodiny.</li>
+      <li><b>Nechte dispečink požádat o plný obraz</b> a v okně rodiny žádost povolte nebo odmítněte.</li>
     </ol>
-    <p class="small muted">Prototyp neukládá nic na server a nemění nastavení aplikace. Tlačítko Vynulovat v panelu vrátí simulaci na začátek.</p>
+  </section>
+
+  <section class="two">
+    <div class="c">
+      <h2>Co je skutečné</h2>
+      <ul class="feats">
+        <li><b>Obraz</b> z vaší kamery Tapo (WebRTC z aplikace), včetně rozostření a drátěného modelu, které se počítají z něj.</li>
+        <li><b>Události kamery</b>: osoba, pohyb, překročení čáry, zakrytí. Server je odebírá z kamery a prototyp je zapisuje pacientovi „TAPO Test“ se štítkem <span class="badge ok">skutečná</span>.</li>
+        <li><b>Stav místa v provozu</b>: go2rtc, kamera, odběr událostí, tak jak ho hlásí aplikace.</li>
+      </ul>
+    </div>
+    <div class="c">
+      <h2>Co je simulace</h2>
+      <ul class="feats">
+        <li><b>Ostatní pacienti</b> a jejich místa, poskytovatelé, dispečerka, technik.</li>
+        <li><b>Souhlasy, alerty, žádosti, notifikace, historie</b>: žijí jen v prohlížeči (sdílené mezi okny), na server nic nejde, nastavení aplikace se nemění.</li>
+        <li><b>Události z panelu</b>: pád, dlouhé ležení, SOS, nečinnost, výpadek kamery, slabá baterie. Procházejí stejnou cestou jako skutečné.</li>
+        <li><b>Analýza pádu z obrazu</b> v prototypu neběží; pád se vyvolá tlačítkem.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="c">
+    <h2>Jak funguje simulace událostí</h2>
+    <p>Každá událost, ať přijde z kamery nebo z panelu, projde stejnou cestou: zapíše se do historie pacienta, u varování a kritických vznikne alert ve frontě dispečinku, rodině přijde notifikace. Kritické notifikace se opakují, dokud je někdo nepotvrdí; klidový režim tlumí jen informativní a varování. Nepřevzatý kritický alert dostane po 2 minutách značku „eskalováno“. Výpadek kamery přepne dlaždici na „kamera nedostupná“ a objeví se v provozu jako alarm.</p>
+    <table class="cat">
+      <thead><tr><th>Událost</th><th>Zdroj</th><th>Závažnost</th><th>Co se stane</th></tr></thead>
+      <tbody>
+        <tr><td>Možný pád, dlouhé ležení</td><td>analýza</td><td><span class="badge crit">kritická</span></td><td>alert, notifikace do potvrzení, nouzový přístup možný</td></tr>
+        <tr><td>Nouzové tlačítko, pád hlášený náramkem</td><td>náramek</td><td><span class="badge crit">kritická</span></td><td>totéž</td></tr>
+        <tr><td>Překročení čáry, zakrytí kamery, nečinnost</td><td>kamera, analýza</td><td><span class="badge warn">varování</span></td><td>alert, notifikace (v klidu ne)</td></tr>
+        <tr><td>Osoba, pohyb, změna polohy</td><td>kamera, analýza</td><td><span class="badge info">informativní</span></td><td>jen historie a dlaždice</td></tr>
+        <tr><td>Kamera nedostupná, slabá baterie</td><td>systém</td><td><span class="badge tech">technická</span></td><td>alarm v provozu, stav dlaždice</td></tr>
+      </tbody>
+    </table>
+    <p class="small muted">Tlačítko <b>Vynulovat</b> v panelu vrátí simulaci na začátek ve všech oknech.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>© 2026 Jindřich Hegmon · Famicura</span>
+    <span class="small">Prototyp pro ověření prostředí. Neukládá osobní údaje, obraz neopouští váš prohlížeč a servery Famicura.</span>
   </div>
-</div>
+</footer>
+<script type="module" src="/proto/index.js"></script>
 </body>
 </html>
