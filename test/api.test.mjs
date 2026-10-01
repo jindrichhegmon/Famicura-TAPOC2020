@@ -5,6 +5,7 @@ import { createHandler, cameraNames } from '../src/api.mjs';
 import { createLimiter } from '../src/limit.mjs';
 import { pripravit } from '../src/zaznamy.mjs';
 import { mockDbs } from './mock-db.mjs';
+import { createUzivatele } from '../src/uzivatele.mjs';
 
 process.env.SESSION_KEY = 'testovaci-klic';
 process.env.FAMICURA_PASSWORD = 'spravne-heslo';
@@ -44,7 +45,9 @@ function handler(over = {}) {
   const db = mockDbs(over.radky);
   const go2rtc = over.go2rtc || fakeGo2rtc();
   const store = over.store || memStore();
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null }), ...db, go2rtc, store };
+  const uzivatele = createUzivatele(store);
+  const sms = over.sms || { nastaveno: false, async posli() { return { ok: false, error: 'SMS není nastavená.' }; } };
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms }), ...db, go2rtc, store, uzivatele };
 }
 
 test('health nepotřebuje přihlášení a vrací verzi', async () => {
@@ -156,7 +159,7 @@ test('správné heslo vydá cookie, se kterou API pustí dál', async () => {
   const r = await h(req('POST', '/api/login', { body: { password: 'spravne-heslo' } }));
   assert.equal(r.status, 200);
   const set = r.headers.get('set-cookie');
-  assert.match(set, /^fam_tapo=\d+\.[\w-]+; Path=\/; HttpOnly; Secure; SameSite=Lax/);
+  assert.match(set, /^fam_tapo=\d+\.admin\.[\w-]+; Path=\/; HttpOnly; Secure; SameSite=Lax/);
   const c = set.split(';')[0];
   assert.equal((await h(req('GET', '/api/devices', { cookies: c }))).status, 200);
 });
@@ -370,4 +373,106 @@ test('obraz přes HTTPS: jen známá kamera, jen obraz, díly HLS jen podle id',
   assert.deepEqual(proxied.map((x) => x.p), [
     '/api/stream.mp4?src=tapoc2020&video=h264', '/api/stream.m3u8?src=tapoc2020&video=h264',
     '/api/hls/playlist.m3u8?id=Ab-9_x', '/api/hls/segment.m4s?id=Ab-9_x&n=12']);
+});
+
+/* ---------- rodina: pozvánka, aktivace, přihlášení, co smí ---------- */
+
+const setCookie = (r) => (r.headers.get('set-cookie') || '').split(';')[0];
+
+test('rodina: poskytovatel založí uživatele, dostane odkaz a text SMS; bez SMS webhooku se SMS neodešle', async () => {
+  const { h, store } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
+  const r = await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr Novák', telefon: '777 123 456', kamery: ['tapoc2020'], poslatSms: true } }));
+  assert.equal(r.status, 200);
+  const b = await r.json();
+  assert.match(b.odkaz, /^http:\/\/localhost\/proto\/rodina\.html\?pozvanka=[A-Za-z0-9_-]{20,}$/);
+  assert.ok(b.text.includes(b.odkaz));
+  assert.equal(b.sms.odeslano, false);
+  assert.equal(b.smsNastaveno, false);
+  assert.equal(b.uzivatel.aktivni, false);
+  assert.ok(!JSON.stringify(store.data.uzivatele).includes(b.odkaz.split('=')[1]), 'token v úložišti není');
+  const list = await (await h(req('GET', '/api/rodina/uzivatele', { cookies: cookie() }))).json();
+  assert.equal(list.uzivatele.length, 1);
+  assert.equal(list.uzivatele[0].telefon, '777123456');
+  // bez přihlášení ani s cookie rodiny tam nikdo nesmí
+  assert.equal((await h(req('GET', '/api/rodina/uzivatele'))).status, 401);
+});
+
+test('rodina: SMS jde webhookem, když je nastavený; odkaz podle X-Forwarded-Host', async () => {
+  const posl = [];
+  const sms = { nastaveno: true, async posli(x) { posl.push(x); return { ok: true }; } };
+  const { h } = handler({ sms });
+  const r = new Request('http://localhost/api/rodina/uzivatele', { method: 'POST', headers: { 'content-type': 'application/json', cookie: cookie(),
+    'x-forwarded-host': 'famicuratapo.example', 'x-forwarded-proto': 'https' }, body: JSON.stringify({ jmeno: 'Jana', telefon: '+420 606 111 222', kamery: ['tapoc2020'], poslatSms: true }) });
+  const b = await (await h(r)).json();
+  assert.equal(b.sms.odeslano, true);
+  assert.equal(posl.length, 1);
+  assert.equal(posl[0].telefon, '606111222');
+  assert.ok(posl[0].text.startsWith('https://famicuratapo.example/proto/rodina.html?pozvanka=') || posl[0].text.includes('https://famicuratapo.example/proto/rodina.html?pozvanka='));
+});
+
+test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení telefonem a heslem; vidí jen své kamery', async () => {
+  const { h, go2rtc } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
+  const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] } }))).json();
+  const token = new URL(b.odkaz).searchParams.get('pozvanka');
+  assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'kratke' } }))).status, 400);
+  const a = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }));
+  assert.equal(a.status, 200);
+  const c = setCookie(a);
+  assert.match(c, /^fam_tapo=\d+\.r:[a-f0-9]+\./);
+  assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }))).status, 410, 'odkaz je na jedno použití');
+
+  const ja = await (await h(req('GET', '/api/rodina/ja', { cookies: c }))).json();
+  assert.equal(ja.role, 'rodina');
+  assert.equal(ja.jmeno, 'Petr');
+  assert.deepEqual(ja.kamery.map((k) => k.id), ['tapoc2020']);
+  const dev = await (await h(req('GET', '/api/devices', { cookies: c }))).json();
+  assert.deepEqual(dev.devices.map((d) => d.id), ['tapoc2020'], 'cizí kamera v seznamu není');
+  assert.equal((await h(req('POST', '/api/stream', { cookies: c, body: { deviceId: 'tapoc2020', sdpOffer: 'v=0' } }))).status, 200);
+  assert.equal((await h(req('POST', '/api/stream', { cookies: c, body: { deviceId: 'druha', sdpOffer: 'v=0' } }))).status, 404, 'cizí kamera jako by nebyla');
+  assert.equal(go2rtc.calls.length, 1);
+  // nastavení je poskytovatele
+  for (const [m, p] of [['GET', '/api/schedules'], ['GET', '/api/watch'], ['GET', '/api/diag'], ['GET', '/api/rodina/uzivatele'], ['POST', '/api/clb']]) {
+    assert.equal((await h(req(m, p, { cookies: c, body: m === 'POST' ? {} : undefined }))).status, 403, `${m} ${p}`);
+  }
+  const st = await (await h(req('GET', '/api/status', { cookies: c }))).json();
+  assert.equal(st.authenticated, false, 'hlavní aplikace rodinu nepustí do nastavení');
+
+  // přihlášení telefonem
+  assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777 123 456', heslo: 'spatne-heslo' } }))).status, 401);
+  const l = await h(req('POST', '/api/rodina/login', { body: { telefon: '+420 777 123 456', heslo: 'Famicura2026' } }));
+  assert.equal(l.status, 200);
+  const c2 = setCookie(l);
+  // změna hesla
+  assert.equal((await h(req('POST', '/api/rodina/heslo', { cookies: c2, body: { stare: 'spatne', nove: 'NoveHeslo99' } }))).status, 401);
+  assert.equal((await h(req('POST', '/api/rodina/heslo', { cookies: c2, body: { stare: 'Famicura2026', nove: 'NoveHeslo99' } }))).status, 200);
+  assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777123456', heslo: 'NoveHeslo99' } }))).status, 200);
+  // odhlášení
+  assert.match(setCookie(await h(req('POST', '/api/rodina/odhlaseni'))), /^fam_tapo=$/);
+});
+
+test('rodina: události jen vlastní kamery; smazaný uživatel je hned odhlášen; nová pozvánka zruší heslo', async () => {
+  const udalosti = { stav: () => ({}), nedavne: () => [{ kameraId: 'tapoc2020', kind: 'cam-motion' }, { kameraId: 'druha', kind: 'cam-motion' }] };
+  const { h } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }), udalosti });
+  const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] } }))).json();
+  const token = new URL(b.odkaz).searchParams.get('pozvanka');
+  const c = setCookie(await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } })));
+  const ev = await (await h(req('GET', '/api/events', { cookies: c }))).json();
+  assert.deepEqual(ev.events.map((e) => e.kameraId), ['tapoc2020']);
+  const adminEv = await (await h(req('GET', '/api/events', { cookies: cookie() }))).json();
+  assert.equal(adminEv.events.length, 2);
+
+  const p = await (await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/pozvanka`, { cookies: cookie(), body: {} }))).json();
+  assert.ok(p.odkaz);
+  assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777123456', heslo: 'Famicura2026' } }))).status, 401, 'po nové pozvánce staré heslo neplatí');
+
+  assert.equal((await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}`, { cookies: cookie() }))).status, 200);
+  const po = await h(req('GET', '/api/rodina/ja', { cookies: c }));
+  assert.equal(po.status, 401);
+  assert.match(setCookie(po), /^fam_tapo=$/);
+});
+
+test('rodina: po deseti chybných přihlášeních z jedné adresy se čeká', async () => {
+  const { h } = handler();
+  for (let i = 0; i < 10; i++) await h(req('POST', '/api/rodina/login', { ip: '1.2.3.4', body: { telefon: '777123456', heslo: 'x' } }));
+  assert.equal((await h(req('POST', '/api/rodina/login', { ip: '1.2.3.4', body: { telefon: '777123456', heslo: 'x' } }))).status, 429);
 });

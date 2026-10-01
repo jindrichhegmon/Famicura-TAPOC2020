@@ -17,14 +17,41 @@
 <meta name="apple-mobile-web-app-title" content="Famicura">
 <link rel="stylesheet" href="/proto/proto.css">
 </head>
-<body class="app">
+<body class="app pending">
+<!-- Brána: aplikace rodiny je jen pro přihlášené. Účet zakládá poskytovatel a posílá pozvánku SMS. -->
+<div class="gate hide" id="gate">
+  <div class="gatecard">
+    <img class="gatelogo" src="/proto/ikony/famicura-192.png" alt="" width="72" height="72">
+    <h1>Famicura</h1>
+    <p class="gatesub">Dohled nad vaším blízkým</p>
+
+    <form id="gLogin" class="gateform hide" autocomplete="on">
+      <label>Telefon<input type="tel" id="gTel" name="username" autocomplete="username" inputmode="tel" placeholder="777 123 456" required></label>
+      <label>Heslo<input type="password" id="gPw" name="password" autocomplete="current-password" required></label>
+      <p class="gateerr hide" id="gLoginErr"></p>
+      <button class="btn wide" type="submit">Přihlásit se</button>
+      <p class="hint">Přístup zakládá poskytovatel péče a pošle vám ho SMS zprávou. Zapomenuté heslo: požádejte ho o novou pozvánku.</p>
+    </form>
+
+    <form id="gAktivace" class="gateform hide" autocomplete="on">
+      <p class="gatewelcome">Vítejte. Zvolte si heslo, kterým se budete přihlašovat.</p>
+      <label>Nové heslo (aspoň 8 znaků)<input type="password" id="gPw1" autocomplete="new-password" minlength="8" required></label>
+      <label>Heslo ještě jednou<input type="password" id="gPw2" autocomplete="new-password" minlength="8" required></label>
+      <p class="gateerr hide" id="gAktErr"></p>
+      <button class="btn wide" type="submit">Nastavit heslo a přihlásit se</button>
+    </form>
+
+    <p class="gatedemo"><button class="sm sec" type="button" id="gDemo">Vyzkoušet ukázku bez přihlášení</button><br><span class="small muted">Ukázka běží jen v tomhle prohlížeči, bez obrazu ze skutečné kamery.</span></p>
+  </div>
+</div>
+
 <div class="phone">
   <header class="apphead">
     <div class="me">
       <div class="avatar" id="avatar">TT</div>
       <div>
         <div class="t" id="pname">…</div>
-        <div class="s">Rodina · Petr Novák (správce)</div>
+        <div class="s" id="whoami">Rodina</div>
       </div>
     </div>
     <select id="patient" class="pill" aria-label="Pacient"></select>
@@ -106,6 +133,23 @@
     <p class="now" id="watchInfo"></p>
   </section>
 
+  <section class="card" id="ucet">
+    <div class="cardhead"><span class="ic">👤</span><h2>Můj účet</h2></div>
+    <p class="hint" id="ucetInfo"></p>
+    <div class="row wrap" id="ucetBtns">
+      <button class="sm sec" id="pwOpen">Změnit heslo</button>
+      <button class="sm sec" id="logout">Odhlásit se</button>
+      <a class="sm btnlike hide" id="gotoLogin" href="/proto/rodina.html">Přihlásit se</a>
+    </div>
+    <form id="pwForm" class="gateform hide">
+      <label>Současné heslo<input type="password" id="pwOld" autocomplete="current-password" required></label>
+      <label>Nové heslo (aspoň 8 znaků)<input type="password" id="pwNew" autocomplete="new-password" minlength="8" required></label>
+      <label>Nové heslo ještě jednou<input type="password" id="pwNew2" autocomplete="new-password" minlength="8" required></label>
+      <p class="gateerr hide" id="pwErr"></p>
+      <div class="row"><button class="btn" type="submit">Uložit nové heslo</button><button class="sm sec" type="button" id="pwCancel">Zrušit</button></div>
+    </form>
+  </section>
+
   <section class="card install hide" id="install">
     <div class="cardhead"><span class="ic">📲</span><h2>Aplikace na telefonu</h2></div>
     <p class="hint" id="installHint">Uložte si Famicuru na plochu: spouští se pak jedním klepnutím, bez lišty prohlížeče.</p>
@@ -120,7 +164,7 @@
       <li>Potvrďte. Ikona Famicura je na ploše.</li>
     </ol>
     <button class="btn wide hide" id="installBtn">Nainstalovat na plochu</button>
-    <p class="hint small">Přihlášení uděláte jednou, aplikace si ho pamatuje 12 hodin.</p>
+    <p class="hint small">Přihlášení uděláte jednou, aplikace si ho pamatuje 30 dní.</p>
   </section>
 
   <p class="foot small">© 2026 Jindřich Hegmon · Famicura · prototyp</p>

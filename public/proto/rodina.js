@@ -1,33 +1,133 @@
 import { createSource } from '/proto/zdroj.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch } from '/proto/sim.js';
+import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
-const FAMILY = ['tapoc2020', 'p2'];
+let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina dostane své kamery ze serveru
 let patientId = FAMILY[0];
+let src = null, panel = null, demo = false;
+const params = new URLSearchParams(location.search);
 // Zobrazení = podklad (normální, rozostření, černé pozadí) + drátěný model přes
 // něj. Model jde zapnout k normálnímu i rozostřenému obrazu; na černém pozadí je vždy.
 const REZIM = { full: ['full', false], normal: ['full', false], blur: ['blur', false], blurskel: ['blur', true],
   fullskel: ['full', true], model: ['full', true], skeleton: ['skeleton', true], black: ['skeleton', true] };
 const SKEL_KEY = 'famicura.proto.skel';
-const zRezimu = REZIM[new URLSearchParams(location.search).get('rezim')];
+const zRezimu = REZIM[params.get('rezim')];
 let baseMode = zRezimu ? zRezimu[0] : 'full';
 let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) === '1';
 const viewMode = () => baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
 let filter = 'all';
 const seen = new Set(sim.state.notifications.map((n) => n.id));
 
-const src = createSource({ deviceId: 'tapoc2020' });
-window.__zdroj = src;
-src.register($('cv'), viewMode);
-src.connect();
-mountAuthBanner(src);
-src.onChange((s) => {
-  $('liveTag').classList.toggle('hide', s.status !== 'live');
-  $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'Obraz z vaší kamery náhradní cestou přes HTTPS (bez zvuku, o pár sekund pozadu).' : 'Obraz z vaší kamery (WebRTC).')
-    : s.status === 'connecting' ? 'Připojuji obraz z kamery…'
-    : `Náhradní scéna: ${s.error || 'kamera nedostupná'}${s.error?.includes('přihlášeni') ? ' Přihlaste se v hlavní aplikaci a obnovte stránku.' : ''}`;
-});
-sim.startRealEvents('tapoc2020');
+/* ---------- brána: přihlášení rodiny, aktivace pozvánky, ukázka ----------
+ * Účet zakládá poskytovatel v dispečinku a pošle pozvánku SMS s odkazem
+ * (?pozvanka=). Při prvním otevření si rodina zvolí heslo; dál se přihlašuje
+ * telefonem a heslem. Stejná cookie pak platí i pro obraz a události
+ * z hlavní aplikace, takže se nikam podruhé nepřihlašuje. */
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  let data = {};
+  try { data = await r.json(); } catch { /* bez těla */ }
+  if (!r.ok) throw new Error(data.error || `Chyba serveru (${r.status})`);
+  return data;
+}
+const showErr = (id, text) => { const e = $(id); e.textContent = text; e.classList.toggle('hide', !text); };
+function showGate(co) {
+  $('gate').classList.remove('hide');
+  $('gLogin').classList.toggle('hide', co !== 'login');
+  $('gAktivace').classList.toggle('hide', co !== 'aktivace');
+  document.body.classList.add('gated');
+}
+function hideGate() { $('gate').classList.add('hide'); document.body.classList.remove('gated'); document.body.classList.remove('pending'); }
+
+function startSource(deviceId) {
+  src = createSource({ deviceId });
+  window.__zdroj = src;
+  src.register($('cv'), viewMode);
+  src.connect();
+  src.onChange((s) => {
+    $('liveTag').classList.toggle('hide', s.status !== 'live');
+    $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'Obraz z vaší kamery náhradní cestou přes HTTPS (bez zvuku, o pár sekund pozadu).' : 'Obraz z vaší kamery (WebRTC).')
+      : s.status === 'connecting' ? 'Připojuji obraz z kamery…'
+      : demo ? 'Ukázka bez přihlášení: náhradní scéna místo skutečné kamery.'
+      : `Obraz z kamery teď nejde (${s.error || 'kamera nedostupná'}). Ukazuji náhradní scénu; poskytovatel o výpadku ví z diagnostiky.`;
+  });
+  sim.startRealEvents(deviceId);
+}
+
+function setupPatients() {
+  patientId = FAMILY[0];
+  panel = mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) => { patientId = id; render(); } });
+  $('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');
+  $('patient').classList.toggle('hide', FAMILY.length < 2);
+  $('patient').onchange = () => { patientId = $('patient').value; panel.select(patientId); render(); };
+  render();
+}
+
+/** Přihlášený uživatel rodiny (nebo poskytovatel z hlavní aplikace). */
+function boot(ja) {
+  hideGate();
+  if (ja.role === 'rodina') {
+    for (const k of ja.kamery) sim.ensurePatient({ id: k.id, name: k.name });
+    FAMILY = ja.kamery.map((k) => k.id);
+    $('whoami').textContent = `${ja.jmeno} · rodina`;
+    $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}. ${ja.kamery.length ? '' : 'Poskytovatel vám zatím nepřiřadil kameru.'}`;
+    if (!FAMILY.length) FAMILY = ['tapoc2020'];
+  } else {
+    $('whoami').textContent = 'Poskytovatel · přihlášen v hlavní aplikaci';
+    $('ucetInfo').textContent = 'Jste přihlášeni heslem Famicura (poskytovatel). Vidíte skutečnou kameru i ukázkového pacienta.';
+    $('pwOpen').classList.add('hide');
+  }
+  setupPatients();
+  startSource(FAMILY[0]);
+}
+
+function startDemo() {
+  demo = true;
+  hideGate();
+  FAMILY = ['tapoc2020', 'p2'];
+  $('whoami').textContent = 'Ukázka · bez přihlášení';
+  $('ucetInfo').textContent = 'Ukázka běží jen v tomhle prohlížeči. Skutečný obraz z kamery uvidí jen přihlášená rodina.';
+  $('pwOpen').classList.add('hide'); $('logout').classList.add('hide'); $('gotoLogin').classList.remove('hide');
+  setupPatients();
+  startSource('tapoc2020');
+}
+
+$('gLogin').onsubmit = async (e) => {
+  e.preventDefault(); showErr('gLoginErr', '');
+  const b = e.target.querySelector('button'); b.disabled = true;
+  try { await api('/api/rodina/login', { telefon: $('gTel').value, heslo: $('gPw').value }); boot(await api('/api/rodina/ja')); }
+  catch (err) { showErr('gLoginErr', err.message); }
+  b.disabled = false;
+};
+$('gAktivace').onsubmit = async (e) => {
+  e.preventDefault(); showErr('gAktErr', '');
+  if ($('gPw1').value !== $('gPw2').value) { showErr('gAktErr', 'Hesla se neshodují.'); return; }
+  const b = e.target.querySelector('button'); b.disabled = true;
+  try {
+    await api('/api/rodina/aktivace', { token: params.get('pozvanka'), heslo: $('gPw1').value });
+    params.delete('pozvanka'); history.replaceState(null, '', location.pathname + (params.size ? '?' + params : ''));
+    boot(await api('/api/rodina/ja'));
+    toast('Heslo nastaveno, jste přihlášen(a).');
+  } catch (err) { showErr('gAktErr', err.message); }
+  b.disabled = false;
+};
+$('gDemo').onclick = startDemo;
+$('logout').onclick = async () => { await api('/api/rodina/odhlaseni', {}).catch(() => {}); location.href = '/proto/rodina.html'; };
+$('pwOpen').onclick = () => { $('pwForm').classList.toggle('hide'); showErr('pwErr', ''); };
+$('pwCancel').onclick = () => $('pwForm').classList.add('hide');
+$('pwForm').onsubmit = async (e) => {
+  e.preventDefault(); showErr('pwErr', '');
+  if ($('pwNew').value !== $('pwNew2').value) { showErr('pwErr', 'Nová hesla se neshodují.'); return; }
+  try { await api('/api/rodina/heslo', { stare: $('pwOld').value, nove: $('pwNew').value }); $('pwForm').classList.add('hide'); e.target.reset(); toast('Heslo změněno.'); }
+  catch (err) { showErr('pwErr', err.message); }
+};
+
+(async () => {
+  if (params.get('pozvanka')) { showGate('aktivace'); return; }
+  if (params.get('ukazka') === '1') { startDemo(); return; }
+  try { boot(await api('/api/rodina/ja')); }
+  catch { showGate('login'); }
+})();
 
 /* ---------- aplikace na ploše telefonu ---------- */
 // Servisní skript nic nekešuje (obraz i události jsou živé); je tu kvůli
@@ -52,10 +152,6 @@ if (!naPlose) {
   window.addEventListener('appinstalled', () => $('install').classList.add('hide'));
 }
 
-const panel = mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) => { patientId = id; render(); } });
-
-$('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');
-$('patient').onchange = () => { patientId = $('patient').value; panel.select(patientId); render(); };
 
 function renderModes() {
   $('modes').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === baseMode)));

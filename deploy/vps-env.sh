@@ -46,6 +46,17 @@ fi
 unset P P2
 
 echo
+echo "Pozvánky rodině SMS přes webhook Make (jako Péče doma). Enter = nechat, jak je."
+read -r -p "SMS_WEBHOOK_URL (https://hook.eu2.make.com/…): " W
+if [ -n "$W" ]; then
+  [[ "$W" =~ ^https://[A-Za-z0-9./_-]+$ ]] || { echo "Adresa webhooku musí začínat https:// a být bez mezer."; exit 1; }
+  printf '%s' "$W" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav SMS_WEBHOOK_URL'"
+  read -rs -p "SMS_WEBHOOK_KLIC (klíč, který scénář kontroluje): " K; echo
+  [ -n "$K" ] && printf '%s' "$K" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav SMS_WEBHOOK_KLIC'"
+fi
+unset W K
+
+echo
 echo "Po:"
 $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs stav'"
 

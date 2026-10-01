@@ -220,6 +220,33 @@ o plný obraz nebo noc; skutečné události kamery se do prototypu
 propisují také. Prototyp na server nic nezapisuje a nastavení aplikace
 nemění.
 
+### Přihlášení rodiny, účty a pozvánka SMS
+
+Aplikace rodiny je jen pro přihlášené. Princip je z aplikace pacienta Péče
+doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
+
+1. **Poskytovatel založí účet** v dispečinku (detail skutečné kamery →
+   Uživatelé rodiny): jméno a telefon. Server připraví pozvánku, odkaz
+   `/proto/rodina.html?pozvanka=…` platný 7 dní a na jedno použití.
+2. **Pozvánka jde SMS**: ze serveru webhookem Make (`SMS_WEBHOOK_URL`,
+   `SMS_WEBHOOK_KLIC` v `.env`, stejný scénář jako Péče doma), nebo tlačítkem
+   „Poslat SMS z tohoto telefonu“ z dispečerova mobilu, nebo zkopírovaným
+   odkazem. Bez webhooku se SMS ze serveru neposílá a dispečink to vidí.
+3. **Rodina otevře odkaz**, zvolí si heslo (aspoň 8 znaků, ne jen číslice)
+   a je přihlášená. Dál se přihlašuje telefonem a heslem; cookie platí
+   30 dní, takže na telefonu jednou za měsíc. Heslo si změní v „Můj účet“.
+   Zapomenuté heslo řeší poskytovatel novou pozvánkou (stará přestane platit).
+4. **Stejné přihlášení platí pro obraz a události** z hlavní aplikace: uživatel
+   rodiny smí `/api/devices`, `/api/stream*`, `/api/events` jen pro své kamery,
+   nic z nastavení (`403`). Do hlavní aplikace (nastavení, diagnostika)
+   se dál přihlašuje jen poskytovatel heslem Famicura; jeho cookie platí
+   i v dispečinku a v aplikaci rodiny.
+
+Účty jsou v `data/uzivatele.json`: heslo jen jako scrypt hash, pozvánka jen
+jako SHA-256 tokenu. Přihlášení rodiny má stejný limit pokusů jako heslo
+Famicura. Bez přihlášení nabízí stránka rodiny **ukázku** (simulace bez
+skutečné kamery), aby šel prototyp dál předvádět.
+
 ### Aplikace rodiny na ploše telefonu
 
 `/proto/rodina.html` jde uložit na plochu jako aplikace: má manifest
@@ -229,10 +256,11 @@ Ten nic nekešuje, obraz i události jsou živé; je tu kvůli instalaci a
 stránce „jste bez připojení“. Stránka sama ukáže kartu **Aplikace na
 telefonu** s postupem pro iPhone (Sdílet → Přidat na plochu) a Android
 (nabídka → Přidat na plochu, nebo rovnou tlačítko Nainstalovat), a skryje
-ji, jakmile běží z plochy. Přihlášení z plochy otevře hlavní aplikaci ve
-stejném okně (nové okno by iPhone poslal do Safari a přihlášení by zůstalo
-tam) a ta se po přihlášení vrátí zpět (`/?zpet=/proto/rodina.html`;
-přijímá jen cesty do `/proto/`). Cookie platí 12 h. Ikony vznikly
+ji, jakmile běží z plochy. Rodina se přihlašuje přímo v aplikaci (telefon
+a heslo, cookie 30 dní). Odkaz na přihlášení poskytovatele z ostatních
+stránek prototypu otevře hlavní aplikaci ve stejném okně (nové okno by
+iPhone poslal do Safari) a ta se po přihlášení vrátí zpět
+(`/?zpet=/proto/dispecink.html`; přijímá jen cesty do `/proto/`). Ikony vznikly
 skriptem v Pillow (srdce s křivkou tepu v modré Famicury); zdroj je
 v historii gitu u tohoto commitu.
 

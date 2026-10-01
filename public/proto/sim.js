@@ -99,6 +99,13 @@ export const sim = {
   get state() { return state; },
   subscribe(f) { subs.add(f); f(state); return () => subs.delete(f); },
   patient(id) { return state.patients.find((p) => p.id === id); },
+  /** Kamera ze serveru, kterou simulace nezná: založí k ní pacienta (jméno = název kamery). */
+  ensurePatient({ id, name }) {
+    if (state.patients.some((p) => p.id === id)) return;
+    state.patients.push({ id, name: name || id, place: 'skutečná kamera', provider: 'Poskytovatel', real: true,
+      consent: { den: 'full', noc: 'full', nouze: true }, watch: defaultWatch(), night: false, offline: false, note: '' });
+    commit();
+  },
   isNight() { return state.night || (() => { const h = new Date().getHours(); return h >= 22 || h < 6; })(); },
 
   /** The mode the provider gets right now: a running grant beats the consent; night has its own consent. */

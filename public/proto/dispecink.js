@@ -132,7 +132,9 @@ function renderDetail(rebuild = false) {
       <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
       <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
       <div class="row" id="dbtn"></div>
-      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(p.provider)}</dd><dt>Rodina</dt><dd>Petr Novák (syn), 777 123 456</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
+      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(p.provider)}</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
+      <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
+      <div id="dusers"></div>
       <h3 style="margin-top:12px">Sledování a nahrávání <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí</span></h3>
       <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td></tr>`).join('')}</tbody></table>
       <h3 style="margin-top:12px">Historie</h3><ul class="list" id="dhist"></ul>`;
@@ -144,6 +146,7 @@ function renderDetail(rebuild = false) {
       tr.querySelectorAll('input').forEach((i) => { i.onchange = push; });
     });
     d.querySelector('#closeD').onclick = () => { selected = null; renderDetail(); renderTiles(); };
+    renderUzivatele(p);
     const ovl = d.querySelector('#ovl'); ovl.checked = overlay; ovl.onchange = () => { overlay = ovl.checked; };
   }
   const s = sim.state;
@@ -177,6 +180,72 @@ function renderDetail(rebuild = false) {
     const k = KINDS[e.kind];
     return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : '<span class="badge">souhlas</span> '}${esc(eventText(e))}${e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}</span></li>`;
   }).join(''));
+}
+
+/* ---------- uživatelé rodiny: účty na serveru, pozvánka SMS ----------
+ * Jen u skutečné kamery (id pacienta = id kamery). Zakládá je poskytovatel
+ * přihlášený v hlavní aplikaci; rodina dostane odkaz SMS, zvolí si heslo
+ * a přihlašuje se telefonem a heslem (src/uzivatele.mjs). */
+let posledniPozvanka = null;   // { uzivatelId, odkaz, text, sms } – ukázat po založení / nové pozvánce
+async function apiJson(path, init) {
+  const r = await fetch(path, init);
+  let data = {}; try { data = await r.json(); } catch { /* bez těla */ }
+  if (!r.ok) { const e = new Error(data.error || `Chyba (${r.status})`); e.status = r.status; throw e; }
+  return data;
+}
+const post = (path, body) => apiJson(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const smsLink = (tel, text) => `sms:+420${tel}?&body=${encodeURIComponent(text)}`;
+
+async function renderUzivatele(p) {
+  const box = $('detail').querySelector('#dusers'); if (!box) return;
+  if (!p.real) { box.innerHTML = '<p class="small muted">Simulovaný pacient: účty rodiny se zakládají jen u skutečné kamery.</p>'; return; }
+  let data;
+  try { data = await apiJson('/api/rodina/uzivatele'); }
+  catch (e) {
+    box.innerHTML = e.status === 401
+      ? `<p class="small">Účty rodiny spravuje přihlášený poskytovatel. <a class="sm btnlike" href="/?zpet=${encodeURIComponent('/proto/dispecink.html')}">Přihlásit se v hlavní aplikaci</a></p>`
+      : `<p class="small bad">${esc(e.message)}</p>`;
+    return;
+  }
+  const users = data.uzivatele.filter((u) => u.kamery.includes(p.id));
+  const inv = posledniPozvanka;
+  box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"><span class="grow"><strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
+      <button class="sm sec" data-a="pozvanka">Nová pozvánka (nové heslo)</button><button class="sm bad" data-a="smaz">Odebrat</button>
+      ${inv && inv.uzivatelId === u.id ? `<div class="inv"><strong>${inv.sms?.odeslano ? 'SMS odeslána.' : inv.sms?.error ? `SMS neodešla: ${esc(inv.sms.error)}` : 'Pozvánka připravena.'}</strong> Odkaz platí 7 dní, je na jedno použití:<br><code>${esc(inv.odkaz)}</code>
+        <div class="row"><button class="sm" data-a="copy">Kopírovat odkaz</button><a class="sm btnlike" href="${smsLink(u.telefon, inv.text)}">Poslat SMS z tohoto telefonu</a></div></div>` : ''}</li>`).join('') || '<li class="small muted">Zatím nikdo. Založte první účet níže; rodina dostane pozvánku SMS.</li>'}</ul>
+    <form class="userform" id="uform">
+      <label>Jméno<input type="text" id="uJmeno" maxlength="60" required placeholder="Petr Novák"></label>
+      <label>Telefon<input type="tel" id="uTel" required placeholder="777 123 456"></label>
+      <label class="small"><input type="checkbox" id="uSms" ${data.smsNastaveno ? 'checked' : 'disabled'}> poslat SMS ze serveru${data.smsNastaveno ? '' : ' (není nastaveno; pošlete ji z telefonu)'}</label>
+      <button class="sm" type="submit">Založit účet a připravit pozvánku</button>
+    </form>
+    <p class="small bad hide" id="uErr"></p>`;
+  box.querySelector('#uform').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = box.querySelector('#uErr'); err.classList.add('hide');
+    try {
+      const r = await post('/api/rodina/uzivatele', { jmeno: box.querySelector('#uJmeno').value, telefon: box.querySelector('#uTel').value, kamery: [p.id], poslatSms: box.querySelector('#uSms').checked });
+      posledniPozvanka = { uzivatelId: r.uzivatel.id, odkaz: r.odkaz, text: r.text, sms: r.sms };
+      toast(r.sms.odeslano ? `Pozvánka odeslána SMS na ${r.uzivatel.telefon}.` : 'Účet založen, pozvánka je připravená.');
+      renderUzivatele(p);
+    } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
+  };
+  box.querySelectorAll('li[data-u] button').forEach((b) => { b.onclick = async () => {
+    const id = b.closest('li').dataset.u;
+    try {
+      if (b.dataset.a === 'copy') { await navigator.clipboard.writeText(inv.odkaz); toast('Odkaz zkopírován.'); return; }
+      if (b.dataset.a === 'smaz') {
+        if (b.textContent !== 'Opravdu odebrat?') { b.textContent = 'Opravdu odebrat?'; return; }
+        await apiJson(`/api/rodina/uzivatele/${id}`, { method: 'DELETE' }); posledniPozvanka = null; toast('Účet odebrán.');
+      }
+      if (b.dataset.a === 'pozvanka') {
+        const r = await post(`/api/rodina/uzivatele/${id}/pozvanka`, { poslatSms: data.smsNastaveno });
+        posledniPozvanka = { uzivatelId: id, odkaz: r.odkaz, text: r.text, sms: r.sms };
+        toast('Nová pozvánka připravena; staré heslo přestalo platit.');
+      }
+      renderUzivatele(p);
+    } catch (ex) { toast(ex.message, 'crit'); }
+  }; });
 }
 
 $('onlyOpen').onchange = renderTiles;

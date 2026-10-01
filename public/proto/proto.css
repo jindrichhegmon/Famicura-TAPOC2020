@@ -241,3 +241,28 @@ body.withAuth .apphead,body.withAuth .deskbar{top:56px}
 .install .steps{margin:6px 0 10px;padding-left:22px;font-size:.9rem;line-height:1.5}
 .install .steps li{margin:4px 0}
 .btn.wide{display:block;width:100%;text-align:center;margin:8px 0}
+
+/* brána aplikace rodiny: přihlášení / aktivace pozvánky */
+.gate{position:fixed;inset:0;z-index:50;background:linear-gradient(160deg,var(--navy),#1b6bb8);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+.gatecard{background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,.25);text-align:center}
+.gatelogo{border-radius:18px;display:block;margin:0 auto 8px}
+.gatecard h1{margin:0;font-size:1.5rem;color:var(--navy)}
+.gatesub{margin:2px 0 16px;color:var(--muted)}
+.gateform{text-align:left;display:flex;flex-direction:column;gap:10px}
+.gateform label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.gateform input{font-size:1.05rem;padding:10px 12px;border:1px solid var(--line);border-radius:12px;min-height:44px}
+.gateerr{background:#fde8e8;color:#8a1f1f;border-radius:10px;padding:8px 10px;font-size:.9rem;margin:0}
+.gatewelcome{margin:0 0 4px;font-weight:600;color:var(--ink)}
+.gatedemo{margin:18px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+.row.wrap{flex-wrap:wrap}
+#ucet .gateform{margin-top:10px}
+/* dispečink: uživatelé rodiny */
+.users{list-style:none;margin:6px 0 0;padding:0}
+.users li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
+.users li .grow{min-width:160px}
+.users .inv{flex-basis:100%;background:var(--soft);border-radius:10px;padding:8px 10px;font-size:.85rem;word-break:break-all}
+.users .inv .row{margin-top:6px;flex-wrap:wrap}
+.userform{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:8px}
+.userform label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)}
+.userform input[type=text],.userform input[type=tel]{min-height:36px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:.9rem}
+.app.pending .phone,.app.pending .bottomnav{visibility:hidden}
