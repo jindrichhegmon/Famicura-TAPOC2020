@@ -323,6 +323,37 @@ Skript jde spustit opakovaně. Co už je nastavené, jen znovu nastaví.
 Router, který umí klienta WireGuard, to zvládne také, ale nastavuje se
 u každého výrobce jinak.
 
+### 2c. Brána GL.iNet Mango místo Windows serveru
+
+Malý router GL.iNet Mango (GL-MT300N-V2) nahradí Windows server i jeho
+firewall: kamera se připojí na Wi-Fi Manga, Mango se připojí k internetu
+klienta (kabelem do WAN, nebo jako opakovač jeho Wi-Fi) a naváže tunel
+WireGuard k VPS. Je to stejný režim jako Raspberry Pi (`linux`): VPS vidí
+přímo kameru. Nastavení ve webovém rozhraní Manga, bez skriptů na zařízení.
+
+1. Mango zapojte do napájení, připojte se na jeho Wi-Fi (jméno a heslo
+   jsou na štítku zespodu) a otevřete http://192.168.8.1. Nastavte heslo
+   správce a připojení k internetu: kabel do portu WAN, nebo
+   **Repeater** na Wi-Fi v místě.
+2. Kameru připojte na Wi-Fi Manga (Tapo: kameru resetovat, v aplikaci Tapo
+   nastavit znovu a zvolit síť Manga; znovu založit **Účet kamery**).
+   V Mangu ve **Clients** kameře zamkněte IP adresu (statický DHCP).
+3. Na Macu: `./deploy/wireguard-vps.sh <IP kamery v síti Manga>` (bez
+   `--windows`). Vznikne `famicura-wg-u-kamery.conf`.
+4. V Mangu **VPN → WireGuard Client → Add manually / Set up manually**:
+   vložte obsah souboru, uložte, připojte. V nastavení klienta zapněte
+   **Allow Remote Access LAN** (přístup z VPN do místní sítě Manga);
+   volby typu „Block non-VPN traffic“ nechte vypnuté, tunelem jde jen
+   provoz pro VPS (10.77.0.1). Soubor `.conf` pak smažte, má soukromý klíč.
+5. Na Macu `./deploy/vps-kamera.sh`: zadáte IP kamery z kroku 2 a účet
+   kamery. Ověření z VPS: `wg show wg-famicura && ping -c 2 <IP kamery>`.
+
+Když Mango volbu „Allow Remote Access LAN“ nemá (starší firmware), jde totéž
+nastavit v LuCI: Network → Firewall → zóna klienta WireGuard → Forward
+do zóny `lan`: accept. Tunel SSH z Windows (2b) ani WireGuard na Windows
+pak nejsou potřeba; VPS přepne `vps-kamera.sh` automaticky podle
+`/etc/wireguard/famicura-rezim` (po kroku 3 je `linux`).
+
 ### 2b. Když firewall serveru tunel nepustí: tunel SSH
 
 Příznak: tunel WireGuard na obou stranách hlásí čerstvý handshake, server

@@ -48,7 +48,11 @@ cat <<TEXT
 
 Hotovo na straně VPS. Konfigurace pro zařízení u kamery: $PWD/$OUT
 
-Na zařízení u kamery (Raspberry Pi / mini PC s Linuxem ve stejné síti jako kamera):
+Brána GL.iNet Mango (kamera na Wi-Fi Manga): v http://192.168.8.1 → VPN → WireGuard Client
+→ Add manually: vložte obsah souboru $OUT, připojte a zapněte „Allow Remote Access LAN“.
+Pak:  rm $OUT   (soubor má soukromý klíč)
+
+Raspberry Pi / mini PC s Linuxem ve stejné síti jako kamera:
   scp $OUT deploy/wireguard/u-kamery.sh deploy/wireguard/brana.sh UZIVATEL@ZARIZENI:~/
   ssh UZIVATEL@ZARIZENI 'sudo ./u-kamery.sh $OUT brana.sh && rm $OUT'
   rm $OUT          # i tady na Macu
