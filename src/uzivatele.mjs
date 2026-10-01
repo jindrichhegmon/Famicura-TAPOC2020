@@ -62,7 +62,7 @@ export function createUzivatele(store, { now = Date.now, nahoda = (n) => crypto.
   const uloz = (vsichni) => store.uloz(SOUBOR, vsichni);
 
   function pozvankaPro(u) {
-    const token = nahoda(24).toString('base64url');
+    const token = nahoda(16).toString('base64url');   // 22 znaků: v SMS každý znak hraje roli
     u.pozvanka = { hash: hashTokenu(token), platiDo: now() + POZVANKA_TTL_MS };
     return token;
   }
@@ -76,6 +76,8 @@ export function createUzivatele(store, { now = Date.now, nahoda = (n) => crypto.
       const u = (await nacti())[id];
       return u ? verejne(u) : null;
     },
+
+    async pozvanka(token) { return pozvankaPlati(await nacti(), token, now()); },
 
     /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). */
     async vytvor({ jmeno, telefon, kamery }) {
@@ -154,7 +156,22 @@ export function createUzivatele(store, { now = Date.now, nahoda = (n) => crypto.
   };
 }
 
-/** Text SMS s pozvánkou; stručně, odkaz je dlouhý. */
+/**
+ * Text SMS s pozvánkou. Bez diakritiky (díl SMS = 153 znaků jen bez ní); i tak
+ * jde o 2 díly, odkaz je dlouhý a rada, jak si aplikaci dát na plochu, ušetří
+ * telefonát. Použitý odkaz vede na přihlášení, takže ho rodina může
+ * klepnout i podruhé.
+ */
 export function textPozvanky({ jmeno, odkaz }) {
-  return `Famicura: ${jmeno}, zde je vas pristup k dohledu nad blizkym: ${odkaz} Otevrete odkaz, zvolte si heslo a prihlaste se. Odkaz plati 7 dni.`;
+  return `Famicura: ${jmeno}, pristup k dohledu: ${odkaz} `
+    + 'Otevrete odkaz a zvolte si heslo. '
+    + 'Dejte si ji na plochu: iPhone Safari Sdilet > Pridat na plochu, Android Chrome menu > Pridat na plochu. '
+    + 'Priste se jen prihlasite telefonem a heslem.';
+}
+
+/** Je pozvánka k tomuto tokenu platná (nepoužitá a nepropadlá)? Pro stránku, bez změny stavu. */
+export function pozvankaPlati(vsichni, token, now = Date.now()) {
+  const h = hashTokenu(token || '');
+  const u = Object.values(vsichni).find((x) => x.pozvanka && x.pozvanka.hash === h);
+  return u && u.pozvanka.platiDo >= now ? { platna: true, jmeno: u.jmeno } : { platna: false };
 }

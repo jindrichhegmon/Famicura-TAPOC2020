@@ -83,6 +83,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
+    // Krátký odkaz z SMS s pozvánkou (/r/<token>): aplikace rodiny, o 30 znaků kratší SMS.
+    const mr = url.pathname.match(/^\/r\/([A-Za-z0-9_-]{10,100})$/);
+    if (mr) { res.writeHead(302, { Location: `/proto/rodina.html?pozvanka=${mr[1]}`, 'Cache-Control': 'no-store' }); res.end(); return; }
     let file = path.join(PUBLIC, rel === '' ? 'index.html' : rel);
     if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
     // A folder (/proto/) serves its index.html, like any web server.

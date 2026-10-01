@@ -33,13 +33,16 @@ test('pozvánka → aktivace → přihlášení; nová pozvánka staré heslo zr
   const { uzivatel, token } = await u.vytvor({ jmeno: 'Petr Novák', telefon: '+420 777 123 456', kamery: ['tapoc2020'] });
   assert.equal(uzivatel.aktivni, false);
   assert.equal(uzivatel.telefon, '777123456');
-  assert.ok(token.length >= 30);
+  assert.ok(token.length >= 20);
   assert.equal(await u.prihlas('777123456', 'cokoli-heslo'), null, 'před aktivací se nepřihlásí');
+  assert.deepEqual(await u.pozvanka(token), { platna: true, jmeno: 'Petr Novák' });
+  assert.deepEqual(await u.pozvanka('jiny'), { platna: false });
   await assert.rejects(u.aktivuj(token, 'kratke'), /aspoň 8/);
   await assert.rejects(u.aktivuj('jiny-token', 'Famicura2026'), /neplatí/);
   const a = await u.aktivuj(token, 'Famicura2026');
   assert.equal(a.aktivni, true);
   await assert.rejects(u.aktivuj(token, 'Famicura2026'), /neplatí/, 'token je na jedno použití');
+  assert.deepEqual(await u.pozvanka(token), { platna: false }, 'použitý odkaz už neplatí');
   assert.equal((await u.prihlas('777 123 456', 'Famicura2026')).id, uzivatel.id);
   assert.equal(await u.prihlas('777 123 456', 'Famicura2027'), null);
   assert.equal(await u.prihlas('777 999 999', 'Famicura2026'), null);
@@ -86,7 +89,10 @@ test('cookie rodiny: role a id, admin cookie zůstává admin, stará dvoudíln�
 });
 
 test('text SMS je krátký a nese odkaz', () => {
-  const t = textPozvanky({ jmeno: 'Petr', odkaz: 'https://x.cz/proto/rodina.html?pozvanka=abc' });
-  assert.ok(t.includes('https://x.cz/proto/rodina.html?pozvanka=abc'));
-  assert.ok(t.length < 200, String(t.length));
+  const t = textPozvanky({ jmeno: 'Marie Novakova', odkaz: 'https://famicuratapo.95-216-201-2.sslip.io/r/AbCdEfGhIjKlMnOpQrStUv' });
+  assert.ok(t.includes('https://famicuratapo.95-216-201-2.sslip.io/r/AbCdEfGhIjKlMnOpQrStUv'));
+  assert.ok(t.length <= 306, `nejvýš 2 díly SMS (${t.length} znaků)`);
+  assert.ok(/Pridat na plochu/.test(t), 'rada, jak uložit na plochu');
+  assert.ok(/prihlasite telefonem a heslem/.test(t), 'co dělat při dalším klepnutí');
+  assert.ok(!/[ěščřžýáíéúůťďňĚŠČŘŽÝÁÍÉÚŮŤĎŇ]/.test(t), 'bez diakritiky (dělení SMS po 153 znacích místo 67)');
 });

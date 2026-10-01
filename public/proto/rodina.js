@@ -123,10 +123,17 @@ $('pwForm').onsubmit = async (e) => {
 };
 
 (async () => {
-  if (params.get('pozvanka')) { showGate('aktivace'); return; }
   if (params.get('ukazka') === '1') { startDemo(); return; }
-  try { boot(await api('/api/rodina/ja')); }
-  catch { showGate('login'); }
+  // Už přihlášený (třeba druhé klepnutí na odkaz z SMS) jde rovnou dovnitř.
+  try { boot(await api('/api/rodina/ja')); return; } catch { /* nepřihlášen */ }
+  const token = params.get('pozvanka');
+  if (token) {
+    const p = await api('/api/rodina/pozvanka?token=' + encodeURIComponent(token)).catch(() => ({ platna: false }));
+    if (p.platna) { $('gWelcome').textContent = `Vítejte, ${p.jmeno}. Zvolte si heslo, kterým se budete přihlašovat.`; showGate('aktivace'); return; }
+    // Použitý nebo propadlý odkaz: heslo už existuje, stačí se přihlásit.
+    showErr('gLoginInfo', 'Tenhle odkaz už byl použitý, heslo máte nastavené. Přihlaste se telefonem a heslem. Když heslo nevíte, požádejte poskytovatele o novou pozvánku.');
+  }
+  showGate('login');
 })();
 
 /* ---------- aplikace na ploše telefonu ---------- */

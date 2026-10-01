@@ -19,6 +19,7 @@
  *   POST   /api/rodina/uzivatele                 { jmeno, telefon, kamery, poslatSms } → pozvánka (poskytovatel)
  *   POST   /api/rodina/uzivatele/:id/pozvanka    { poslatSms } nová pozvánka = nové heslo (poskytovatel)
  *   DELETE /api/rodina/uzivatele/:id             (poskytovatel)
+ *   GET    /api/rodina/pozvanka?token=  platí ještě pozvánka? { platna, jmeno }
  *   POST   /api/rodina/aktivace   { token, heslo } odkaz z SMS → heslo → přihlášen
  *   POST   /api/rodina/login      { telefon, heslo } → cookie na 30 dní
  *   POST   /api/rodina/odhlaseni
@@ -155,6 +156,12 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.id) });
       }
       if (m === 'POST' && path === '/api/rodina/odhlaseni') return json({ ok: true }, 200, { 'Set-Cookie': odhlaseni() });
+      // Odkaz z SMS klepnutý podruhé: stránka se zeptá, zda pozvánka ještě platí, a jinak rovnou nabídne přihlášení.
+      if (m === 'GET' && path === '/api/rodina/pozvanka') {
+        const token = url.searchParams.get('token') || '';
+        if (token.length > 100) return json({ ok: false, error: 'Neplatný odkaz.' }, 400);
+        return json({ ok: true, ...(await uzivatele.pozvanka(token)) });
+      }
 
       const ja = kdo(req.headers);
       if (!ja) return json({ ok: false, error: 'Přihlaste se heslem Famicura.' }, 401);
@@ -178,7 +185,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
 
       // ---------- správa uživatelů rodiny: jen poskytovatel ----------
       const pozvanka = async (vysledek, poslatSms) => {
-        const odkaz = `${verejnaAdresa(req)}/proto/rodina.html?pozvanka=${encodeURIComponent(vysledek.token)}`;
+        const odkaz = `${verejnaAdresa(req)}/r/${vysledek.token}`;   // server.mjs: → /proto/rodina.html?pozvanka=
         const text = textPozvanky({ jmeno: vysledek.uzivatel.jmeno, odkaz });
         let smsStav = { odeslano: false, error: null };
         if (poslatSms) {

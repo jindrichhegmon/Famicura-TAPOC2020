@@ -384,7 +384,7 @@ test('rodina: poskytovatel založí uživatele, dostane odkaz a text SMS; bez SM
   const r = await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr Novák', telefon: '777 123 456', kamery: ['tapoc2020'], poslatSms: true } }));
   assert.equal(r.status, 200);
   const b = await r.json();
-  assert.match(b.odkaz, /^http:\/\/localhost\/proto\/rodina\.html\?pozvanka=[A-Za-z0-9_-]{20,}$/);
+  assert.match(b.odkaz, /^http:\/\/localhost\/r\/[A-Za-z0-9_-]{20,}$/, 'krátký odkaz pro SMS');
   assert.ok(b.text.includes(b.odkaz));
   assert.equal(b.sms.odeslano, false);
   assert.equal(b.smsNastaveno, false);
@@ -407,19 +407,21 @@ test('rodina: SMS jde webhookem, když je nastavený; odkaz podle X-Forwarded-Ho
   assert.equal(b.sms.odeslano, true);
   assert.equal(posl.length, 1);
   assert.equal(posl[0].telefon, '606111222');
-  assert.ok(posl[0].text.startsWith('https://famicuratapo.example/proto/rodina.html?pozvanka=') || posl[0].text.includes('https://famicuratapo.example/proto/rodina.html?pozvanka='));
+  assert.ok(posl[0].text.includes('https://famicuratapo.example/r/'), posl[0].text);
 });
 
 test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení telefonem a heslem; vidí jen své kamery', async () => {
   const { h, go2rtc } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
   const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] } }))).json();
-  const token = new URL(b.odkaz).searchParams.get('pozvanka');
+  const token = b.odkaz.split('/r/')[1];
+  assert.deepEqual(await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json(), { ok: true, platna: true, jmeno: 'Petr' });
   assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'kratke' } }))).status, 400);
   const a = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }));
   assert.equal(a.status, 200);
   const c = setCookie(a);
   assert.match(c, /^fam_tapo=\d+\.r:[a-f0-9]+\./);
   assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }))).status, 410, 'odkaz je na jedno použití');
+  assert.equal((await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json()).platna, false, 'stránka pozná použitý odkaz');
 
   const ja = await (await h(req('GET', '/api/rodina/ja', { cookies: c }))).json();
   assert.equal(ja.role, 'rodina');
@@ -454,7 +456,7 @@ test('rodina: události jen vlastní kamery; smazaný uživatel je hned odhláš
   const udalosti = { stav: () => ({}), nedavne: () => [{ kameraId: 'tapoc2020', kind: 'cam-motion' }, { kameraId: 'druha', kind: 'cam-motion' }] };
   const { h } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }), udalosti });
   const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] } }))).json();
-  const token = new URL(b.odkaz).searchParams.get('pozvanka');
+  const token = b.odkaz.split('/r/')[1];
   const c = setCookie(await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } })));
   const ev = await (await h(req('GET', '/api/events', { cookies: c }))).json();
   assert.deepEqual(ev.events.map((e) => e.kameraId), ['tapoc2020']);

@@ -68,6 +68,11 @@ test('složka s prototypem se otevře na /proto/ i bez index.html v adrese; mimo
   assert.equal(manifest.display, 'standalone');
   for (const ic of manifest.icons) assert.equal((await fetch(`http://127.0.0.1:${port}${ic.src}`)).headers.get('content-type'), 'image/png', ic.src);
   assert.equal((await fetch(`http://127.0.0.1:${port}/proto/sw.js`)).headers.get('content-type'), 'text/javascript');
+  // krátký odkaz z SMS
+  const r2 = await fetch(`http://127.0.0.1:${port}/r/AbCdEfGhIjKlMnOpQrStUv`, { redirect: 'manual' });
+  assert.equal(r2.status, 302);
+  assert.equal(r2.headers.get('location'), '/proto/rodina.html?pozvanka=AbCdEfGhIjKlMnOpQrStUv');
+  assert.equal((await fetch(`http://127.0.0.1:${port}/r/../x`, { redirect: 'manual' })).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${port}/neexistuje/`)).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${port}/src/`)).status, 404);
 });

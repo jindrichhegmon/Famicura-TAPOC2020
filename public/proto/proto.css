@@ -266,3 +266,6 @@ body.withAuth .apphead,body.withAuth .deskbar{top:56px}
 .userform label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)}
 .userform input[type=text],.userform input[type=tel]{min-height:36px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:.9rem}
 .app.pending .phone,.app.pending .bottomnav{visibility:hidden}
+.gateinfo{background:#e7f1fb;color:var(--navy);border-radius:10px;padding:8px 10px;font-size:.9rem;margin:0;line-height:1.35}
+.gatecard .btn.wide,#ucet .btn{flex:0 0 auto;height:auto;min-height:48px;font-size:1.05rem;margin-top:4px;padding:12px 16px}
+.gateform .hint{margin:2px 0 0}

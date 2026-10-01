@@ -226,8 +226,11 @@ Aplikace rodiny je jen pro přihlášené. Princip je z aplikace pacienta Péče
 doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
 
 1. **Poskytovatel založí účet** v dispečinku (detail skutečné kamery →
-   Uživatelé rodiny): jméno a telefon. Server připraví pozvánku, odkaz
-   `/proto/rodina.html?pozvanka=…` platný 7 dní a na jedno použití.
+   Uživatelé rodiny): jméno a telefon. Server připraví pozvánku: krátký odkaz
+   `/r/<token>` (server ho přesměruje na `/proto/rodina.html?pozvanka=…`),
+   platný 7 dní a na jedno použití. SMS je bez diakritiky a vejde se do
+   dvou dílů; radí i, jak si aplikaci dát na plochu. Použitý odkaz vede
+   rovnou na přihlášení (nebo do aplikace, když je rodina ještě přihlášená).
 2. **Pozvánka jde SMS**: ze serveru webhookem Make (`SMS_WEBHOOK_URL`,
    `SMS_WEBHOOK_KLIC` v `.env`, stejný scénář jako Péče doma), nebo tlačítkem
    „Poslat SMS z tohoto telefonu“ z dispečerova mobilu, nebo zkopírovaným
