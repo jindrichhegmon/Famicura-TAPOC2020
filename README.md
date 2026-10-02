@@ -343,18 +343,30 @@ přímo kameru. Nastavení ve webovém rozhraní Manga, bez skriptů na zaříze
 4. V Mangu **VPN → WireGuard Client → New Group → Add Manually**: vložte
    obsah `famicura-mango.conf` (stejná konfigurace bez řádků `#`, které
    GL.iNet odmítá; `cat famicura-mango.conf | pbcopy`), Apply, Connect.
-   Pak **VPN Dashboard → ozubené kolo → Allow Remote Access LAN** (přístup
-   z VPN do místní sítě Manga); „Block Non-VPN Traffic“ nechte vypnuté,
-   tunelem jde jen provoz pro VPS (10.77.0.1). Oba soubory `.conf` pak
-   smažte, mají soukromý klíč.
-5. Na Macu `./deploy/vps-kamera.sh`: zadáte IP kamery z kroku 2 a účet
-   kamery. Ověření z VPS: `wg show wg-famicura && ping -c 2 <IP kamery>`.
+   Pak **VPN Dashboard → ozubené kolo**: Proxy Mode „Based on the Target
+   Domain or IP“ s adresou 10.77.0.1 (Global Proxy by Mangu vzal internet),
+   „Allow Remote Access LAN“ zapnuto, „Block Non-VPN Traffic“ vypnuto. Oba
+   soubory `.conf` pak smažte, mají soukromý klíč.
+5. Firewall Manga provoz z tunelu ke kameře sám nepustí („Allow Remote Access
+   LAN“ ve firmwaru 4.3 nestačí a ruční úprava zóny v LuCI se po dalším
+   připojení VPN ztratí; LuCI navíc při Save & Apply končí „XHR timeout“).
+   Pravidlo se zapíše přes SSH do Manga (Mac na Wi-Fi Manga, heslo správce
+   Manga, IP kamery z kroku 2):
+   ```
+   ssh root@192.168.8.1 "uci add firewall forwarding; uci set firewall.@forwarding[-1].name='famicura_wg_lan'; uci set firewall.@forwarding[-1].src='wgclient'; uci set firewall.@forwarding[-1].dest='lan'; uci add firewall rule; uci set firewall.@rule[-1].name='Famicura kamera'; uci set firewall.@rule[-1].src='wgclient'; uci set firewall.@rule[-1].dest='lan'; uci set firewall.@rule[-1].dest_ip='192.168.8.211'; uci set firewall.@rule[-1].proto='all'; uci set firewall.@rule[-1].target='ACCEPT'; uci commit firewall; /etc/init.d/firewall restart"
+   ```
+   Výpis varování `[!] Section … fw4` je normální. Po resetu Manga se
+   příkaz spouští znovu (a před ním `ssh-keygen -R 192.168.8.1`, Mango má
+   nový klíč).
+6. Na Macu `./deploy/vps-kamera.sh`: zadáte IP kamery z kroku 2 a účet
+   kamery. Ověření z VPS:
+   `ping -c 2 <IP kamery>; nc -zv -w 5 <IP kamery> 554` (má být
+   „2 received“ a „succeeded“; „Destination Port Unreachable“ nebo
+   „Connection refused“ od 10.77.0.2 znamená, že chybí krok 5).
 
-Když Mango volbu „Allow Remote Access LAN“ nemá (starší firmware), jde totéž
-nastavit v LuCI: Network → Firewall → zóna klienta WireGuard → Forward
-do zóny `lan`: accept. Tunel SSH z Windows (2b) ani WireGuard na Windows
-pak nejsou potřeba; VPS přepne `vps-kamera.sh` automaticky podle
-`/etc/wireguard/famicura-rezim` (po kroku 3 je `linux`).
+Tunel SSH z Windows (2b) ani WireGuard na Windows pak nejsou potřeba; VPS
+přepne `vps-kamera.sh` automaticky podle `/etc/wireguard/famicura-rezim`
+(po kroku 3 je `linux`).
 
 ### 2b. Když firewall serveru tunel nepustí: tunel SSH
 

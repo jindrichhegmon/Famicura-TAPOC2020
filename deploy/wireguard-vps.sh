@@ -54,7 +54,9 @@ Totéž bez poznámek pro GL.iNet Mango: $PWD/$MANGO
 
 Brána GL.iNet Mango (kamera na Wi-Fi Manga): v http://192.168.8.1 → VPN → WireGuard Client
 → skupina → Add Manually: vložte obsah $MANGO (do schránky: cat $MANGO | pbcopy), Apply, Connect;
-VPN Dashboard → ozubené kolo → zapnout „Allow Remote Access LAN“.
+VPN Dashboard → ozubené kolo → Proxy Mode „Based on the Target Domain or IP“ (10.77.0.1), „Allow Remote Access LAN“ zapnout.
+Firewall Manga (Mac na Wi-Fi Manga, heslo správce Manga) – bez toho VPS kameru nevidí:
+  ssh root@192.168.8.1 "uci add firewall forwarding; uci set firewall.@forwarding[-1].src='wgclient'; uci set firewall.@forwarding[-1].dest='lan'; uci add firewall rule; uci set firewall.@rule[-1].name='Famicura kamera'; uci set firewall.@rule[-1].src='wgclient'; uci set firewall.@rule[-1].dest='lan'; uci set firewall.@rule[-1].dest_ip='$IP'; uci set firewall.@rule[-1].proto='all'; uci set firewall.@rule[-1].target='ACCEPT'; uci commit firewall; /etc/init.d/firewall restart"
 Pak:  rm $OUT $MANGO   (soubory mají soukromý klíč)
 
 Raspberry Pi / mini PC s Linuxem ve stejné síti jako kamera:
