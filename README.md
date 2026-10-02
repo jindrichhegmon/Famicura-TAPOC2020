@@ -340,11 +340,13 @@ přímo kameru. Nastavení ve webovém rozhraní Manga, bez skriptů na zaříze
    V Mangu ve **Clients** kameře zamkněte IP adresu (statický DHCP).
 3. Na Macu: `./deploy/wireguard-vps.sh <IP kamery v síti Manga>` (bez
    `--windows`). Vznikne `famicura-wg-u-kamery.conf`.
-4. V Mangu **VPN → WireGuard Client → Add manually / Set up manually**:
-   vložte obsah souboru, uložte, připojte. V nastavení klienta zapněte
-   **Allow Remote Access LAN** (přístup z VPN do místní sítě Manga);
-   volby typu „Block non-VPN traffic“ nechte vypnuté, tunelem jde jen
-   provoz pro VPS (10.77.0.1). Soubor `.conf` pak smažte, má soukromý klíč.
+4. V Mangu **VPN → WireGuard Client → New Group → Add Manually**: vložte
+   obsah `famicura-mango.conf` (stejná konfigurace bez řádků `#`, které
+   GL.iNet odmítá; `cat famicura-mango.conf | pbcopy`), Apply, Connect.
+   Pak **VPN Dashboard → ozubené kolo → Allow Remote Access LAN** (přístup
+   z VPN do místní sítě Manga); „Block Non-VPN Traffic“ nechte vypnuté,
+   tunelem jde jen provoz pro VPS (10.77.0.1). Oba soubory `.conf` pak
+   smažte, mají soukromý klíč.
 5. Na Macu `./deploy/vps-kamera.sh`: zadáte IP kamery z kroku 2 a účet
    kamery. Ověření z VPS: `wg show wg-famicura && ping -c 2 <IP kamery>`.
 

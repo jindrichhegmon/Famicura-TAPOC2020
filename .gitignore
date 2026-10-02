@@ -3,6 +3,7 @@ node_modules/
 verze.json
 data/
 famicura-wg-u-kamery.conf
+famicura-mango.conf
 *.conf.tmp
 cameras.json
 go2rtc.yaml

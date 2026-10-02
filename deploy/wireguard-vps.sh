@@ -44,13 +44,18 @@ TEXT
 exit 0
 fi
 
+# GL.iNet odmítne konfiguraci s řádky „#“; pro Mango jde stejný obsah bez nich.
+MANGO=famicura-mango.conf
+grep -v '^#' "$OUT" > "$MANGO"
 cat <<TEXT
 
 Hotovo na straně VPS. Konfigurace pro zařízení u kamery: $PWD/$OUT
+Totéž bez poznámek pro GL.iNet Mango: $PWD/$MANGO
 
 Brána GL.iNet Mango (kamera na Wi-Fi Manga): v http://192.168.8.1 → VPN → WireGuard Client
-→ Add manually: vložte obsah souboru $OUT, připojte a zapněte „Allow Remote Access LAN“.
-Pak:  rm $OUT   (soubor má soukromý klíč)
+→ skupina → Add Manually: vložte obsah $MANGO (do schránky: cat $MANGO | pbcopy), Apply, Connect;
+VPN Dashboard → ozubené kolo → zapnout „Allow Remote Access LAN“.
+Pak:  rm $OUT $MANGO   (soubory mají soukromý klíč)
 
 Raspberry Pi / mini PC s Linuxem ve stejné síti jako kamera:
   scp $OUT deploy/wireguard/u-kamery.sh deploy/wireguard/brana.sh UZIVATEL@ZARIZENI:~/
