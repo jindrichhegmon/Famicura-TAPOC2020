@@ -33,6 +33,7 @@
 import { kdo, cookie, cookieRodina, odhlaseni, hesloSedi } from './session.mjs';
 import { createUzivatele, textPozvanky, formatTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
+import { createProtoStav } from './proto-stav.mjs';
 import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
 import { normalizeIntervals, isDeviceId, MAX_INTERVALS } from './plan-pravidla.mjs';
@@ -80,9 +81,10 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null }) {
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, proto = null }) {
   uzivatele = uzivatele || createUzivatele(store);
   sms = sms || createSms();
+  proto = proto || createProtoStav({ store, udalosti });
   // Each camera carries what it can report itself, so the page offers only that.
   async function kamery() {
     const names = cameraNames();
@@ -245,6 +247,21 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!['playlist.m3u8', 'init.mp4', 'segment.m4s', 'segment.ts'].includes(file)) return json({ ok: false, error: 'Neznámá adresa.' }, 404);
         if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || (n !== null && !/^\d{1,9}$/.test(n))) return json({ ok: false, error: 'Neplatný odkaz.' }, 400);
         return go2rtc.proxy(`${path}?id=${id}${n === null ? '' : `&n=${n}`}`, { signal: req.signal });
+      }
+
+      // ---------- prototyp (rodina, dispečink, provoz): stav sdílený mezi zařízeními ----------
+      // Rodina i poskytovatel ho vidí celý: jsou to ukázková data plus
+      // souhlasy a události k jejich kameře; nastavení serveru v něm není.
+      if (m === 'GET' && path === '/api/proto/stav') {
+        const s = await proto.stav();
+        const v = Number(url.searchParams.get('v'));
+        if (v && v === s.v) return json({ ok: true, v: s.v, zmena: false });
+        return json({ ok: true, v: s.v, zmena: true, state: s.state });
+      }
+      if (m === 'POST' && path === '/api/proto/akce') {
+        const { akce, args } = await telo(req);
+        if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
+        return json({ ok: true, ...(await proto.proved(akce, args)) });
       }
 
       if (m === 'GET' && path === '/api/events') {

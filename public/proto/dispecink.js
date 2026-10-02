@@ -250,9 +250,11 @@ async function renderUzivatele(p) {
 
 $('onlyOpen').onchange = renderTiles;
 if (selected) { renderDetail(true); panel.select(selected); }
-sim.subscribe((s) => {
+sim.subscribe((s, info) => {
   for (const e of s.events) {
     if (seen.has(e.id)) continue; seen.add(e.id);
+    // celý stav odjinud (první načtení ze serveru): staré události nehlásit
+    if (info?.nahrazeno) continue;
     const k = KINDS[e.kind]; if (!k || k.level === 'info') continue;
     if (k.level === 'crit') { beep(); toast(`🚨 ${sim.patient(e.patientId)?.name}: ${k.label}`, 'crit', () => { selected = e.patientId; renderDetail(true); renderTiles(); }); }
     else toast(`${sim.patient(e.patientId)?.name}: ${k.label}`);

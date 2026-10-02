@@ -212,13 +212,21 @@ místem). Obraz je skutečný, z vaší kamery, kreslený jednou a do každé
 dlaždice zvlášť v jejím režimu (`public/proto/zdroj.js`); drátěný model
 se počítá jednou a sdílí. Bez přihlášení nebo bez kamery kreslí náhradní
 scénu s animovanou postavou (stojí, sedí, leží). Všechno ostatní je
-simulace v prohlížeči (`public/proto/sim.js`): stav se sdílí mezi okny
-přes localStorage a BroadcastChannel, takže změna souhlasu v okně rodiny
-se do 1 s projeví v dispečinku. Panel **Simulace** vlevo dole vyvolá
-pád, překročení čáry, SOS z náramku, výpadek kamery, žádost dispečera
-o plný obraz nebo noc; skutečné události kamery se do prototypu
-propisují také. Prototyp na server nic nezapisuje a nastavení aplikace
-nemění.
+simulace: pacienti, souhlasy, události, žádosti a notifikace. Data i
+akce jsou v `public/proto/sim-core.js`, stejný kód běží v prohlížeči i na
+serveru. **Přihlášeným drží stav server** (`src/proto-stav.mjs`,
+`GET /api/proto/stav`, `POST /api/proto/akce`, soubor
+`data/proto-stav.json`): rozostření, které rodina nastaví na telefonu,
+vidí dispečink na jiném počítači do 2 s, žádost dispečinku o plný obraz
+dojde na telefon rodiny a její odpověď zpět. Prohlížeč se každé 2 s ptá
+na číslo verze a stáhne stav jen při změně; skutečné události kamery do
+něj skládá server sám. Bez přihlášení (ukázka) zůstává stav jen v tom
+prohlížeči, sdílený mezi okny přes localStorage a BroadcastChannel.
+Hodiny (noc 22–6, „jen v hodinách“) se počítají v pražském čase i na
+serveru v UTC. Panel **Simulace** vlevo dole vyvolá pád, překročení
+čáry, SOS z náramku, výpadek kamery, žádost dispečera o plný obraz nebo
+noc a tlačítkem Vynulovat vrátí výchozí stav pro všechny. Prototyp
+nastavení aplikace (plány, sledování, kamery) nemění.
 
 ### Přihlášení rodiny, účty a pozvánka SMS
 
@@ -508,6 +516,12 @@ založil `node scripts/init-db.mjs`.
   u Linuxu jsou jiný port kamery, jiný počítač i zařízení samotné
   zablokované. U Windows přišel obraz přes předávání TCP, i když VPS
   kameru napřímo vůbec neviděl.
+* Stav prototypu na serveru je jen pro přihlášené (poskytovatel i
+  rodina) a obsahuje jen ukázková data a simulaci; rodina ho vidí celý,
+  protože je to společná ukázka, ne data jiných klientů. Každý vstup
+  z prohlížeče se na serveru kontroluje (`sim-core.js`: druh události,
+  režim obrazu, hodiny, délky textů, ID), chybný vrací 400. Nastavení
+  serveru ani kamer tudy nejde změnit.
 * Tunel SSH (2b) otáčí jen směr navázání spojení, ne co je dostupné:
   účet `famicura-tunel` na VPS nemá heslo ani shell a sshd mu dovolí jen
   přivést porty 10554 a 12020 na localhost VPS. Z VPS tunelem ven nic

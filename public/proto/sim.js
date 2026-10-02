@@ -1,84 +1,17 @@
 /*
- * Simulovaný stav pro prototyp: pacienti, souhlasy s režimem obrazu, události,
- * alerty, žádosti o plný obraz, notifikace. Sdílí se mezi otevřenými okny
- * (rodina, dispečink, provoz) přes localStorage a BroadcastChannel, takže
- * změna souhlasu v okně rodiny se hned projeví v dispečinku.
+ * Stav prototypu: pacienti, souhlasy s režimem obrazu, události, alerty,
+ * žádosti o plný obraz, notifikace. Přihlášeným (poskytovatel i rodina) ho
+ * drží server (/api/proto/stav), takže souhlas nastavený na telefonu rodiny
+ * vidí dispečink na jiném počítači do 2 s. Bez přihlášení (ukázka) zůstává
+ * stav v tomhle prohlížeči: localStorage + BroadcastChannel mezi okny.
+ * Data i akce jsou v sim-core.js, stejné pro prohlížeč i server.
  */
+import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNoc, grantText } from '/proto/sim-core.js';
+export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch };
+
 const KEY = 'famicura.proto.v1';
 const CH = 'famicura-proto';
-
-export const KINDS = {
-  fall:       { label: 'Možný pád',                    level: 'crit', source: 'analýza' },
-  longlie:    { label: 'Dlouhé ležení mimo postel',    level: 'crit', source: 'analýza' },
-  sos:        { label: 'Nouzové tlačítko',             level: 'crit', source: 'náramek' },
-  devfall:    { label: 'Pád hlášený náramkem',         level: 'crit', source: 'náramek' },
-  inactivity: { label: 'Nečinnost',                    level: 'warn', source: 'analýza' },
-  linecross:  { label: 'Překročení čáry',              level: 'warn', source: 'kamera' },
-  tamper:     { label: 'Zakrytí nebo posunutí kamery', level: 'warn', source: 'kamera' },
-  missing:    { label: 'Ztráta postavy',               level: 'info', source: 'analýza' },
-  state:      { label: 'Změna polohy',                 level: 'info', source: 'analýza' },
-  person:     { label: 'Osoba',                        level: 'info', source: 'kamera' },
-  motion:     { label: 'Pohyb',                        level: 'info', source: 'kamera' },
-  offline:    { label: 'Kamera nedostupná',            level: 'tech', source: 'systém' },
-  online:     { label: 'Kamera opět dostupná',         level: 'tech', source: 'systém' },
-  battery:    { label: 'Slabá baterie náramku',        level: 'tech', source: 'náramek' },
-};
-export const LEVEL_LABEL = { crit: 'kritická', warn: 'varování', info: 'informativní', tech: 'technická' };
-export const CONSENT = { none: 'žádný obraz (jen události)', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' };
-
-/** What the provider watches for a patient: on/off, hours, recording. The family only reads it. */
-export const WATCH_KINDS = ['fall', 'longlie', 'sos', 'devfall', 'inactivity', 'linecross', 'tamper', 'missing', 'state', 'person', 'motion'];
-export function defaultWatch() {
-  const w = {};
-  for (const k of WATCH_KINDS) w[k] = { on: true, from: '', to: '', rec: KINDS[k].level === 'crit' || k === 'linecross' };
-  w.linecross = { on: true, from: '07:00', to: '20:00', rec: true };
-  w.motion = { on: false, from: '', to: '', rec: false };
-  w.state = { on: false, from: '', to: '', rec: false };
-  return w;
-}
-export function describeWatch(w) {
-  const hodiny = (r) => (r.from ? ` ${r.from}–${r.to}` : '');
-  const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : ''));
-  return on.length ? on.join(', ') : 'nic';
-}
-function withinHours(r, d = new Date()) {
-  if (!r.from || !r.to) return true;
-  const m = d.getHours() * 60 + d.getMinutes();
-  const [fh, fm] = r.from.split(':').map(Number), [th, tm] = r.to.split(':').map(Number);
-  const f = fh * 60 + fm, t = th * 60 + tm;
-  return f < t ? (m >= f && m < t) : (m >= f || m < t);
-}
-
-const FAKE = [
-  ['p2', 'Babička Marie', 'Byt 7, Kladno', 'Pečovatelská služba Kladno'],
-  ['p3', 'Pan Josef', 'Pokoj 12, DS Slunečnice', 'DS Slunečnice'],
-  ['p4', 'Paní Anna', 'Byt 3, Praha 4', 'Pečovatelská služba Kladno'],
-  ['p5', 'Pan Karel', 'Pokoj 5, DS Slunečnice', 'DS Slunečnice'],
-  ['p6', 'Paní Věra', 'Byt 21, Beroun', 'Pečovatelská služba Kladno'],
-  ['p7', 'Pan Miroslav', 'Pokoj 8, DS Slunečnice', 'DS Slunečnice'],
-  ['p8', 'Paní Jarmila', 'Byt 2, Praha 6', 'Pečovatelská služba Kladno'],
-];
-
-function seed() {
-  const now = Date.now();
-  const patients = [
-    { id: 'tapoc2020', name: 'TAPO Test', place: 'Kancelář Famicura (skutečná kamera)', provider: 'Pečovatelská služba Kladno', real: true,
-      consent: { den: 'full', noc: 'full', nouze: true }, watch: defaultWatch(), night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
-    ...FAKE.map(([id, name, place, provider], i) => ({ id, name, place, provider, real: false,
-      consent: { den: ['skeleton', 'blur', 'none', 'full', 'skeleton', 'skeleton', 'blur'][i], noc: ['skeleton', 'skeleton', 'none', 'skeleton', 'none', 'skeleton', 'skeleton'][i], nouze: i % 3 !== 2 },
-      watch: defaultWatch(), night: false, offline: i === 5, note: '' })),
-  ];
-  const events = [];
-  const add = (minsAgo, patientId, kind, state = 'uzavřen', result = 'planý poplach') => events.push({
-    id: 'e' + minsAgo + patientId, at: now - minsAgo * 60000, patientId, kind, state, by: state === 'nový' ? null : 'Jana Nováková', result: state === 'uzavřen' ? result : null, note: '' });
-  add(38, 'p3', 'linecross', 'uzavřen', 'vyřešeno na dálku');
-  add(65, 'p2', 'person');
-  add(120, 'tapoc2020', 'motion');
-  add(190, 'p5', 'inactivity', 'uzavřen', 'výjezd');
-  add(260, 'p8', 'fall', 'uzavřen', 'záchranná služba');
-  add(300, 'p7', 'offline', 'uzavřen', 'tunel obnoven');
-  return { patients, events, notifications: [], requests: [], grants: {}, klid: {}, watching: {}, night: false, seq: 1, seededAt: now };
-}
+const POLL_MS = 2000;
 
 function load() {
   try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.patients) { for (const p of s.patients) p.watch = p.watch || defaultWatch(); return s; } } catch { /* fresh */ }
@@ -87,26 +20,86 @@ function load() {
 function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* private mode */ } }
 
 let state = load();
+let server = null;              // { v } když stav drží server
 const bc = 'BroadcastChannel' in window ? new BroadcastChannel(CH) : null;
 const subs = new Set();
-bc?.addEventListener('message', (m) => { if (m.data?.type === 'state') { state = m.data.state; subs.forEach((f) => f(state)); } });
-window.addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { state = JSON.parse(e.newValue); subs.forEach((f) => f(state)); } catch { /* ignore */ } } });
+const notify = (info) => subs.forEach((f) => f(state, info));
+bc?.addEventListener('message', (m) => { if (!server && m.data?.type === 'state') { state = m.data.state; notify(); } });
+window.addEventListener('storage', (e) => { if (!server && e.key === KEY && e.newValue) { try { state = JSON.parse(e.newValue); notify(); } catch { /* ignore */ } } });
 
-function commit() { save(state); bc?.postMessage({ type: 'state', state }); subs.forEach((f) => f(state)); }
-const nid = () => 'n' + (state.seq++) + Date.now().toString(36);
+function commit() { save(state); bc?.postMessage({ type: 'state', state }); notify(); }
+
+/* ---------- server ---------- */
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  let data = {}; try { data = await r.json(); } catch { /* bez těla */ }
+  if (!r.ok) { const e = new Error(data.error || `Chyba serveru (${r.status})`); e.status = r.status; throw e; }
+  return data;
+}
+function adopt(b, info) {
+  if (!server) return;
+  if (b.v === server.v && !info) return;
+  server.v = b.v; state = b.state;
+  for (const p of state.patients) p.watch = p.watch || defaultWatch();
+  notify(info);
+}
+let pripojovani = null, pollTimer = null, polluji = false;
+async function poll() {
+  if (!server || polluji) return;
+  polluji = true;
+  try { const b = await api(`/api/proto/stav?v=${server.v}`); if (b.zmena) adopt(b); }
+  catch (e) { if (e.status === 401 || e.status === 403) odpojit(); }
+  polluji = false;
+}
+function odpojit() { server = null; clearInterval(pollTimer); pollTimer = null; state = load(); notify({ nahrazeno: true }); }
+
+/** Zkusí vzít stav ze serveru (po přihlášení znovu). Vrací true, když stav drží server. */
+async function pripojit() {
+  if (server) return true;
+  if (pripojovani) return pripojovani;
+  pripojovani = (async () => {
+    try {
+      const b = await api('/api/proto/stav');
+      server = { v: 0 }; adopt(b, { nahrazeno: true });
+      if (!pollTimer) pollTimer = setInterval(poll, POLL_MS);
+      return true;
+    } catch { return false; }
+    finally { pripojovani = null; }
+  })();
+  return pripojovani;
+}
+
+/** Jedna akce: na serveru ji provede server a vrátí nový stav, jinak běží tady. */
+async function run(nazev, args) {
+  if (pripojovani) await pripojovani;   // stránka může volat akci dřív, než je jasné, kdo stav drží
+  if (server) {
+    try { const b = await api('/api/proto/akce', { akce: nazev, args }); adopt(b); return b.vysledek; }
+    catch (e) { if (e.status === 401 || e.status === 403) { odpojit(); return runLocal(nazev, args); } toast(e.message, 'crit'); return undefined; }
+  }
+  return runLocal(nazev, args);
+}
+function runLocal(nazev, args) {
+  const out = proved(state, nazev, args);
+  state = out.state;
+  if (out.zmena) commit();
+  return out.vysledek;
+}
 
 export const sim = {
   get state() { return state; },
+  get naServeru() { return !!server; },
+  pripojit,
+  /** f(state, info): info.nahrazeno = celý stav přišel odjinud (první načtení ze serveru), ne nová událost. */
   subscribe(f) { subs.add(f); f(state); return () => subs.delete(f); },
   patient(id) { return state.patients.find((p) => p.id === id); },
-  /** Kamera ze serveru, kterou simulace nezná: založí k ní pacienta (jméno = název kamery). */
-  ensurePatient({ id, name }) {
-    if (state.patients.some((p) => p.id === id)) return;
-    state.patients.push({ id, name: name || id, place: 'skutečná kamera', provider: 'Poskytovatel', real: true,
-      consent: { den: 'full', noc: 'full', nouze: true }, watch: defaultWatch(), night: false, offline: false, note: '' });
-    commit();
+  /** Kamera ze serveru, kterou simulace nezná: založí k ní pacienta hned tady (stránka s ním počítá) i na serveru. */
+  async ensurePatient(p) {
+    if (!state.patients.some((x) => x.id === p.id)) { proved(state, 'ensurePatient', [p]); notify(); }
+    if (pripojovani) await pripojovani;
+    if (server) { if (!state.patients.some((x) => x.id === p.id)) run('ensurePatient', [p]); }
+    else commit();
   },
-  isNight() { return state.night || (() => { const h = new Date().getHours(); return h >= 22 || h < 6; })(); },
+  isNight() { return state.night || jeNoc(); },
 
   /** The mode the provider gets right now: a running grant beats the consent; night has its own consent. */
   effectiveMode(patientId) {
@@ -120,104 +113,37 @@ export const sim = {
   modeReason(patientId) {
     const p = this.patient(patientId); if (!p) return '';
     const g = state.grants[patientId];
-    if (g && g.until > Date.now()) return `${CONSENT[g.mode]} – ${g.by} do ${new Date(g.until).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}`;
+    if (g && g.until > Date.now()) return grantText(g);
     if (p.offline) return 'kamera nedostupná';
     const n = this.isNight();
     return `${CONSENT[p.consent[n ? 'noc' : 'den']]} (${n ? 'noc' : 'den'}, nastavila rodina)`;
   },
 
-  emit(patientId, kind, extra = {}) {
-    const k = KINDS[kind]; if (!k) return null;
-    const pw = this.patient(patientId)?.watch?.[kind];
-    if (pw && (!pw.on || !withinHours(pw))) {
-      // dropped by the provider's settings; the panel says so, the history stays clean
-      state.lastDropped = { at: Date.now(), patientId, kind, reason: !pw.on ? 'poskytovatel událost vypnul' : `mimo hodiny ${pw.from}–${pw.to}` };
-      commit(); return null;
-    }
-    const ev = { id: nid(), at: Date.now(), patientId, kind, state: k.level === 'info' ? 'uzavřen' : 'nový', by: null, result: null, note: '', rec: !!pw?.rec, ...extra };
-    state.events.unshift(ev);
-    if (state.events.length > 400) state.events.length = 400;
-    const p = this.patient(patientId);
-    if (kind === 'offline' && p) p.offline = true;
-    if (kind === 'online' && p) p.offline = false;
-    const quiet = state.klid[patientId] && state.klid[patientId] > Date.now();
-    if (k.level === 'crit' || (!quiet && k.level !== 'info')) {
-      state.notifications.unshift({ id: nid(), at: ev.at, patientId, eventId: ev.id, kind, level: k.level, ack: false });
-      if (state.notifications.length > 100) state.notifications.length = 100;
-    }
-    commit(); return ev;
-  },
-  setAlert(eventId, patch) { const e = state.events.find((x) => x.id === eventId); if (!e) return; Object.assign(e, patch); commit(); },
-  ackNotification(id) { const n = state.notifications.find((x) => x.id === id); if (n) { n.ack = true; commit(); } },
-  ackAll(patientId) { for (const n of state.notifications) if (n.patientId === patientId) n.ack = true; commit(); },
+  emit(patientId, kind, extra = {}) { return run('emit', [patientId, kind, extra]); },
+  setAlert(eventId, patch) { return run('setAlert', [eventId, patch]); },
+  ackNotification(id) { return run('ackNotification', [id]); },
+  ackAll(patientId) { return run('ackAll', [patientId]); },
+  setWatch(patientId, kind, patch) { return run('setWatch', [patientId, kind, patch]); },
+  setConsent(patientId, consent) { return run('setConsent', [patientId, consent]); },
+  requestFull(patientId, from, reason) { return run('requestFull', [patientId, from, reason]); },
+  answerRequest(reqId, answer, minutes = 15) { return run('answerRequest', [reqId, answer, minutes]); },
+  emergencyAccess(patientId, who) { return run('emergencyAccess', [patientId, who]); },
+  endGrant(patientId, by = 'rodina') { return run('endGrant', [patientId, by]); },
+  setWatching(patientId, who, on) { return run('setWatching', [patientId, who, on]); },
+  setKlid(patientId, until) { return run('setKlid', [patientId, until]); },
+  setNight(on) { return run('setNight', [on]); },
+  reset() { return run('reset', []); },
 
-  setWatch(patientId, kind, patch) {
-    const p = this.patient(patientId); if (!p || !WATCH_KINDS.includes(kind)) return;
-    p.watch = p.watch || defaultWatch();
-    p.watch[kind] = { ...p.watch[kind], ...patch };
-    commit();
-  },
-  setConsent(patientId, consent) {
-    const p = this.patient(patientId); if (!p) return;
-    p.consent = { ...p.consent, ...consent };
-    state.events.unshift({ id: nid(), at: Date.now(), patientId, kind: 'consent', state: 'uzavřen', by: 'rodina',
-      text: `Rodina nastavila poskytovateli: den ${CONSENT[p.consent.den]}, noc ${CONSENT[p.consent.noc]}, nouzový přístup ${p.consent.nouze ? 'povolen' : 'nepovolen'}.` });
-    // a grant above the new consent is over
-    commit();
-  },
-  requestFull(patientId, from, reason) {
-    const r = { id: nid(), at: Date.now(), patientId, from, reason, state: 'čeká', until: Date.now() + 120000 };
-    state.requests.unshift(r);
-    state.notifications.unshift({ id: nid(), at: r.at, patientId, requestId: r.id, kind: 'request', level: 'warn', ack: false });
-    commit(); return r;
-  },
-  answerRequest(reqId, answer, minutes = 15) {
-    const r = state.requests.find((x) => x.id === reqId); if (!r || r.state !== 'čeká') return;
-    r.state = answer === 'deny' ? 'odmítnuto' : 'povoleno';
-    if (answer !== 'deny') {
-      state.grants[r.patientId] = { mode: 'full', until: answer === 'forever' ? Date.now() + 365 * 86400000 : Date.now() + minutes * 60000, by: r.from, kind: 'souhlas rodiny' };
-      state.watching[r.patientId] = { who: r.from, since: Date.now() };
-    }
-    for (const n of state.notifications) if (n.requestId === reqId) n.ack = true;
-    state.events.unshift({ id: nid(), at: Date.now(), patientId: r.patientId, kind: 'consent', state: 'uzavřen', by: 'rodina',
-      text: answer === 'deny' ? `Rodina odmítla žádost o plný obraz (${r.from}).` : `Rodina povolila plný obraz pro ${r.from}${answer === 'forever' ? ' do odvolání' : ` na ${minutes} min`}.` });
-    commit();
-  },
-  emergencyAccess(patientId, who) {
-    const p = this.patient(patientId); if (!p || !p.consent.nouze) return false;
-    state.grants[patientId] = { mode: 'full', until: Date.now() + 10 * 60000, by: who, kind: 'nouzový přístup' };
-    state.watching[patientId] = { who, since: Date.now() };
-    state.notifications.unshift({ id: nid(), at: Date.now(), patientId, kind: 'emergency', level: 'crit', ack: false, who });
-    state.events.unshift({ id: nid(), at: Date.now(), patientId, kind: 'consent', state: 'uzavřen', by: who, text: `${who} otevřel nouzový přístup k plnému obrazu na 10 minut (kritický alert).` });
-    commit(); return true;
-  },
-  endGrant(patientId, by = 'rodina') {
-    if (!state.grants[patientId]) return;
-    delete state.grants[patientId]; delete state.watching[patientId];
-    state.events.unshift({ id: nid(), at: Date.now(), patientId, kind: 'consent', state: 'uzavřen', by, text: `${by === 'rodina' ? 'Rodina ukončila' : by + ' ukončil'} přístup k plnému obrazu.` });
-    commit();
-  },
-  setWatching(patientId, who, on) { if (on) state.watching[patientId] = { who, since: Date.now() }; else delete state.watching[patientId]; commit(); },
-  setKlid(patientId, until) { if (until) state.klid[patientId] = until; else delete state.klid[patientId]; commit(); },
-  setNight(on) { state.night = on; commit(); },
-  reset() { state = seed(); commit(); },
+  /** Housekeeping every few seconds; na serveru to dělá server při každém dotazu. */
+  tick() { if (!server) runLocal('tick', []); },
 
-  /** Housekeeping every few seconds: expired grants and requests, escalation. */
-  tick() {
-    let changed = false;
-    const now = Date.now();
-    for (const [pid, g] of Object.entries(state.grants)) if (g.until <= now) { delete state.grants[pid]; delete state.watching[pid]; changed = true;
-      state.events.unshift({ id: nid(), at: now, patientId: pid, kind: 'consent', state: 'uzavřen', by: 'systém', text: 'Povolení plného obrazu vypršelo, obraz se vrátil do nastaveného režimu.' }); }
-    for (const r of state.requests) if (r.state === 'čeká' && r.until <= now) { r.state = 'vypršelo'; changed = true; }
-    for (const e of state.events) if (e.state === 'nový' && KINDS[e.kind]?.level === 'crit' && now - e.at > 120000 && !e.escalated) { e.escalated = true; changed = true; }
-    if (changed) commit();
-  },
-
-  /** Real events of the real camera from the server, folded into the simulation as the real patient's events. */
+  /** Real events of the real camera from the server, folded into the simulation as the real patient's events.
+   *  Se stavem na serveru je skládá server sám (jednou pro všechny), tady jen bez přihlášení. */
   startRealEvents(patientId = 'tapoc2020') {
     let since = Date.now();
     const map = { 'cam-linecross': 'linecross', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion', 'cam-pet': 'motion', 'cam-vehicle': 'motion', 'cam-smart': 'motion' };
     const poll = async () => {
+      if (server) { since = Date.now(); return; }
       try {
         const r = await fetch('/api/events?since=' + since); const b = await r.json();
         if (b.ok) { for (const ev of b.events || []) { since = Math.max(since, ev.prijato); const kind = map[ev.kind]; if (kind) this.emit(patientId, kind, { real: true, text: ev.text }); } }
@@ -227,6 +153,7 @@ export const sim = {
   },
 };
 setInterval(() => sim.tick(), 3000);
+pripojit();
 
 /* ---------- helpers for the pages ---------- */
 export const fmtT = (ms) => new Date(ms).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
@@ -332,7 +259,7 @@ export function mountPanel({ role, patientIds, onPatient }) {
         <button class="sm sec" data-act="reset">Vynulovat</button>
       </div>
       <div class="small muted" id="simDropped"></div>
-      <div class="small muted">Otevřete role v dalších oknech vedle sebe: změna v jednom se hned projeví v ostatních.</div>
+      <div class="small muted" id="simKde"></div>
     </div>`;
   document.body.append(el);
   el.querySelector('.hd').onclick = () => el.classList.toggle('min');
@@ -341,9 +268,11 @@ export function mountPanel({ role, patientIds, onPatient }) {
   el.querySelectorAll('[data-ev]').forEach((b) => { b.onclick = () => sim.emit(pat(), b.dataset.ev); });
   el.querySelectorAll('[data-pose]').forEach((b) => { b.onclick = () => window.__zdroj?.setSyntheticPose(b.dataset.pose || null); });
   el.querySelector('[data-act=request]').onclick = () => sim.requestFull(pat(), 'Dispečerka Jana Nováková', 'ověření alertu');
-  el.querySelector('[data-act=reset]').onclick = () => { if (confirm('Vynulovat simulaci ve všech oknech?')) sim.reset(); };
+  el.querySelector('[data-act=reset]').onclick = () => { if (confirm(sim.naServeru ? 'Vynulovat simulaci pro všechny (dispečink, rodina i provoz na všech zařízeních)?' : 'Vynulovat simulaci ve všech oknech?')) sim.reset(); };
   const night = el.querySelector('.night'); night.checked = sim.state.night; night.onchange = () => sim.setNight(night.checked);
-  sim.subscribe((s) => { night.checked = s.night; const d = s.lastDropped; el.querySelector('#simDropped').textContent = d && Date.now() - d.at < 20000 ? `Událost „${KINDS[d.kind]?.label}“ se nezapsala: ${d.reason} (nastavení poskytovatele).` : ''; });
+  sim.subscribe((s) => { night.checked = s.night;
+    el.querySelector('#simKde').textContent = sim.naServeru ? 'Stav drží server: změna na jednom zařízení se u ostatních přihlášených projeví do 2 s.' : 'Bez přihlášení běží simulace jen v tomhle prohlížeči (okna vedle sebe se vidí).';
+    const d = s.lastDropped; el.querySelector('#simDropped').textContent = d && Date.now() - d.at < 20000 ? `Událost „${KINDS[d.kind]?.label}“ se nezapsala: ${d.reason} (nastavení poskytovatele).` : ''; });
   el.classList.add('min');
   return { patient: pat, select: (id) => { el.querySelector('.pat').value = id; } };
 }

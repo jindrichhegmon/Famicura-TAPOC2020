@@ -478,3 +478,33 @@ test('rodina: po deseti chybných přihlášeních z jedné adresy se čeká', a
   for (let i = 0; i < 10; i++) await h(req('POST', '/api/rodina/login', { ip: '1.2.3.4', body: { telefon: '777123456', heslo: 'x' } }));
   assert.equal((await h(req('POST', '/api/rodina/login', { ip: '1.2.3.4', body: { telefon: '777123456', heslo: 'x' } }))).status, 429);
 });
+
+test('prototyp: stav na serveru vidí poskytovatel i rodina, bez přihlášení ne', async () => {
+  const { h, uzivatele } = handler();
+  assert.equal((await h(req('GET', '/api/proto/stav'))).status, 401);
+  const r1 = await h(req('GET', '/api/proto/stav', { cookies: cookie() }));
+  assert.equal(r1.status, 200);
+  const b1 = await r1.json();
+  assert.equal(b1.zmena, true); assert.equal(b1.state.patients[0].id, 'tapoc2020');
+  const same = await (await h(req('GET', `/api/proto/stav?v=${b1.v}`, { cookies: cookie() }))).json();
+  assert.equal(same.zmena, false); assert.equal(same.state, undefined);
+
+  // rodina na telefonu nastaví rozostření…
+  const { token } = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const akt = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'tajne-heslo-1' } }));
+  const fam = akt.headers.get('set-cookie').split(';')[0];
+  const r2 = await h(req('POST', '/api/proto/akce', { cookies: fam, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'blur' }] } }));
+  assert.equal(r2.status, 200);
+  const b2 = await r2.json();
+  assert.equal(b2.state.patients[0].consent.den, 'blur');
+  assert.ok(b2.v > b1.v);
+  // …a dispečink na jiném počítači to při dalším dotazu dostane
+  const b3 = await (await h(req('GET', `/api/proto/stav?v=${b1.v}`, { cookies: cookie() }))).json();
+  assert.equal(b3.zmena, true); assert.equal(b3.state.patients[0].consent.den, 'blur');
+  assert.match(b3.state.events[0].text, /rozostření/);
+
+  const bad = await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'emit', args: ['tapoc2020', 'neznámý'] } }));
+  assert.equal(bad.status, 400);
+  const bad2 = await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'reset' } }));
+  assert.equal(bad2.status, 400);
+});

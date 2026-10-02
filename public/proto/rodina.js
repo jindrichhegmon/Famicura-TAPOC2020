@@ -66,6 +66,7 @@ function setupPatients() {
 /** Přihlášený uživatel rodiny (nebo poskytovatel z hlavní aplikace). */
 function boot(ja) {
   hideGate();
+  sim.pripojit();   // po přihlášení: stav ze serveru, společný s dispečinkem
   if (ja.role === 'rodina') {
     for (const k of ja.kamery) sim.ensurePatient({ id: k.id, name: k.name });
     FAMILY = ja.kamery.map((k) => k.id);
@@ -247,10 +248,11 @@ function render() {
   }).join('') || '<li class="muted">Zatím nic.</li>');
 }
 
-sim.subscribe((s) => {
+sim.subscribe((s, info) => {
   for (const n of s.notifications) {
     if (seen.has(n.id)) continue; seen.add(n.id);
-    if (n.patientId !== patientId || n.ack) continue;
+    // celý stav odjinud (první načtení ze serveru): nic z toho není nové
+    if (info?.nahrazeno || n.patientId !== patientId || n.ack) continue;
     const text = n.kind === 'request' ? 'Poskytovatel žádá o plný obraz' : n.kind === 'emergency' ? `${n.who}: nouzový přístup k obrazu` : `${sim.patient(n.patientId).name}: ${KINDS[n.kind]?.label || n.kind}`;
     toast(`🔔 ${text}`, n.level === 'crit' ? 'crit' : 'info');
     if (n.level === 'crit' && navigator.vibrate) navigator.vibrate([200, 100, 200]);
