@@ -10,12 +10,12 @@
 <link rel="apple-touch-icon" href="/proto/ikony/famicura-180.png">
 <link rel="stylesheet" href="/proto/proto.css">
 </head>
-<body>
+<body class="pending">
 <div class="gate hide" id="gate">
   <div class="gatecard">
     <img class="gatelogo" src="/proto/ikony/famicura-192.png" alt="" width="72" height="72">
     <h1>Famicura · Dispečink</h1>
-    <p class="gatesub">Přihlaste se heslem Famicura (poskytovatel). Po přihlášení je obraz z kamery k dispozici.</p>
+    <p class="gatesub" id="gateSub">Přihlaste se heslem Famicura (poskytovatel). Po přihlášení je obraz z kamery k dispozici.</p>
     <form id="gLogin" class="gateform" autocomplete="on">
       <label>Heslo Famicura<input type="password" id="gPw" name="password" autocomplete="current-password" required autofocus></label>
       <p class="gateerr hide" id="gLoginErr"></p>
@@ -26,8 +26,11 @@
 </div>
 <div class="desk">
   <div class="deskbar">
-    <div><h1>Famicura · Dispečink</h1><div class="small"><span id="hlavicka"></span> <button class="sm sec" id="hlUprav" title="Nastavení: údaje poskytovatele a dispečinku, které se zobrazují v záhlaví, v detailu kamery i v aplikaci rodiny"><span class="ico">⚙</span> Nastavení</button> <button class="sm sec" id="napovedaBtn" title="Nápověda a asistent"><span class="ico">?</span> Nápověda</button></div></div>
-    <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
+    <div><h1>Famicura · Dispečink</h1><div class="small" id="hlavicka"></div></div>
+    <div class="right">
+      <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
+      <div class="hbtn"><button class="sm sec" id="napovedaBtn" title="Nápověda a asistent"><span class="ico">?</span> Nápověda</button><button class="sm sec icon" id="hlUprav" title="Nastavení poskytovatele a dispečinku" aria-label="Nastavení"><span class="ico">⚙</span></button></div>
+    </div>
   </div>
   <div id="critBanner"></div>
   <div class="cm ovl hide" id="nastaveni" role="dialog" aria-labelledby="nastaveniT">

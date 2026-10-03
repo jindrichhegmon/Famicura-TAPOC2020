@@ -39,6 +39,7 @@ const { createGo2rtc } = await import('./src/go2rtc.mjs');
 const { createStore } = await import('./src/store.mjs');
 const { BEZPECNOSTNI_HLAVICKY } = await import('./src/csp.mjs');
 const { createCameraEvents } = await import('./src/udalosti-kamer.mjs');
+const { kdo } = await import('./src/session.mjs');
 const store = createStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 // The camera's own detections: the server subscribes to each camera in
@@ -88,6 +89,9 @@ const server = http.createServer(async (req, res) => {
     if (mr) { res.writeHead(302, { Location: `/proto/rodina.html?pozvanka=${mr[1]}`, 'Cache-Control': 'no-store' }); res.end(); return; }
     let file = path.join(PUBLIC, rel === '' ? 'index.html' : rel);
     if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
+    // Dispečink a provoz jen po přihlášení poskytovatele: bez něj jde místo
+    // stránky přihlášení (stejná adresa, po přihlášení se načte znovu).
+    if (/^proto[/\\](dispecink|provoz)\.html$/.test(rel) && kdo(req.headers)?.role !== 'admin') file = path.join(PUBLIC, 'proto', 'prihlaseni.html');
     // A folder (/proto/) serves its index.html, like any web server.
     if (await stat(file).then((st) => st.isDirectory(), () => false)) file = path.join(file, 'index.html');
     const data = await readFile(file);

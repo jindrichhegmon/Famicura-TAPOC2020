@@ -70,7 +70,11 @@ th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;l
 .desk{padding:0 16px 120px}
 .deskbar{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:10px 16px;margin:0 -16px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .deskbar h1{color:#fff}
-.deskbar .stats{display:flex;gap:14px;font-size:.85rem}
+.deskbar .stats{display:flex;gap:14px;font-size:.85rem;flex-wrap:wrap}
+.deskbar .right{display:flex;align-items:center;gap:16px;margin-left:auto;flex-wrap:wrap}
+.deskbar .hbtn{display:flex;gap:6px;align-items:center}
+.deskbar button.icon{font-size:1.25rem;padding:2px 10px;min-width:40px}
+.deskbar button.icon .ico{font-size:1.25rem}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start}
 @media (max-width:980px){.cols{grid-template-columns:1fr}}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
@@ -333,8 +337,9 @@ body.withAuth .cm.ovl{padding-top:72px}
 .cm .naptema summary{cursor:pointer;padding:11px 14px;font-weight:600;list-style:none;display:flex;gap:9px;align-items:center;font-size:13.5px}
 .cm .naptema summary::before{content:'▸';color:var(--brand)}.cm .naptema[open] summary::before{content:'▾'}
 .cm .naptema .tx{margin:0;padding:0 14px 12px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
-.cm .naptema figure{margin:0 14px 14px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
-.cm .naptema figure img{display:block;width:100%;height:auto}
+.cm .naptema figure{margin:0 14px 14px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);display:inline-block;max-width:calc(100% - 28px);vertical-align:top}
+.cm .naptema figure img{display:block;max-width:100%;max-height:440px;width:auto;height:auto}
+.cm .naptema figcaption{max-width:460px}
 .cm .naptema figcaption{font-size:12px;color:var(--ink3);padding:6px 10px;border-top:1px solid var(--line2)}
 /* asistent: chat */
 .cm .chatlog{display:flex;flex-direction:column;gap:8px;min-height:280px;max-height:46vh;overflow:auto;padding:4px 2px}
@@ -346,3 +351,14 @@ body.withAuth .cm.ovl{padding-top:72px}
 .cm .otazky{display:flex;flex-wrap:wrap;gap:6px}.cm .otazky button{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink2);min-height:0}
 .cm .otazky button:hover{background:var(--brand-soft);color:var(--brand-dark)}
 .deskbar .ico{font-style:normal;font-size:1.05rem;line-height:1}
+
+/* poznámky dispečinku v detailu kamery */
+.notes{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.notes textarea{width:100%;min-height:64px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:.95rem;resize:vertical}
+.notes ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.notes li{background:var(--soft);border-radius:10px;padding:8px 10px;font-size:.92rem;line-height:1.4}
+.notes li .when{color:var(--muted);font-size:.8rem;display:block}
+.badge.note{background:#fff1cf;color:#6b4b00}
+
+/* dispečink: bez přihlášení poskytovatele se nic neukáže (server posílá přihlášení, stránka si to ještě ověří) */
+body.pending .desk,body.pending #critBanner{visibility:hidden}

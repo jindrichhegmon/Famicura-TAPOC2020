@@ -37,7 +37,9 @@ function otevriNastaveni() {
 $('hlUprav').onclick = otevriNastaveni;
 $('hlZrusit').onclick = () => $('nastaveni').classList.add('hide');
 $('nastaveniZavrit').onclick = () => $('nastaveni').classList.add('hide');
-$('nastaveni').addEventListener('click', (e) => { if (e.target === $('nastaveni')) $('nastaveni').classList.add('hide'); });
+// Zavírá se jen tlačítky: klepnutí vedle okna ani Enter v poli okno nezavřou, uloží jen tlačítko Uložit.
+$('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); const pole = [...$('hlForm').querySelectorAll('input')]; const i = pole.indexOf(e.target); (pole[i + 1] || $('hlForm').querySelector('button[type=submit]')).focus(); } });
+$('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); $('nastaveni').classList.add('hide'); } });
 $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
@@ -97,9 +99,10 @@ let detailUnreg = null;
  * hlavní aplikaci. Po přihlášení se stránka načte znovu: obraz, stav ze
  * serveru i účty rodiny už jdou s cookie. */
 (async () => {
-  let status = 0;
-  try { status = (await fetch('/api/devices', { cache: 'no-store' })).status; } catch { return; }
-  if (status !== 401) return;
+  let role = null;
+  try { const r = await fetch('/api/rodina/ja', { cache: 'no-store' }); if (r.ok) role = (await r.json()).role; } catch { /* server away: stránka zůstane schovaná a gate ukáže chybu při pokusu o přihlášení */ }
+  if (role === 'admin') { document.body.classList.remove('pending'); return; }
+  if (role === 'rodina') $('gateSub').textContent = 'Jste přihlášen(a) jako rodina. Dispečink je jen pro poskytovatele: přihlaste se heslem Famicura.';
   $('gate').classList.remove('hide');
   setTimeout(() => $('gPw').focus(), 50);
   $('gLogin').onsubmit = async (e) => {
@@ -203,7 +206,7 @@ function renderTiles() {
     t.className = 'tile ' + st + (selected === p.id ? ' sel' : '');
     t.querySelector('.tag').textContent = p.offline ? 'kamera nedostupná' : { none: 'bez obrazu', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' }[tileMode(p.id)] || '';
     const b = t.querySelector('.st-badge'); b.textContent = { crit: 'kritické', warn: 'varování', off: 'offline', klid: 'klid' }[st]; b.className = 'badge st-badge ' + (st === 'klid' ? 'ok' : st === 'off' ? 'tech' : st);
-    const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent');
+    const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent' && e.kind !== 'poznamka');
     t.querySelector('.st').textContent = last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí';
   });
   $('nPat').textContent = s.patients.filter(visible).length;
@@ -257,6 +260,8 @@ function renderDetail(rebuild = false) {
       <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
       <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
       <div id="dusers"></div>
+      <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; zapisují se do logu kamery, rodina je nevidí</span></h3>
+      <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div><ul id="dnotes"></ul></div>
       <h3 style="margin-top:12px">Sledování a nahrávání <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí</span></h3>
       <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td></tr>`).join('')}</tbody></table>
       <h3 style="margin-top:12px">Historie</h3><ul class="list" id="dhist"></ul>`;
@@ -270,6 +275,9 @@ function renderDetail(rebuild = false) {
     d.querySelector('#closeD').onclick = () => { selected = null; renderDetail(); renderTiles(); };
     renderUzivatele(p);
     const ovl = d.querySelector('#ovl'); ovl.checked = overlay; ovl.onchange = () => { overlay = ovl.checked; };
+    const pridej = async () => { const ta = d.querySelector('#dnote'); const t = ta.value.trim(); if (!t) { ta.focus(); return; } ta.disabled = true; await sim.poznamka(p.id, t, ME()); ta.value = ''; ta.disabled = false; ta.focus(); toast('Poznámka zapsána.'); };
+    d.querySelector('#dnoteAdd').onclick = pridej;
+    d.querySelector('#dnote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); pridej(); } });
   }
   const s = sim.state;
   const mode = tileMode(p.id);
@@ -298,9 +306,12 @@ function renderDetail(rebuild = false) {
     d.querySelector('#emergYes')?.addEventListener('click', () => { emergOpen = false; sim.emergencyAccess(p.id, `Dispečerka ${ME()}`); });
     d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME()}`));
   }
+  d.querySelector('#dnoteKdo').textContent = `zapíše se jako ${ME()}, ${new Date().toLocaleDateString('cs-CZ')}`;
+  setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];
-    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : '<span class="badge">souhlas</span> '}${esc(eventText(e))}${e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}</span></li>`;
+    const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
+    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}</span></li>`;
   }).join(''));
 }
 

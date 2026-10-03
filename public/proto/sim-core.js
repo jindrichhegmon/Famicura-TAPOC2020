@@ -293,6 +293,15 @@ const akce = {
   setWatching(s, now, patientId, who, on) { patientId = pid(patientId); if (bool(on)) s.watching[patientId] = { who: str(who, 80, 'who'), since: now }; else delete s.watching[patientId]; return {}; },
   setKlid(s, now, patientId, until) { patientId = pid(patientId); until = cas(until, 'until'); if (until) s.klid[patientId] = until; else delete s.klid[patientId]; return {}; },
   setNight(s, now, on) { s.night = bool(on); return {}; },
+  /** Poznámka dispečera ke kameře: do logu jako událost (kind 'poznamka') s časem a jménem; rodina ji v historii nevidí. */
+  poznamka(s, now, patientId, text, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    text = str(text, 1000, 'text').trim(); if (!text) throw chyba('Poznámka je prázdná.');
+    const ev = { id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink', text, note: '' };
+    s.events.unshift(ev);
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: ev };
+  },
   setPoskytovatel(s, now, p) {
     if (!p || typeof p !== 'object') throw chyba('Chybí údaje poskytovatele.');
     const n = { ...poskytovatel(s) };

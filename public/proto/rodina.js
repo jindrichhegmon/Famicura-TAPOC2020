@@ -247,7 +247,7 @@ function render() {
   $('pstatus').className = 'badge hide ' + (p.offline ? 'tech' : worst || 'ok');
   $('avatar').textContent = p.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const hero = $('hero');
-  const lastEv = s.events.find((e) => e.patientId === patientId && e.kind !== 'consent');
+  const lastEv = s.events.find((e) => e.patientId === patientId && e.kind !== 'consent' && e.kind !== 'poznamka');
   const heroKind = p.offline ? 'off' : worst || 'ok';
   hero.className = 'hero-' + heroKind;
   $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁' }[heroKind];
@@ -284,7 +284,8 @@ function render() {
   if (setHtml($('requests'), reqHtml)) $('requests').querySelectorAll('[data-req]').forEach((b) => { b.onclick = () => sim.answerRequest(b.dataset.req, b.dataset.a === 'deny' ? 'deny' : b.dataset.a === 'forever' ? 'forever' : 'minutes', 15); });
 
   // history
-  const rows = s.events.filter((e) => e.patientId === patientId).filter((e) => {
+  // poznámky dispečinku jsou interní pro poskytovatele, rodina je v historii nevidí
+  const rows = s.events.filter((e) => e.patientId === patientId && e.kind !== 'poznamka').filter((e) => {
     if (filter === 'all') return true;
     if (filter === 'consent') return e.kind === 'consent';
     if (filter === 'crit') return KINDS[e.kind]?.level === 'crit';

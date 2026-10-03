@@ -157,3 +157,13 @@ test('jádro: údaje poskytovatele na jednom místě, s výchozími hodnotami pr
   assert.throws(() => proved(s, 'setPoskytovatel', [{ eskalaceMin: 0 }]), (e) => e.status === 400);
   assert.throws(() => proved(s, 'setPoskytovatel', [{ eskalaceMin: 'x' }]), (e) => e.status === 400);
 });
+
+test('jádro: poznámka dispečinku je událost kamery s časem a jménem, prázdná se odmítne', () => {
+  const s = seed(0);
+  const { vysledek } = proved(s, 'poznamka', ['tapoc2020', '  Volala dcera, klient v pořádku. ', 'Eva Malá'], 5000);
+  assert.equal(vysledek.kind, 'poznamka'); assert.equal(vysledek.at, 5000); assert.equal(vysledek.by, 'Eva Malá'); assert.equal(vysledek.text, 'Volala dcera, klient v pořádku.');
+  assert.equal(s.events[0].id, vysledek.id);
+  assert.equal(s.notifications.length, 0, 'poznámka nenotifikuje');
+  assert.throws(() => proved(s, 'poznamka', ['tapoc2020', '   ', 'x']), (e) => e.status === 400);
+  assert.throws(() => proved(s, 'poznamka', ['tapoc2020', 'a'.repeat(1001), 'x']), (e) => e.status === 400);
+});

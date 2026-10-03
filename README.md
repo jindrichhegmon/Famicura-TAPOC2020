@@ -217,7 +217,12 @@ přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery
 připojené k serveru, demo přidá fiktivní pacienty; volba se pamatuje
 v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne; bez
 přihlášení se dispečink přihlašuje heslem Famicura rovnou ve svém okně
-a po přihlášení naběhne s obrazem kamery; **⚙ Nastavení** v záhlaví
+a po přihlášení naběhne s obrazem kamery; bez přihlášení poskytovatele
+server místo `dispecink.html` a `provoz.html` pošle `prihlaseni.html`
+(žádná aplikace ani ukázková data); u každé kamery jsou **poznámky
+dispečinku** (datum, čas a jméno se doplní samy, zapisují se do logu
+kamery jako události a jsou vidět i samostatně; rodina je nevidí);
+**⚙** vpravo nahoře
 drží všechny údaje poskytovatele a dispečinku, které se kdekoli
 zobrazují (název služby, telefon, e-mail, dispečer, směna, záloha
 s telefonem, vedoucí s telefonem, po kolika minutách eskaluje nepřevzatý

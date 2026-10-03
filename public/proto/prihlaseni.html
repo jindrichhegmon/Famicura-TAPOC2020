@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Famicura · Přihlášení poskytovatele</title>
+<link rel="icon" href="/proto/ikony/famicura-32.png">
+<link rel="apple-touch-icon" href="/proto/ikony/famicura-180.png">
+<link rel="stylesheet" href="/proto/proto.css">
+</head>
+<body>
+<!-- Dispečink a provoz jsou jen pro přihlášeného poskytovatele: bez přihlášení
+     server místo nich pošle tuhle stránku (server.mjs). Po přihlášení se
+     původní adresa načte znovu. -->
+<div class="gate" id="gate">
+  <div class="gatecard">
+    <img class="gatelogo" src="/proto/ikony/famicura-192.png" alt="" width="72" height="72">
+    <h1>Famicura · Poskytovatel</h1>
+    <p class="gatesub" id="gateSub">Dispečink a provoz jsou jen pro přihlášeného poskytovatele. Přihlaste se heslem Famicura.</p>
+    <form id="gLogin" class="gateform" autocomplete="on">
+      <label>Heslo Famicura<input type="password" id="gPw" name="password" autocomplete="current-password" required autofocus></label>
+      <p class="gateerr hide" id="gLoginErr"></p>
+      <button class="btn wide" type="submit">Přihlásit se</button>
+      <p class="hint">Stejné heslo jako do hlavní aplikace. Přihlášení platí 12 hodin pro dispečink, provoz i hlavní aplikaci v tomhle prohlížeči. Rodina používá vlastní aplikaci: <a href="/proto/rodina.html">aplikace rodiny</a>.</p>
+    </form>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+$('gLogin').onsubmit = async (e) => {
+  e.preventDefault();
+  const err = $('gLoginErr'); err.classList.add('hide');
+  const b = e.target.querySelector('button'); b.disabled = true;
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: $('gPw').value }) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { err.textContent = body.error || `Chyba (${r.status})`; err.classList.remove('hide'); b.disabled = false; return; }
+    location.reload();
+  } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); b.disabled = false; }
+};
+</script>
+</body>
+</html>

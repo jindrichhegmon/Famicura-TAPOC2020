@@ -92,6 +92,7 @@ export const sim = {
   get poskytovatel() { return poskytovatel(state); },
   poskytovatelPro(p) { return poskytovatelPro(state, p); },
   setPoskytovatel(p) { return run('setPoskytovatel', [p]); },
+  poznamka(patientId, text, by) { return run('poznamka', [patientId, text, by]); },
   pripojit,
   /** f(state, info): info.nahrazeno = celý stav přišel odjinud (první načtení ze serveru), ne nová událost. */
   subscribe(f) { subs.add(f); f(state); return () => subs.delete(f); },
@@ -155,7 +156,7 @@ export const fmtT = (ms) => new Date(ms).toLocaleTimeString('cs-CZ', { hour: '2-
 export const fmtDT = (ms) => new Date(ms).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export function eventText(e) {
-  if (e.kind === 'consent') return e.text;
+  if (e.kind === 'consent' || e.kind === 'poznamka') return e.text;
   const k = KINDS[e.kind];
   return e.text || (k ? k.label : e.kind);
 }

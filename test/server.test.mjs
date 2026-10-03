@@ -107,3 +107,18 @@ test('HLS: master a díly procházejí, cizí názvy a odkazy ne', async () => {
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/stream.mp4?deviceId=cizi`, { headers: { cookie: c } })).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/stream.mp4?deviceId=../x`, { headers: { cookie: c } })).status, 400);
 });
+
+test('dispečink a provoz jen po přihlášení: bez cookie přijde stránka přihlášení, s cookie aplikace; rodina zůstává otevřená', async () => {
+  for (const p of ['/proto/dispecink.html', '/proto/provoz.html']) {
+    const r = await fetch(`http://127.0.0.1:${port}${p}`);
+    assert.equal(r.status, 200);
+    const t = await r.text();
+    assert.match(t, /Přihlášení poskytovatele/, p);
+    assert.doesNotMatch(t, /id="tiles"|id="fleet"/, p + ': bez přihlášení žádná aplikace');
+  }
+  const c = await cookie();
+  const d = await (await fetch(`http://127.0.0.1:${port}/proto/dispecink.html`, { headers: { cookie: c } })).text();
+  assert.match(d, /id="tiles"/);
+  assert.doesNotMatch(d, /Přihlášení poskytovatele/);
+  assert.match(await (await fetch(`http://127.0.0.1:${port}/proto/rodina.html`)).text(), /id="gAktivace"/, 'rodina má vlastní přihlášení a ukázku');
+});

@@ -10,6 +10,9 @@ test('nápověda: asistent najde téma podle klíčových slov, i bez diakritiky
   assert.equal(odpovez('jak založit účet rodině a poslat SMS').tema, 'rodina');
   assert.equal(odpovez('kde upravím záhlaví a jméno dispečera').tema, 'poskytovatel');
   assert.equal(odpovez('nejde obraz, vidím náhradní scénu').tema, 'obraz');
+  assert.equal(odpovez('kam zapsat poznámku ke kameře').tema, 'poznamky');
+  assert.equal(odpovez('co je nového').tema, 'novinky');
+  assert.equal(odpovez('kde je ozubené kolečko s nastavením').tema, 'poskytovatel');
   assert.equal(odpovez('dobrý den').tema, null);
   assert.match(odpovez('xyzzy').text, /Témata:/);
   assert.ok(TEMATA.length >= 10);
