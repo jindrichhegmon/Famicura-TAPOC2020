@@ -116,7 +116,7 @@ export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev :
 export function seed(now = Date.now()) {
   const patients = [
     { id: 'tapoc2020', name: 'TAPO Test', place: 'Kancelář Famicura (skutečná kamera)', provider: 'Pečovatelská služba Kladno', real: true,
-      consent: { den: 'full', noc: 'full', nouze: true, denOd: DEN_OD, nocOd: NOC_OD }, watch: defaultWatch(), night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
+      consent: { den: 'full', noc: 'full', nouze: true, denOd: DEN_OD, nocOd: NOC_OD }, watch: defaultWatch(), night: false, offline: false, note: '' },
     ...FAKE.map(([id, name, place, provider], i) => ({ id, name, place, provider, real: false,
       consent: { den: ['skeleton', 'blur', 'none', 'full', 'skeleton', 'skeleton', 'blur'][i], noc: ['skeleton', 'skeleton', 'none', 'skeleton', 'none', 'skeleton', 'skeleton'][i], nouze: i % 3 !== 2, denOd: DEN_OD, nocOd: NOC_OD },
       watch: defaultWatch(), night: false, offline: i === 5, note: '' })),
@@ -293,6 +293,16 @@ const akce = {
   setWatching(s, now, patientId, who, on) { patientId = pid(patientId); if (bool(on)) s.watching[patientId] = { who: str(who, 80, 'who'), since: now }; else delete s.watching[patientId]; return {}; },
   setKlid(s, now, patientId, until) { patientId = pid(patientId); until = cas(until, 'until'); if (until) s.klid[patientId] = until; else delete s.klid[patientId]; return {}; },
   setNight(s, now, on) { s.night = bool(on); return {}; },
+  /** Trvalá poznámka ke klientovi (zdravotní stav, co dělat při alertu): pod obrazem v detailu; změna se zapíše do logu. */
+  setNote(s, now, patientId, text, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    text = str(text, 300, 'text').trim();
+    if ((p.note || '') === text) return { zmena: false };
+    p.note = text;
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink', text: text ? `Poznámka ke klientovi: ${text}` : 'Poznámka ke klientovi smazána.', note: '' });
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: text };
+  },
   /** Poznámka dispečera ke kameře: do logu jako událost (kind 'poznamka') s časem a jménem; rodina ji v historii nevidí. */
   poznamka(s, now, patientId, text, by) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };

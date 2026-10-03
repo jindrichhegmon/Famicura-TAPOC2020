@@ -257,7 +257,8 @@ function renderDetail(rebuild = false) {
       <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
       <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
       <div class="row" id="dbtn"></div>
-      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
+      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
+        <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
       <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
       <div id="dusers"></div>
       <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; zapisují se do logu kamery, rodina je nevidí</span></h3>
@@ -275,6 +276,10 @@ function renderDetail(rebuild = false) {
     d.querySelector('#closeD').onclick = () => { selected = null; renderDetail(); renderTiles(); };
     renderUzivatele(p);
     const ovl = d.querySelector('#ovl'); ovl.checked = overlay; ovl.onchange = () => { overlay = ovl.checked; };
+    const tf = d.querySelector('#dtrvalaForm');
+    d.querySelector('#dtrvalaEdit').onclick = () => { d.querySelector('#dtrvalaText').value = sim.patient(p.id)?.note || ''; tf.classList.remove('hide'); d.querySelector('#dtrvalaText').focus(); };
+    d.querySelector('#dtrvalaCancel').onclick = () => tf.classList.add('hide');
+    d.querySelector('#dtrvalaSave').onclick = async () => { await sim.setNote(p.id, d.querySelector('#dtrvalaText').value, ME()); tf.classList.add('hide'); toast('Poznámka ke klientovi uložena.'); };
     const pridej = async () => { const ta = d.querySelector('#dnote'); const t = ta.value.trim(); if (!t) { ta.focus(); return; } ta.disabled = true; await sim.poznamka(p.id, t, ME()); ta.value = ''; ta.disabled = false; ta.focus(); toast('Poznámka zapsána.'); };
     d.querySelector('#dnoteAdd').onclick = pridej;
     d.querySelector('#dnote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); pridej(); } });
@@ -307,6 +312,7 @@ function renderDetail(rebuild = false) {
     d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME()}`));
   }
   d.querySelector('#dnoteKdo').textContent = `zapíše se jako ${ME()}, ${new Date().toLocaleDateString('cs-CZ')}`;
+  d.querySelector('#dtrvala').textContent = p.note || 'zatím žádná (tlačítko Upravit)';
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];

@@ -125,15 +125,16 @@ $('pwForm').onsubmit = async (e) => {
 
 (async () => {
   if (params.get('ukazka') === '1') { startDemo(); return; }
+  // Platná pozvánka má přednost před čímkoli přihlášeným v tomhle prohlížeči
+  // (jiný člen rodiny, nebo poskytovatel, který odkaz zkouší na svém počítači):
+  // nový člen si musí zvolit heslo. Aktivace pak přihlásí jeho.
+  const token = params.get('pozvanka');
+  const pozvanka = token ? await api('/api/rodina/pozvanka?token=' + encodeURIComponent(token)).catch(() => ({ platna: false })) : null;
+  if (pozvanka?.platna) { $('gWelcome').textContent = `Vítejte, ${pozvanka.jmeno}. Heslo není v SMS: zvolte si ho tady, budete se jím přihlašovat spolu s telefonem.`; showGate('aktivace'); return; }
   // Už přihlášený (třeba druhé klepnutí na odkaz z SMS) jde rovnou dovnitř.
   try { boot(await api('/api/rodina/ja')); return; } catch { /* nepřihlášen */ }
-  const token = params.get('pozvanka');
-  if (token) {
-    const p = await api('/api/rodina/pozvanka?token=' + encodeURIComponent(token)).catch(() => ({ platna: false }));
-    if (p.platna) { $('gWelcome').textContent = `Vítejte, ${p.jmeno}. Zvolte si heslo, kterým se budete přihlašovat.`; showGate('aktivace'); return; }
-    // Použitý nebo propadlý odkaz: heslo už existuje, stačí se přihlásit.
-    showErr('gLoginInfo', 'Tenhle odkaz už byl použitý, heslo máte nastavené. Přihlaste se telefonem a heslem. Když heslo nevíte, požádejte poskytovatele o novou pozvánku.');
-  }
+  // Použitý nebo propadlý odkaz: heslo už existuje, stačí se přihlásit.
+  if (token) showErr('gLoginInfo', 'Tenhle odkaz už byl použitý, heslo máte nastavené. Přihlaste se telefonem a heslem. Když heslo nevíte, požádejte poskytovatele o novou pozvánku.');
   showGate('login');
 })();
 

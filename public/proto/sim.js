@@ -93,6 +93,7 @@ export const sim = {
   poskytovatelPro(p) { return poskytovatelPro(state, p); },
   setPoskytovatel(p) { return run('setPoskytovatel', [p]); },
   poznamka(patientId, text, by) { return run('poznamka', [patientId, text, by]); },
+  setNote(patientId, text, by) { return run('setNote', [patientId, text, by]); },
   pripojit,
   /** f(state, info): info.nahrazeno = celý stav přišel odjinud (první načtení ze serveru), ne nová událost. */
   subscribe(f) { subs.add(f); f(state); return () => subs.delete(f); },

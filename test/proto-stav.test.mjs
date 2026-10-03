@@ -167,3 +167,14 @@ test('jádro: poznámka dispečinku je událost kamery s časem a jménem, práz
   assert.throws(() => proved(s, 'poznamka', ['tapoc2020', '   ', 'x']), (e) => e.status === 400);
   assert.throws(() => proved(s, 'poznamka', ['tapoc2020', 'a'.repeat(1001), 'x']), (e) => e.status === 400);
 });
+
+test('jádro: trvalá poznámka ke klientovi se ukládá a změna jde do logu; beze změny nic', () => {
+  const s = seed(0);
+  assert.equal(s.patients[0].note, '', 'skutečná kamera začíná bez ukázkové poznámky');
+  const r = proved(s, 'setNote', ['tapoc2020', ' Klient chodí s hůlkou. ', 'Eva Malá'], 7000);
+  assert.equal(r.vysledek, 'Klient chodí s hůlkou.'); assert.equal(s.patients[0].note, 'Klient chodí s hůlkou.');
+  assert.match(s.events[0].text, /^Poznámka ke klientovi: Klient/); assert.equal(s.events[0].by, 'Eva Malá');
+  assert.equal(proved(s, 'setNote', ['tapoc2020', 'Klient chodí s hůlkou.', 'Eva Malá']).zmena, false);
+  proved(s, 'setNote', ['tapoc2020', '', 'Eva Malá']);
+  assert.equal(s.patients[0].note, ''); assert.match(s.events[0].text, /smazána/);
+});

@@ -219,8 +219,9 @@ v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne; bez
 přihlášení se dispečink přihlašuje heslem Famicura rovnou ve svém okně
 a po přihlášení naběhne s obrazem kamery; bez přihlášení poskytovatele
 server místo `dispecink.html` a `provoz.html` pošle `prihlaseni.html`
-(žádná aplikace ani ukázková data); u každé kamery jsou **poznámky
-dispečinku** (datum, čas a jméno se doplní samy, zapisují se do logu
+(žádná aplikace ani ukázková data); pod obrazem v detailu je trvalá
+**Poznámka ke klientovi** (upravuje poskytovatel, změna jde do logu);
+u každé kamery jsou **poznámky dispečinku** (datum, čas a jméno se doplní samy, zapisují se do logu
 kamery jako události a jsou vidět i samostatně; rodina je nevidí);
 **⚙** vpravo nahoře
 drží všechny údaje poskytovatele a dispečinku, které se kdekoli
@@ -260,6 +261,11 @@ noc a tlačítkem Vynulovat vrátí výchozí stav pro všechny. Prototyp
 nastavení aplikace (plány, sledování, kamery) nemění.
 
 ### Přihlášení rodiny, účty a pozvánka SMS
+
+Heslo v SMS není: rodina si ho zvolí sama po otevření odkazu. Platný odkaz
+z pozvánky má přednost před čímkoli přihlášeným v tom prohlížeči (jiný člen
+rodiny, nebo poskytovatel, který odkaz zkouší u sebe): vždy ukáže volbu
+hesla pro nového člena. Změna hesla: karta Můj účet → Změnit heslo.
 
 Aplikace rodiny je jen pro přihlášené. Princip je z aplikace pacienta Péče
 doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
