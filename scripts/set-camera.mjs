@@ -50,7 +50,7 @@ async function main([akce, id]) {
     return;
   }
   if (akce === 'tenant') {
-    const [, , , tenant, ...misto] = process.argv.slice(0);
+    const [, , , , tenant, ...misto] = process.argv;   // node skript tenant ID TENANT [místo…]
     const t = String(tenant || '').trim().toUpperCase();
     if (!/^[A-Z0-9]{4,16}$/.test(t)) throw new Error('ID tenanta: 4 až 16 písmen a číslic (dbo.Tenants v PeceDomaPlus).');
     const k = nacti(); const kam = k.find((x) => x.id === id);
