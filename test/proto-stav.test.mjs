@@ -146,4 +146,14 @@ test('jádro: údaje poskytovatele na jednom místě, s výchozími hodnotami pr
   assert.throws(() => proved(s, 'setPoskytovatel', [{ dispecer: '   ' }]), (e) => e.status === 400);
   delete s.poskytovatel;
   assert.equal(poskytovatel(s).dispecer, 'Jana Nováková', 'stav uložený před touto verzí dostane výchozí údaje');
+  // eskalace podle nastavení: výchozí 2 min, jde nastavit 1–60
+  const { vysledek: ev } = proved(s, 'emit', ['tapoc2020', 'fall'], 1000);
+  assert.equal(proved(s, 'tick', [], 1000 + 119000).zmena, false);
+  assert.equal(proved(s, 'tick', [], 1000 + 121000).zmena, true); assert.equal(ev.escalated, true);
+  proved(s, 'setPoskytovatel', [{ eskalaceMin: 5 }]);
+  const { vysledek: ev2 } = proved(s, 'emit', ['tapoc2020', 'sos'], 5000);
+  assert.equal(proved(s, 'tick', [], 5000 + 4 * 60000).zmena, false); assert.equal(ev2.escalated, undefined);
+  assert.equal(proved(s, 'tick', [], 5000 + 6 * 60000).zmena, true); assert.equal(ev2.escalated, true);
+  assert.throws(() => proved(s, 'setPoskytovatel', [{ eskalaceMin: 0 }]), (e) => e.status === 400);
+  assert.throws(() => proved(s, 'setPoskytovatel', [{ eskalaceMin: 'x' }]), (e) => e.status === 400);
 });

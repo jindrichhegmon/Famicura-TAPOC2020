@@ -217,12 +217,17 @@ přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery
 připojené k serveru, demo přidá fiktivní pacienty; volba se pamatuje
 v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne; bez
 přihlášení se dispečink přihlašuje heslem Famicura rovnou ve svém okně
-a po přihlášení naběhne s obrazem kamery; údaje poskytovatele (název,
-telefon, dispečer, směna, záloha) se zadávají na jednom místě tlačítkem
-Upravit v záhlaví, ukládají se do sdíleného stavu a stejně je vidí všichni
-dispečeři, detail kamery i aplikace rodiny; jméno dispečera se zapisuje
-k převzetí alertů a k žádostem o obraz; tlačítko **? Nápověda** otevře
-panel s tématy a záložku **Asistent**: ten odpovídá z nápovědy
+a po přihlášení naběhne s obrazem kamery; **⚙ Nastavení** v záhlaví
+drží všechny údaje poskytovatele a dispečinku, které se kdekoli
+zobrazují (název služby, telefon, e-mail, dispečer, směna, záloha
+s telefonem, vedoucí s telefonem, po kolika minutách eskaluje nepřevzatý
+kritický alert) a volbu Jen skutečné / Demo pro ten počítač; ukládají se
+do sdíleného stavu a stejně je vidí všichni dispečeři, detail kamery,
+karta Směna i aplikace rodiny; jméno dispečera se zapisuje k převzetí
+alertů a k žádostem o obraz; karta Směna počítá dobu převzetí a podíl
+planých poplachů z dnešních alertů; **? Nápověda** otevře okno v grafice
+Case manageru s tématy a obrázky obrazovek (`public/proto/napoveda/`,
+pořizuje je test v prohlížeči) a záložku **Asistent**: ten odpovídá z nápovědy
 (`public/proto/napoveda.js`) přímo v prohlížeči, a když je v `.env`
 `ASISTENT_WEBHOOK_URL` + `ASISTENT_WEBHOOK_KLIC` (scénář Make s AI, který
 dostane otázku a text nápovědy a vrátí `{ "odpoved": … }`), odpovídá AI

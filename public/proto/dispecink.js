@@ -7,36 +7,64 @@ const $ = (id) => document.getElementById(id);
  * dispečeři, detail kamery i aplikace rodiny. Jméno dispečera jde do převzetí
  * alertů a do žádostí o obraz. */
 const ME = () => sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'dispecer', 'smena', 'zaloha'];
+const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin'];
+const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
   $('hlavicka').textContent = [h.nazev, h.telefon, h.dispecer, h.smena, h.zaloha ? `záloha: ${h.zaloha}` : ''].filter(Boolean).join(' · ');
+  renderSmena();
 }
-$('hlUprav').onclick = () => {
+/** Karta Směna: text z nastavení a čísla spočítaná z dnešních alertů (ne vymyšlená). */
+function renderSmena() {
+  const h = sim.poskytovatel, s = sim.state;
+  const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
+  const dnesni = s.events.filter((e) => e.at >= dnes.getTime() && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && e.kind !== 'consent');
+  const prevzate = dnesni.filter((e) => e.takenAt);
+  const prum = prevzate.length ? Math.round(prevzate.reduce((a, e) => a + (e.takenAt - e.at), 0) / prevzate.length / 1000) : null;
+  const uzavrene = dnesni.filter((e) => e.state === 'uzavřen' && e.result);
+  const plane = uzavrene.length ? Math.round(100 * uzavrene.filter((e) => e.result === 'planý poplach').length / uzavrene.length) : null;
+  const kam = [h.zaloha ? `zálohu ${h.zaloha}${h.zalohaTelefon ? ' (' + h.zalohaTelefon + ')' : ''}` : 'zálohu', h.vedouci ? `vedoucí ${h.vedouci}${h.vedouciTelefon ? ' (' + h.vedouciTelefon + ')' : ''}` : 'vedoucího'].join(' a ');
+  $('smenaInfo').innerHTML = `${esc(h.dispecer)}${h.smena ? ', ' + esc(h.smena) : ''}. Nepřevzatý kritický alert po <strong>${h.eskalaceMin} min</strong> eskaluje na ${esc(kam)}. `
+    + `Dnes: alertů <strong>${dnesni.length}</strong>, doba převzetí <strong>${prum === null ? '–' : Math.floor(prum / 60) + ':' + String(prum % 60).padStart(2, '0') + ' min'}</strong>, plané poplachy <strong>${plane === null ? '–' : plane + ' %'}</strong>.`;
+}
+function otevriNastaveni() {
   const h = sim.poskytovatel;
-  for (const k of HL_POLE) $('hl' + k[0].toUpperCase() + k.slice(1)).value = h[k] || '';
-  $('hlForm').classList.toggle('hide'); $('hlNazev').focus();
-};
-$('hlZrusit').onclick = () => $('hlForm').classList.add('hide');
+  for (const k of HL_POLE) hlPole(k).value = h[k] ?? '';
+  $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
+  $('hlErr').classList.add('hide');
+  $('nastaveni').classList.remove('hide'); $('hlNazev').focus();
+}
+$('hlUprav').onclick = otevriNastaveni;
+$('hlZrusit').onclick = () => $('nastaveni').classList.add('hide');
+$('nastaveniZavrit').onclick = () => $('nastaveni').classList.add('hide');
+$('nastaveni').addEventListener('click', (e) => { if (e.target === $('nastaveni')) $('nastaveni').classList.add('hide'); });
+$('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  const p = {}; for (const k of HL_POLE) p[k] = $('hl' + k[0].toUpperCase() + k.slice(1)).value.trim();
-  await sim.setPoskytovatel(p);
-  $('hlForm').classList.add('hide'); renderHlavicka(); toast('Údaje poskytovatele uloženy.');
+  const p = {}; for (const k of HL_POLE) p[k] = k === 'eskalaceMin' ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  try {
+    const r = await sim.setPoskytovatel(p);
+    if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }
+  } catch (ex) { $('hlErr').textContent = ex.message; $('hlErr').classList.remove('hide'); return; }
+  $('nastaveni').classList.add('hide'); renderHlavicka(); toast('Nastavení uloženo.');
 };
 renderHlavicka();
 
-/* ---------- nápověda a asistent ---------- */
+/* ---------- nápověda a asistent (grafika Case manageru) ---------- */
 import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
   const nap = $('napoveda');
-  $('napTemata').innerHTML = TEMATA.map((t) => `<details class="naptema" id="nap-${t.id}"><summary>${esc(t.nazev)}</summary><p>${esc(t.text)}</p></details>`).join('');
+  $('napTemata').innerHTML = TEMATA.map((t) => `<details class="naptema" id="nap-${t.id}"><summary>${esc(t.nazev)}</summary><p class="tx">${esc(t.text)}</p>${(t.obrazky || []).map((o) => `<figure><img src="${esc(o.src)}" alt="${esc(o.popis)}" loading="lazy" onerror="this.parentElement.remove()"><figcaption>${esc(o.popis)}</figcaption></figure>`).join('')}</details>`).join('');
   const tab = (name) => { nap.querySelectorAll('.naptabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === name))); $('napTemata').classList.toggle('hide', name !== 'temata'); $('napChat').classList.toggle('hide', name !== 'chat'); if (name === 'chat') $('chatIn').focus(); };
   nap.querySelectorAll('.naptabs button').forEach((b) => { b.onclick = () => tab(b.dataset.tab); });
-  $('napovedaBtn').onclick = () => { nap.classList.toggle('hide'); if (!nap.classList.contains('hide')) tab('temata'); };
+  $('napovedaBtn').onclick = () => { nap.classList.remove('hide'); tab('temata'); };
   $('napZavrit').onclick = () => nap.classList.add('hide');
+  nap.addEventListener('click', (e) => { if (e.target === nap) nap.classList.add('hide'); });
   const log = $('chatLog');
   const zprava = (text, kdo, tema) => { const d = document.createElement('div'); d.className = 'msg ' + kdo; d.innerHTML = (tema ? `<span class="tema">${esc(tema)}</span>` : '') + esc(text); log.append(d); log.scrollTop = log.scrollHeight; return d; };
-  zprava('Dobrý den, jsem asistent dispečinku. Zeptejte se třeba: jak požádat o plný obraz, co je nouzový přístup, jak založit účet rodině.', 'bot');
+  zprava('Dobrý den, jsem asistent dispečinku. Zeptejte se, nebo klepněte na jednu z otázek níže.', 'bot');
+  const PRIKLADY = ['Jak požádat rodinu o plný obraz?', 'Kdy můžu použít nouzový přístup?', 'Jak založit účet rodině?', 'Proč nevidím obraz z kamery?', 'Co dělá tlačítko Převzít?'];
+  $('chatOtazky').innerHTML = PRIKLADY.map((q) => `<button type="button">${esc(q)}</button>`).join('');
+  $('chatOtazky').querySelectorAll('button').forEach((b) => { b.onclick = () => { $('chatIn').value = b.textContent; $('chatForm').requestSubmit(); }; });
   let aiNaServeru = null;   // null = ještě nevíme, false = neodpovídá AI, true = odpovídá AI přes webhook
   $('chatForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -55,7 +83,7 @@ import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
       else { zprava(lokalni.text, 'bot', lokalni.nazev); zprava(`AI teď neodpovídá (${b.error || r.status}), odpověděl jsem z nápovědy.`, 'bot'); }
     } catch { cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev); }
   };
-  // odkaz z asistenta na téma: po kliknutí na odpověď s tématem ho otevře v záložce Témata
+  // klepnutí na název tématu v odpovědi otevře téma v záložce Témata
   log.addEventListener('click', (e) => { const t = e.target.closest('.msg.bot .tema'); if (!t || t.textContent === 'AI') return; const d = [...document.querySelectorAll('.naptema')].find((x) => x.querySelector('summary').textContent === t.textContent); if (d) { tab('temata'); d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } });
 });
 let selected = null;
@@ -101,11 +129,13 @@ const zParam = new URLSearchParams(location.search).get('zdroj');
 let zdroj = ['real', 'demo'].includes(zParam) ? zParam : (localStorage.getItem(ZDROJ_KEY) === 'demo' ? 'demo' : 'real');
 const visible = (p) => zdroj === 'demo' || !!p.real;
 function renderZdroj() { $('zdroj').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj))); }
-$('zdroj').querySelectorAll('button').forEach((b) => { b.onclick = () => {
-  zdroj = b.dataset.z; localStorage.setItem(ZDROJ_KEY, zdroj); renderZdroj();
+function nastavZdroj(z) {
+  zdroj = z; localStorage.setItem(ZDROJ_KEY, zdroj); renderZdroj();
+  $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
   if (selected && !visible(sim.patient(selected))) { selected = null; renderDetail(); }
   panel.refresh(); renderTiles(); renderQueue();
-}; });
+}
+$('zdroj').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 renderZdroj();
 const panel = mountPanel({ role: 'dispecink', patientIds: () => sim.state.patients.filter(visible).map((p) => p.id), onPatient: () => {} });
 
@@ -192,7 +222,7 @@ function bindQueueButtons(root) {
   root.querySelectorAll('[data-solve]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); sim.setAlert(b.dataset.solve, { state: 'řešen', by: ME() }); }; });
   root.querySelectorAll('[data-close]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); const sel = b.parentElement.querySelector('select'); sim.setAlert(b.dataset.close, { state: 'uzavřen', by: ME(), result: sel ? sel.value : 'vyřešeno', closedAt: Date.now() }); }; });
   root.querySelectorAll('[data-open]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); selected = b.dataset.open; panel.select(selected); renderDetail(true); renderTiles(); $('detail').scrollIntoView({ behavior: 'smooth' }); }; });
-  root.querySelectorAll('[data-call]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); toast(`Volám rodině: Petr Novák, 777 123 456 (simulace)`); }; });
+  root.querySelectorAll('[data-call]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); const u = (rodinaUzivatele.get(b.dataset.call) || [])[0]; toast(u ? `Volám rodině: ${u.jmeno}, ${u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3')} (simulace hovoru)` : 'Volám rodině: Petr Novák, 777 123 456 (simulace, účet rodiny ještě není založený)'); }; });
 }
 
 function renderQueue() {
@@ -279,6 +309,7 @@ function renderDetail(rebuild = false) {
  * přihlášený v hlavní aplikaci; rodina dostane odkaz SMS, zvolí si heslo
  * a přihlašuje se telefonem a heslem (src/uzivatele.mjs). */
 let posledniPozvanka = null;   // { uzivatelId, odkaz, text, sms } – ukázat po založení / nové pozvánce
+const rodinaUzivatele = new Map();   // id kamery → účty rodiny ze serveru (pro „Zavolat rodině“)
 async function apiJson(path, init) {
   const r = await fetch(path, init);
   let data = {}; try { data = await r.json(); } catch { /* bez těla */ }
@@ -300,6 +331,7 @@ async function renderUzivatele(p) {
     return;
   }
   const users = data.uzivatele.filter((u) => u.kamery.includes(p.id));
+  rodinaUzivatele.set(p.id, users);
   const inv = posledniPozvanka;
   box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"><span class="grow"><strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
       <button class="sm sec" data-a="pozvanka">Nová pozvánka (nové heslo)</button><button class="sm bad" data-a="smaz">Odebrat</button>

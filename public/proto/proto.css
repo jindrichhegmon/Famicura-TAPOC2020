@@ -296,19 +296,53 @@ body.withAuth .apphead,body.withAuth .deskbar{top:56px}
 .zadostzavrit{display:block;width:100%;margin-top:8px;background:none;border:0;color:var(--blue);font-weight:600;font-size:.9rem;padding:10px;min-height:40px}
 .zadost.vyprselo .zadostcard{animation:none}.zadost.vyprselo .zadostic{animation:none;background:var(--soft)}
 
-/* nápověda a asistent dispečinku: panel vpravo */
-.napoveda{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.18);z-index:40;display:flex;flex-direction:column}
-.naphead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--navy);color:#fff}
-.naphead strong{flex:1}
-.naptabs{flex:0 0 auto;border-color:rgba(255,255,255,.4)}.naptabs button{min-height:30px;padding:4px 10px;font-size:.8rem;background:transparent;color:#fff}.naptabs button[aria-pressed=true]{background:#fff;color:var(--navy)}
-.napbody{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.naptema{border:1px solid var(--line);border-radius:12px;background:#fff}
-.naptema summary{cursor:pointer;padding:10px 12px;font-weight:600;list-style:none;display:flex;gap:8px;align-items:center}
-.naptema summary::before{content:'▸';color:var(--blue)}.naptema[open] summary::before{content:'▾'}
-.naptema p{margin:0;padding:0 12px 12px;font-size:.9rem;line-height:1.45}
-.chatlog{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:6px}
-.msg{max-width:88%;padding:8px 12px;border-radius:14px;font-size:.9rem;line-height:1.4;white-space:pre-wrap}
-.msg.ja{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
-.msg.bot{align-self:flex-start;background:var(--soft);color:var(--ink);border-bottom-left-radius:4px}
-.msg.bot .tema{display:block;font-size:.75rem;color:var(--muted);margin-bottom:2px}
-.chatin{display:flex;gap:8px}.chatin input{flex:1;min-height:40px;padding:6px 10px;border:1px solid var(--line);border-radius:12px;font-size:16px}
+/* Nápověda, asistent a nastavení dispečinku: grafika jako Case manager (tokeny z jeho index.html), jen uvnitř .cm */
+.cm{--brand:#3358FF;--brand-dark:#2340CC;--brand-soft:#EEF1FF;--brand-soft2:#DDE3FF;--accent:#D22BF7;--accent-soft:#FBEBFE;--grad:linear-gradient(135deg,#D22BF7 0%,#3358FF 62%);--ok:#0E8A5F;--ok-soft:#E4F5EE;--warn:#B26A00;--warn-soft:#FDF3E2;--crit:#C42B2B;--crit-soft:#FDECEC;--info:#0B6E99;--info-soft:#E6F3F9;--ink:#14161C;--ink2:#4A5160;--ink3:#767E8F;--surface:#FCFCFB;--panel:#FFFFFF;--line:#E4E7EE;--line2:#F0F2F6;--shadow:0 1px 2px rgba(20,22,28,.05),0 4px 14px rgba(20,22,28,.05);--shadow-lg:0 10px 40px rgba(20,22,28,.22);--r:10px;--r-lg:14px;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.5;color:var(--ink);-webkit-font-smoothing:antialiased}
+.cm.ovl{position:fixed;inset:0;background:rgba(20,22,28,.42);display:grid;place-items:start center;padding:14px 22px;z-index:120;overflow:auto}
+body.withAuth .cm.ovl{padding-top:72px}
+.cm.ovl.hide{display:none}
+.cm .modal{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);width:100%;max-width:760px;max-height:min(90vh,820px);display:flex;flex-direction:column;margin-top:14px}
+.cm .modal>header{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
+.cm .modal>header h3{margin:0;font-size:16px;font-weight:680;letter-spacing:-.01em;text-transform:none;color:var(--ink)}
+.cm .modal>header .sub{font-size:12.5px;color:var(--ink3);margin-top:2px}
+.cm .modal>header .x{margin-left:auto;font-size:19px;color:var(--ink3);line-height:1;padding:2px 8px;border-radius:6px;background:none;border:0;min-height:0}
+.cm .modal>header .x:hover{background:var(--line2);color:var(--ink)}
+.cm .mbody{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.cm .modal>footer{padding:12px 18px;border-top:1px solid var(--line2);display:flex;gap:8px;align-items:stretch;justify-content:flex-end;background:#FBFBFD;border-radius:0 0 var(--r-lg) var(--r-lg)}
+.cm .modal>footer .btn.left{margin-right:auto}
+.cm .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;font-weight:550;font-size:13px;color:var(--ink2);white-space:nowrap;min-height:0;cursor:pointer}
+.cm .btn:hover{background:var(--line2);color:var(--ink)}
+.cm .btn.pri{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 1px 2px rgba(51,88,255,.25)}
+.cm .btn.gho{border-color:transparent;background:transparent}
+.cm .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 18px}
+.cm .tabs button{padding:10px 13px;font-weight:550;color:var(--ink3);border:0;border-bottom:2px solid transparent;background:none;border-radius:0;white-space:nowrap;font-size:13.5px;min-height:0}
+.cm .tabs button[aria-pressed=true]{color:var(--brand-dark);border-bottom-color:var(--brand);font-weight:650}
+.cm .sec{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:6px 0 2px}
+.cm .f2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.cm .f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px}
+@media(max-width:600px){.cm .f2,.cm .f3{grid-template-columns:1fr}}
+.cm .fld{margin-bottom:13px}
+.cm .fld label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.cm .fld input,.cm .fld select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;color:inherit;min-height:0}
+.cm .fld .help{font-size:12px;color:var(--ink3);margin-top:4px}
+.cm .note{border-left:3px solid var(--info);background:var(--info-soft);padding:10px 13px;border-radius:0 var(--r) var(--r) 0;font-size:13px;color:#0A5A7D}
+.cm .seg{border-color:var(--line)}.cm .seg button{font-size:13px;min-height:34px;color:var(--ink2);background:#fff}.cm .seg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-dark)}
+/* nápověda: témata s obrázky */
+.cm .naptema{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow)}
+.cm .naptema summary{cursor:pointer;padding:11px 14px;font-weight:600;list-style:none;display:flex;gap:9px;align-items:center;font-size:13.5px}
+.cm .naptema summary::before{content:'▸';color:var(--brand)}.cm .naptema[open] summary::before{content:'▾'}
+.cm .naptema .tx{margin:0;padding:0 14px 12px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
+.cm .naptema figure{margin:0 14px 14px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.cm .naptema figure img{display:block;width:100%;height:auto}
+.cm .naptema figcaption{font-size:12px;color:var(--ink3);padding:6px 10px;border-top:1px solid var(--line2)}
+/* asistent: chat */
+.cm .chatlog{display:flex;flex-direction:column;gap:8px;min-height:280px;max-height:46vh;overflow:auto;padding:4px 2px}
+.cm .msg{max-width:86%;padding:9px 13px;border-radius:12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap}
+.cm .msg.ja{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:4px}
+.cm .msg.bot{align-self:flex-start;background:var(--brand-soft);color:var(--ink);border-bottom-left-radius:4px}
+.cm .msg.bot .tema{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--brand-dark);margin-bottom:3px;cursor:pointer}
+.cm .chatin{display:flex;gap:8px}.cm .chatin input{flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:16px;min-height:0}
+.cm .otazky{display:flex;flex-wrap:wrap;gap:6px}.cm .otazky button{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink2);min-height:0}
+.cm .otazky button:hover{background:var(--brand-soft);color:var(--brand-dark)}
+.deskbar .ico{font-style:normal;font-size:1.05rem;line-height:1}

@@ -108,8 +108,8 @@ const FAKE = [
 
 /* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
  * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
-export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák' };
-export function poskytovatel(s) { return { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; }
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2 };
+export function poskytovatel(s) { const p = { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; p.eskalaceMin = Number(p.eskalaceMin) || POSKYTOVATEL_VYCHOZI.eskalaceMin; return p; }
 /** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
 export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
 
@@ -296,7 +296,8 @@ const akce = {
   setPoskytovatel(s, now, p) {
     if (!p || typeof p !== 'object') throw chyba('Chybí údaje poskytovatele.');
     const n = { ...poskytovatel(s) };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p) n[k] = str(p[k], 80, k).trim();
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && k !== 'eskalaceMin') n[k] = str(p[k], 80, k).trim();
+    if ('eskalaceMin' in p) { const m = Number(p.eskalaceMin); if (!Number.isInteger(m) || m < 1 || m > 60) throw chyba('Eskalace: 1 až 60 minut.'); n.eskalaceMin = m; }
     if (!n.nazev) throw chyba('Název poskytovatele nesmí být prázdný.');
     if (!n.dispecer) throw chyba('Jméno dispečera nesmí být prázdné.');
     s.poskytovatel = n;
@@ -312,7 +313,8 @@ const akce = {
     for (const r of s.requests) if (r.state === 'čeká' && r.until <= now) { r.state = 'vypršelo'; changed = true; }
     for (const p of s.patients) if (p.docasne && p.docasne.until <= now) { delete p.docasne; changed = true;
       s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'systém', text: 'Rychlé přepnutí obrazu skončilo střídáním den/noc, platí nastavení podle denní doby.' }); }
-    for (const e of s.events) if (e.state === 'nový' && KINDS[e.kind]?.level === 'crit' && now - e.at > 120000 && !e.escalated) { e.escalated = true; changed = true; }
+    const eskalace = poskytovatel(s).eskalaceMin * 60000;
+    for (const e of s.events) if (e.state === 'nový' && KINDS[e.kind]?.level === 'crit' && now - e.at > eskalace && !e.escalated) { e.escalated = true; changed = true; }
     return { zmena: changed };
   },
 };

@@ -26,29 +26,54 @@
 </div>
 <div class="desk">
   <div class="deskbar">
-    <div><h1>Famicura · Dispečink</h1><div class="small"><span id="hlavicka"></span> <button class="sm sec" id="hlUprav" title="Údaje poskytovatele: název, telefon, dispečer, směna, záloha. Zadávají se tady a vidí je všichni dispečeři, detail kamery i rodina.">Upravit</button> <button class="sm sec" id="napovedaBtn" title="Nápověda a asistent">? Nápověda</button></div>
-      <form class="hlform hide" id="hlForm">
-        <label>Poskytovatel (název služby)<input type="text" id="hlNazev" maxlength="80" placeholder="Pečovatelská služba Kladno" required></label>
-        <label>Telefon poskytovatele<input type="tel" id="hlTelefon" maxlength="40" placeholder="312 123 456"></label>
-        <label>Dispečer(ka)<input type="text" id="hlDispecer" maxlength="80" placeholder="Jana Nováková" required></label>
-        <label>Směna<input type="text" id="hlSmena" maxlength="40" placeholder="denní směna"></label>
-        <label>Záloha<input type="text" id="hlZaloha" maxlength="80" placeholder="Petr Dvořák"></label>
-        <span class="row"><button class="sm" type="submit">Uložit</button><button class="sm sec" type="button" id="hlZrusit">Zrušit</button></span>
-        <span class="small muted">Ukládá se na server: stejné údaje vidí všichni dispečeři, detail kamery i aplikace rodiny. Jméno dispečera se zapisuje k převzetí alertu a k žádostem, které vidí rodina.</span>
-      </form>
-    </div>
+    <div><h1>Famicura · Dispečink</h1><div class="small"><span id="hlavicka"></span> <button class="sm sec" id="hlUprav" title="Nastavení: údaje poskytovatele a dispečinku, které se zobrazují v záhlaví, v detailu kamery i v aplikaci rodiny"><span class="ico">⚙</span> Nastavení</button> <button class="sm sec" id="napovedaBtn" title="Nápověda a asistent"><span class="ico">?</span> Nápověda</button></div></div>
     <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
   </div>
   <div id="critBanner"></div>
-  <aside class="napoveda hide" id="napoveda" aria-label="Nápověda a asistent">
-    <div class="naphead"><strong>Nápověda</strong><span class="seg naptabs"><button data-tab="temata" aria-pressed="true">Témata</button><button data-tab="chat" aria-pressed="false">Asistent</button></span><button class="sm sec" id="napZavrit">✕</button></div>
-    <div class="napbody" id="napTemata"></div>
-    <div class="napbody hide" id="napChat">
-      <div class="chatlog" id="chatLog"></div>
-      <form class="chatin" id="chatForm"><input type="text" id="chatIn" placeholder="Zeptejte se, třeba: jak požádat o plný obraz" maxlength="500" autocomplete="off"><button class="sm" type="submit">Odeslat</button></form>
-      <p class="small muted" id="chatPozn">Asistent odpovídá z nápovědy dispečinku.</p>
+  <div class="cm ovl hide" id="nastaveni" role="dialog" aria-labelledby="nastaveniT">
+    <form class="modal" id="hlForm">
+      <header><div><h3 id="nastaveniT">Nastavení poskytovatele a dispečinku</h3><div class="sub">Všechno, co se zobrazuje v záhlaví, v detailu kamery, v kartě Směna a v aplikaci rodiny. Ukládá se na server pro všechny dispečery.</div></div><button class="x" type="button" id="nastaveniZavrit" aria-label="Zavřít">✕</button></header>
+      <div class="mbody">
+        <div class="sec">Poskytovatel</div>
+        <div class="f3">
+          <div class="fld"><label for="hlNazev">Název služby</label><input type="text" id="hlNazev" maxlength="80" required><div class="help">záhlaví, detail kamery, aplikace rodiny</div></div>
+          <div class="fld"><label for="hlTelefon">Telefon</label><input type="tel" id="hlTelefon" maxlength="40"><div class="help">rodina ho vidí u své kamery</div></div>
+          <div class="fld"><label for="hlEmail">E-mail</label><input type="email" id="hlEmail" maxlength="80"></div>
+        </div>
+        <div class="sec">Dispečink</div>
+        <div class="f2">
+          <div class="fld"><label for="hlDispecer">Dispečer(ka) ve službě</label><input type="text" id="hlDispecer" maxlength="80" required><div class="help">zapisuje se k převzetí alertů a k žádostem o obraz, které vidí rodina</div></div>
+          <div class="fld"><label for="hlSmena">Směna</label><input type="text" id="hlSmena" maxlength="40" placeholder="denní směna"></div>
+        </div>
+        <div class="f2">
+          <div class="fld"><label for="hlZaloha">Záloha (jméno)</label><input type="text" id="hlZaloha" maxlength="80"></div>
+          <div class="fld"><label for="hlZalohaTelefon">Telefon zálohy</label><input type="tel" id="hlZalohaTelefon" maxlength="40"></div>
+        </div>
+        <div class="f3">
+          <div class="fld"><label for="hlVedouci">Vedoucí (eskalace)</label><input type="text" id="hlVedouci" maxlength="80"></div>
+          <div class="fld"><label for="hlVedouciTelefon">Telefon vedoucího</label><input type="tel" id="hlVedouciTelefon" maxlength="40"></div>
+          <div class="fld"><label for="hlEskalaceMin">Eskalace po (minut)</label><input type="number" id="hlEskalaceMin" min="1" max="60" step="1" required><div class="help">nepřevzatý kritický alert se po této době označí jako eskalovaný</div></div>
+        </div>
+        <div class="sec">Zobrazení na tomto počítači</div>
+        <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>
+        <p class="gateerr hide" id="hlErr"></p>
+      </div>
+      <footer><button class="btn left" type="button" id="hlZrusit">Zavřít bez uložení</button><button class="btn pri" type="submit">Uložit</button></footer>
+    </form>
+  </div>
+  <div class="cm ovl hide" id="napoveda" role="dialog" aria-labelledby="napovedaT">
+    <div class="modal">
+      <header><div><h3 id="napovedaT">Nápověda dispečinku</h3><div class="sub">Témata s obrázky obrazovek a asistent, který odpoví na otázku k obsluze.</div></div><button class="x" type="button" id="napZavrit" aria-label="Zavřít">✕</button></header>
+      <div class="tabs naptabs"><button data-tab="temata" aria-pressed="true">Témata</button><button data-tab="chat" aria-pressed="false">Asistent</button></div>
+      <div class="mbody" id="napTemata"></div>
+      <div class="mbody hide" id="napChat">
+        <div class="chatlog" id="chatLog"></div>
+        <div class="otazky" id="chatOtazky"></div>
+        <form class="chatin" id="chatForm"><input type="text" id="chatIn" placeholder="Zeptejte se, třeba: jak požádat o plný obraz" maxlength="500" autocomplete="off"><button class="btn pri" type="submit">Odeslat</button></form>
+        <p class="help" id="chatPozn" style="font-size:12px;color:#767E8F;margin:0">Asistent odpovídá z nápovědy dispečinku.</p>
+      </div>
     </div>
-  </aside>
+  </div>
   <div class="cols">
     <div>
       <div class="row"><span class="small muted grow">Dlaždice ukazují jen to, co rodina povolila. Klepnutím otevřete detail.</span>
@@ -59,7 +84,7 @@
     </div>
     <div>
       <div class="c"><h2>Fronta alertů</h2><ul class="list queue" id="queue"></ul></div>
-      <div class="c"><h2>Směna</h2><p class="small">Nepřevzatý kritický alert po 2 minutách eskaluje na zálohu a vedoucí (push, SMS, hovor). Doba převzetí dnes: <strong>0:48 min</strong>, plané poplachy 31 %.</p></div>
+      <div class="c"><h2>Směna</h2><p class="small" id="smenaInfo"></p></div>
     </div>
   </div>
 </div>
