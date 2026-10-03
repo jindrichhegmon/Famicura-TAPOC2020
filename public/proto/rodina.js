@@ -171,6 +171,13 @@ function renderModes() {
   sw.checked = baseMode === 'skeleton' || skel;
   $('skelHint').textContent = baseMode === 'skeleton' ? 'na černém pozadí je drátěný model vždy' : 'kostra postavy přes normální i rozostřený obraz';
 }
+/* Test obrazu: rodina vidí vždy ostrý obraz; velkým tlačítkem si může vyzkoušet,
+ * jak vypadá rozostření, černé pozadí a drátěný model. Jen na tomhle telefonu,
+ * poskytovateli se nic nemění (to je karta Přístup poskytovatele). */
+const testObrazu = (on) => { $('testObrazu').classList.toggle('hide', !on); $('testStart').classList.toggle('hide', on); };
+$('testBtn').onclick = () => { testObrazu(true); $('testObrazu').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+$('testZavrit').onclick = () => { baseMode = 'full'; skel = false; localStorage.setItem(SKEL_KEY, '0'); renderModes(); render(); testObrazu(false); };
+if (zRezimu && (zRezimu[0] !== 'full' || zRezimu[1])) testObrazu(true);   // ?rezim= otevře test rovnou v tom zobrazení
 $('modes').querySelectorAll('button').forEach((b) => { b.onclick = () => { baseMode = b.dataset.mode; renderModes(); render(); }; });
 $('skelSw').onchange = () => { skel = $('skelSw').checked; localStorage.setItem(SKEL_KEY, skel ? '1' : '0'); renderModes(); render(); };
 renderModes();
@@ -182,15 +189,8 @@ const ulozCas = (k, el) => async () => { if (!el.value) { render(); return; } tr
 $('cDenOd').onchange = ulozCas('denOd', $('cDenOd'));
 $('cNocOd').onchange = ulozCas('nocOd', $('cNocOd'));
 // rychlé přepnutí: platí do další změny nebo do střídání den/noc
-/* Test obrazu: jedno tlačítko, teprve po něm výběr, co má poskytovatel vidět.
- * Vlastní obraz rodiny na telefonu se tím nemění (ten je vždy ostrý). */
-let rychleOtevreno = false;
-const rychleVolbu = (on) => { rychleOtevreno = on; $('rychleVolba').classList.toggle('hide', !on); $('rychleStart').classList.toggle('hide', on); if (on) $('rychleVolba').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
-$('rychleBtn').onclick = () => rychleVolbu(true);
-$('rychleJiny').onclick = () => rychleVolbu(true);
-$('rychleZavrit').onclick = () => rychleVolbu(false);
-$('rychle').querySelectorAll('button').forEach((b) => { b.onclick = async () => { const p = sim.patient(patientId); const aktivni = p?.docasne && p.docasne.until > Date.now() && p.docasne.mode === b.dataset.r; await sim.rychle(patientId, aktivni ? null : b.dataset.r); rychleVolbu(false); }; });
-$('rychleZrusit').onclick = () => { sim.rychle(patientId, null); rychleVolbu(false); };
+$('rychle').querySelectorAll('button').forEach((b) => { b.onclick = () => { const p = sim.patient(patientId); const aktivni = p?.docasne && p.docasne.until > Date.now() && p.docasne.mode === b.dataset.r; sim.rychle(patientId, aktivni ? null : b.dataset.r); }; });
+$('rychleZrusit').onclick = () => sim.rychle(patientId, null);
 document.querySelectorAll('[data-klid]').forEach((b) => { b.onclick = () => sim.klidDo(patientId, b.dataset.klid); });
 $('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('on', o === b); }); render(); }; });
 $('ackAll').onclick = () => sim.ackAll(patientId);
@@ -249,10 +249,8 @@ function render() {
   const ef = sim.efektivni(patientId);
   const docasne = p.docasne && p.docasne.until > Date.now() ? p.docasne : null;
   $('rychle').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(!!docasne && docasne.mode === b.dataset.r)));
-  $('rychleAktivni').classList.toggle('hide', !docasne);
-  $('rychleStart').classList.toggle('hide', !!docasne || rychleOtevreno);
-  if (docasne) $('rychleStav').textContent = `Test běží: poskytovatel vidí ${CONSENT[docasne.mode] || docasne.mode} do ${fmtT(docasne.until)}.`;
-  $('rychleHint').textContent = docasne ? 'Po skončení testu se vrátí nastavení podle denní doby.' : `Váš obraz na telefonu je vždy ostrý. Testem na chvíli přepnete, co vidí poskytovatel: platí do střídání den/noc (${sim.isNight(patientId) ? 'ráno v ' + denOd : 'večer v ' + nocOd}) nebo do další změny.`;
+  $('rychleZrusit').classList.toggle('hide', !docasne);
+  $('rychleHint').textContent = docasne ? `Platí do ${fmtT(docasne.until)} (střídání den/noc), nebo do další změny.` : `Platí do další změny nebo do střídání den/noc (${sim.isNight(patientId) ? 'ráno v ' + denOd : 'večer v ' + nocOd}).`;
   const open = s.events.filter((e) => e.patientId === patientId && e.state !== 'uzavřen' && KINDS[e.kind]);
   const worst = open.some((e) => KINDS[e.kind].level === 'crit') ? 'crit' : open.some((e) => KINDS[e.kind].level === 'warn') ? 'warn' : null;
   $('pstatus').textContent = p.offline ? 'kamera nedostupná' : worst === 'crit' ? 'kritická událost' : worst === 'warn' ? 'varování' : 'klid';
@@ -266,7 +264,7 @@ function render() {
   $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
   $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
   $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
-  const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'váš test obrazu', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
+  const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
   setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
   const kontakty = describeKontakty(p);
   $('watchInfo').textContent = describeWatch(p.watch || {}) + (kontakty ? ` · upozornění poskytovatele jdou na ${kontakty}` : '');

@@ -7,10 +7,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
 
 ## 1.1 · 3. 10. 2026
 
-- Aplikace rodiny: místo tří tlačítek rychlého přepnutí jedno tlačítko
-  **Test obrazu**; teprve po něm výběr Ostrý / Rozmazaný / Drátěný model,
-  běžící test jde ukončit nebo změnit. Nad vlastním přepínačem obrazu je
-  jasně napsané, že platí jen pro telefon rodiny (ten je vždy ostrý).
+- Aplikace rodiny: vlastní obraz na telefonu je vždy ostrý; volba zobrazení
+  (normální, rozostření, černé pozadí, drátěný model) je schovaná za jedním
+  tlačítkem **Test obrazu** a zavřením testu se vrátí ostrý obraz. Tři
+  tlačítka Ostrý / Rozmazaný / Drátěný model, kterými rodina přepíná, co vidí
+  poskytovatel, zůstávají v kartě Přístup poskytovatele.
 - Dispečink: detail kamery ve třech sekcích. **Monitoring** (obraz, režim,
   žádost o plný obraz, nouzový přístup, přidání poznámky, historie), **Komunikace** (poskytovatel,
   poznámka ke klientovi, uživatelé rodiny, kontakty pro upozornění, poznámky

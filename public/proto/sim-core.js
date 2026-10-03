@@ -293,7 +293,7 @@ const akce = {
     if (!RYCHLE.includes(mode)) throw chyba('Neznámý režim obrazu.');
     const until = dalsiHranice(p, now);
     p.docasne = { mode, until };
-    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina', text: `Test obrazu: rodina přepnula obraz na ${CONSENT[mode]} do ${casText(until)} (střídání den/noc).` });
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina', text: `Rodina přepnula obraz na ${CONSENT[mode]} do ${casText(until)} (střídání den/noc).` });
     return { vysledek: p.docasne };
   },
   /** Klid: '120' = na 2 hodiny, 'rano' = do začátku dne, 'vecer' = do začátku noci, 'vypnuti' = do vypnutí, null = vypnout. */
