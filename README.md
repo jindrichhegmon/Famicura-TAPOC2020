@@ -523,6 +523,32 @@ Tunel SSH z Windows (2b) ani WireGuard na Windows pak nejsou potřeba; VPS
 přepne `vps-kamera.sh` automaticky podle `/etc/wireguard/famicura-rezim`
 (po kroku 3 je `linux`).
 
+### 2d. Další místo: kamera u jiného poskytovatele
+
+Každý poskytovatel (nebo každá adresa) má svou bránu, nejčastěji další
+Mango, a v tunelu vlastní **místo**: číslo 1, 2, 3… Místo je jeden `[Peer]`
+`wg-famicura` s adresou `10.77.0.(místo+1)`; soubory jsou v
+`/etc/wireguard/famicura-mista/<N>.peer|rezim|kamera` a `wg-famicura.conf`
+se z nich skládá. Nové místo ostatní místa nechá být (první kamera
+nevypadne); stejné číslo znovu vydá tomu místu nový klíč.
+
+1. Nové Mango nastavte podle 2c (kroky 1 a 2: internet, kamera na jeho
+   Wi-Fi, zamčená IP). Síť Manga může zůstat 192.168.8.x, jen kamera
+   nesmí mít stejnou IP jako kamera jiného místa (tunel míří na IP kamery);
+   nejjistější je Mangu dát jinou síť (System → LAN IP, např. 192.168.9.1).
+2. Na Macu: `./deploy/wireguard-vps.sh <IP kamery> --misto 2`. Vznikne
+   `famicura-wg-misto-2.conf` a `famicura-mango-misto-2.conf`; do Manga
+   a jeho firewallu podle 2c (kroky 4 a 5), pak oba soubory smazat.
+3. `./deploy/vps-kamera.sh`: když je míst víc, zeptá se na číslo místa;
+   dál ID kamery (jiné než u ostatních kamer), název, IP kamery, ID tenanta
+   toho poskytovatele, místo, účet kamery. Dispečink poskytovatele kameru
+   ukáže hned (`?tenant=<jeho ID>`).
+
+Více kamer na jednom místě (stejné Mango): jen `vps-kamera.sh` s další
+IP a ID; v Mangu přidejte pravidlo firewallu i pro její IP (krok 5 v 2c).
+Windows server jako brána dalšího místa: `--windows --misto N`, go2rtc pak
+chodí na `10.77.0.(N+1)`.
+
 ### 2b. Když firewall serveru tunel nepustí: tunel SSH
 
 Příznak: tunel WireGuard na obou stranách hlásí čerstvý handshake, server

@@ -4,6 +4,8 @@ verze.json
 data/
 famicura-wg-u-kamery.conf
 famicura-mango.conf
+famicura-wg-misto-*.conf
+famicura-mango-misto-*.conf
 *.conf.tmp
 cameras.json
 go2rtc.yaml

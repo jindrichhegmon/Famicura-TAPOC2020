@@ -5,9 +5,10 @@
 #   ./deploy/vps-kamera.sh smaz ID
 #   ./deploy/vps-kamera.sh tenant ID_KAMERY ID_TENANTA [místo]   (kameru přiřadí poskytovateli z Péče doma plus)
 #
-# Kam go2rtc na kameru chodí, pozná ze souboru /etc/wireguard/famicura-rezim na VPS:
+# Kam go2rtc na kameru chodí, pozná z místa (brány) na VPS – /etc/wireguard/famicura-mista/<N>.rezim,
+# u jediného místa /etc/wireguard/famicura-rezim; víc míst = skript se zeptá na číslo místa:
 #   linux    přímo na IP kamery tunelem WireGuard
-#   windows  na Windows server v tunelu (10.77.0.2), ten porty předává kameře
+#   windows  na Windows server v tunelu (10.77.0.(místo+1)), ten porty předává kameře
 #   ssh      na 127.0.0.1:10554 a :12020, kam kameru přivedl Windows server tunelem SSH
 #            (deploy/ssh-tunel-vps.sh); přepínač --ssh to vynutí i bez toho souboru
 #
@@ -48,15 +49,24 @@ read -r -p "ID kamery [tapoc2020]: " ID;            ID="${ID:-tapoc2020}"; platn
 read -r -p "Název v aplikaci [Tapo C2020]: " NAZEV;  NAZEV="${NAZEV:-Tapo C2020}"
 # Přes Windows server go2rtc nechodí na kameru, ale na server v tunelu:
 # ten předává svůj port 554 kameře (u-kamery-windows.ps1).
-REZIM=$($SSH "$VPS" "cat /etc/wireguard/famicura-rezim 2>/dev/null" || true)
+# Místa (brány) na VPS: "1 linux 192.168.8.211" na řádek; více míst = otázka, které to je.
+MISTA=$($SSH "$VPS" 'for f in /etc/wireguard/famicura-mista/*.rezim; do [ -s "$f" ] || continue; n=$(basename "$f" .rezim); echo "$n $(cat "$f") $(cat /etc/wireguard/famicura-mista/$n.kamera 2>/dev/null)"; done' 2>/dev/null || true)
+MISTO=1
+if [ "$(echo "$MISTA" | grep -c .)" -gt 1 ]; then
+  echo "Místa (brány) na VPS – číslo, režim, kamera, kterou tunel zná:"; echo "$MISTA" | sed 's/^/   /'
+  read -r -p "Místo, kde kamera je [1]: " MISTO; MISTO="${MISTO:-1}"
+  [[ "$MISTO" =~ ^[0-9]+$ ]] && echo "$MISTA" | grep -q "^$MISTO " || { echo "Takové místo na VPS není (./deploy/wireguard-vps.sh <IP kamery> --misto $MISTO ho založí)."; exit 1; }
+fi
+REZIM=$(echo "$MISTA" | awk -v m="$MISTO" '$1 == m { print $2 }')
+[ -n "$REZIM" ] || REZIM=$($SSH "$VPS" "cat /etc/wireguard/famicura-rezim 2>/dev/null" || true)
 [ -n "$VYNUTIT_SSH" ] && REZIM=ssh
 RTSP_PORT=554; ONVIF_PORT=2020
 if [ "$REZIM" = ssh ]; then
   IP=127.0.0.1; RTSP_PORT=10554; ONVIF_PORT=12020
   echo "Kameru přivádí Windows server tunelem SSH – obraz půjde z $IP:$RTSP_PORT, události z :$ONVIF_PORT. IP kamery zná server."
 elif [ "$REZIM" = windows ]; then
-  IP=10.77.0.2
-  echo "Kamera je za Windows serverem – obraz půjde přes něj ($IP). IP kamery zná server."
+  IP="10.77.0.$((MISTO + 1))"
+  echo "Kamera je za Windows serverem (místo $MISTO) – obraz půjde přes něj ($IP). IP kamery zná server."
 else
   read -r -p "IP adresa kamery v místní síti: " IP
   [[ "$IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "IP adresa musí vypadat jako 192.168.1.50."; exit 1; }
