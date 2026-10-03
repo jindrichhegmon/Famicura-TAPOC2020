@@ -286,14 +286,31 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
    dvou dílů; radí i, jak si aplikaci dát na plochu. Použitý odkaz vede
    rovnou na přihlášení (nebo do aplikace, když je rodina ještě přihlášená).
 2. **Pozvánka jde SMS**: ze serveru webhookem Make (`SMS_WEBHOOK_URL`,
-   `SMS_WEBHOOK_KLIC` v `.env`, stejný scénář jako Péče doma), nebo tlačítkem
+   `SMS_WEBHOOK_KLIC` v `.env`), nebo tlačítkem
    „Poslat SMS z tohoto telefonu“ z dispečerova mobilu, nebo zkopírovaným
    odkazem. Bez webhooku se SMS ze serveru neposílá a dispečink to vidí.
 3. **Rodina otevře odkaz**, zvolí si heslo (aspoň 8 znaků, ne jen číslice)
    a je přihlášená. Dál se přihlašuje telefonem a heslem; cookie platí
    30 dní, takže na telefonu jednou za měsíc. Heslo si změní v „Můj účet“.
    Zapomenuté heslo řeší poskytovatel novou pozvánkou (stará přestane platit).
-4. **Stejné přihlášení platí pro obraz a události** z hlavní aplikace: uživatel
+4. **Jak SMS odchází (Twilio přes Make).** Server pošle na webhook scénáře
+   **Famicura_Tapo_SMS_Pozvanka** (Make, id 9896185) JSON `{ klic, telefon,
+   text, typ, poznamka }`. Scénář ověří klíč, pošle SMS modulem **Twilio –
+   Send SMS** ze stejného spojení a čísla (+420 736 354 150) jako scénář
+   „JARVIS poslání SMS přes Twilio“, zapíše záznam do tabulky SMS v Softru
+   (autor „Famicura Kamera“) a odpoví `{"ok":true,"sid":"SM…"}`. Server bere
+   SMS za odeslanou **jen** s touhle odpovědí (jako portál Péče doma plus):
+   holé „Accepted“ od Make znamená, že požadavek neprošel filtrem (jiný klíč)
+   nebo scénář neběží, a dispečink dostane chybu místo falešného „odesláno“.
+   Do 3. 10. 2026 scénář posílal přes SMSzasilam jako Péče doma; běhy byly
+   „úspěšné“, ale SMS nedocházely, proto Twilio. Ověření bez zakládání účtu:
+   ozubené kolečko v dispečinku → **SMS rodině → Poslat zkušební SMS** na
+   vlastní číslo (`POST /api/sms/test`, jen poskytovatel). Když nedojde:
+   v Make otevřít historii scénáře; běh s **1 operací** = špatný klíč
+   (`SMS_WEBHOOK_KLIC` musí být ten z filtru scénáře), chyba u modulu Twilio
+   = číslo nebo kredit Twilia; v logu serveru (`pm2 logs famicura-tapo`)
+   jsou řádky `[sms] …456: odesláno (…)` nebo důvod chyby (bez textu SMS).
+5. **Stejné přihlášení platí pro obraz a události** z hlavní aplikace: uživatel
    rodiny smí `/api/devices`, `/api/stream*`, `/api/events` jen pro své kamery,
    nic z nastavení (`403`). Do hlavní aplikace (nastavení, diagnostika)
    se dál přihlašuje jen poskytovatel heslem Famicura; jeho cookie platí

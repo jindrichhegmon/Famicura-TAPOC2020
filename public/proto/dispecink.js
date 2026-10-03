@@ -33,8 +33,32 @@ function otevriNastaveni() {
   $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
   $('hlErr').classList.add('hide');
   $('nastaveni').classList.remove('hide'); $('hlNazev').focus();
+  smsStavNacti();
 }
 $('hlUprav').onclick = otevriNastaveni;
+// Zkušební SMS: stejný webhook Make a Twilio jako pozvánky a žádosti o obraz; výsledek se ukáže pod polem.
+let smsNastaveno = null;
+async function smsStavNacti() {
+  if (smsNastaveno !== null) return;
+  try { const r = await fetch('/api/sms/test', { credentials: 'same-origin' }); const b = await r.json(); smsNastaveno = !!b.nastaveno; }
+  catch { smsNastaveno = null; }
+  $('smsStav').textContent = smsNastaveno === null ? 'Stav SMS se nepodařilo zjistit.' : smsNastaveno
+    ? 'SMS ze serveru je nastavená (webhook Make → Twilio). Zkušební SMS ověří celou cestu až na telefon.'
+    : 'SMS ze serveru není nastavená: správce spustí ./deploy/vps-env.sh a zadá adresu webhooku a klíč. Do té doby pozvánky posílejte z telefonu.';
+  $('smsTestBtn').disabled = !smsNastaveno;
+}
+$('smsTestBtn').onclick = async () => {
+  const tel = $('smsTestTel').value.trim();
+  if (!tel) { $('smsStav').textContent = 'Zadejte číslo, kam zkušební SMS poslat.'; $('smsTestTel').focus(); return; }
+  $('smsTestBtn').disabled = true; $('smsStav').textContent = 'Posílám…';
+  try {
+    const r = await fetch('/api/sms/test', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ telefon: tel }) });
+    const b = await r.json();
+    $('smsStav').textContent = b.ok ? `Zkušební SMS odešla na ${b.telefon}${b.sid ? ' (Twilio ' + b.sid + ')' : ''}. Měla by dojít do minuty.` : `SMS neodešla: ${b.error || 'chyba serveru'}`;
+    toast(b.ok ? 'Zkušební SMS odeslána.' : `Zkušební SMS neodešla: ${b.error || 'chyba'}`, b.ok ? undefined : 'crit');
+  } catch (ex) { $('smsStav').textContent = `SMS neodešla: ${ex.message}`; }
+  $('smsTestBtn').disabled = false;
+};
 $('hlZrusit').onclick = () => $('nastaveni').classList.add('hide');
 $('nastaveniZavrit').onclick = () => $('nastaveni').classList.add('hide');
 // Zavírá se jen tlačítky: klepnutí vedle okna ani Enter v poli okno nezavřou, uloží jen tlačítko Uložit.

@@ -60,6 +60,8 @@
         </div>
         <div class="sec">Zobrazení na tomto počítači</div>
         <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>
+        <div class="sec">SMS rodině (pozvánky, žádosti o obraz)</div>
+        <div class="fld"><label for="smsTestTel">Zkušební SMS na číslo</label><div class="row"><input type="tel" id="smsTestTel" maxlength="20" placeholder="777 123 456" autocomplete="tel" style="max-width:220px"><button class="btn" type="button" id="smsTestBtn">Poslat zkušební SMS</button></div><div class="help" id="smsStav">Zjišťuji, jestli je SMS na serveru nastavená…</div></div>
         <p class="gateerr hide" id="hlErr"></p>
       </div>
       <footer><button class="btn left" type="button" id="hlZrusit">Zavřít bez uložení</button><button class="btn pri" type="submit">Uložit</button></footer>

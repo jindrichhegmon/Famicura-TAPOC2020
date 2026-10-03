@@ -31,7 +31,7 @@
  * rodiny smí jen obraz a události svých kamer; nastavení je poskytovatele.
  */
 import { kdo, cookie, cookieRodina, odhlaseni, hesloSedi } from './session.mjs';
-import { createUzivatele, textPozvanky, textZadosti, formatTelefon } from './uzivatele.mjs';
+import { createUzivatele, textPozvanky, textZadosti, formatTelefon, normalizeTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
 import { createProtoStav } from './proto-stav.mjs';
 import { createAsistent } from './asistent.mjs';
@@ -279,6 +279,19 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           r.sms = stav;
         }
         return json({ ok: true, ...vysledek });
+      }
+
+      // Zkušební SMS z nastavení dispečinku: ověří webhook Make a Twilio bez zakládání účtu rodině.
+      if (path === '/api/sms/test') {
+        if (rodina) return jenPoskytovatel();
+        if (m === 'GET') return json({ ok: true, nastaveno: sms.nastaveno });
+        if (m !== 'POST') return json({ ok: false, error: 'GET nebo POST' }, 405);
+        const { telefon } = await telo(req);
+        const t = normalizeTelefon(telefon);
+        if (!t) return json({ ok: false, error: 'Zadejte český mobil (9 číslic).' }, 400);
+        if (!sms.nastaveno) return json({ ok: false, nastaveno: false, error: 'SMS není na serveru nastavená (SMS_WEBHOOK_URL, nastaví ./deploy/vps-env.sh).' }, 400);
+        const r = await sms.posli({ telefon: t, text: 'Famicura Kamera: zkusebni SMS ze serveru. Pokud ji ctete, SMS rodine (pozvanky, zadosti o obraz) funguji.', typ: 'FAMICURA_TEST', poznamka: 'Zkušební SMS z nastavení dispečinku.' });
+        return r.ok ? json({ ok: true, nastaveno: true, telefon: t, sid: r.sid }) : json({ ok: false, nastaveno: true, telefon: t, error: r.error }, 502);
       }
 
       // Asistent dispečinku: AI přes webhook Make, když je nastavený; jinak odpovídá prohlížeč z nápovědy.

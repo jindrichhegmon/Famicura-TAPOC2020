@@ -541,3 +541,28 @@ test('žádost o plný obraz: rodině u kamery odejde SMS s výzvou k rozhodnut�
   assert.equal(r2.vysledek.sms.odeslano, 0); assert.match(r2.vysledek.sms.chyba, /SMS_WEBHOOK_URL/);
   void b;
 });
+
+test('zkušební SMS z nastavení: jen poskytovatel, normalizuje telefon, hlásí nenastavený webhook i chybu scénáře', async () => {
+  const sms = { nastaveno: true, calls: [], async posli(x) { this.calls.push(x); return x.telefon === '777000000' ? { ok: false, error: 'Scénář SMS hlásí chybu: Twilio' } : { ok: true, sid: 'SM1', status: 'queued' }; } };
+  const { h, uzivatele } = handler({ sms });
+  assert.equal((await h(req('GET', '/api/sms/test'))).status, 401);
+  const st = await (await h(req('GET', '/api/sms/test', { cookies: cookie() }))).json();
+  assert.deepEqual(st, { ok: true, nastaveno: true });
+  const r = await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '+420 777 123 456' } }));
+  assert.equal(r.status, 200);
+  const b = await r.json();
+  assert.equal(b.ok, true); assert.equal(b.telefon, '777123456'); assert.equal(b.sid, 'SM1');
+  assert.equal(sms.calls.length, 1); assert.equal(sms.calls[0].typ, 'FAMICURA_TEST'); assert.match(sms.calls[0].text, /^Famicura Kamera: zkusebni SMS/);
+  const ch = await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '777000000' } }));
+  assert.equal(ch.status, 502); assert.match((await ch.json()).error, /Twilio/);
+  assert.equal((await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '12' } }))).status, 400);
+  // rodina na to nesmí
+  const a = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const akt = await h(req('POST', '/api/rodina/aktivace', { body: { token: a.token, heslo: 'tajne-heslo-1' } }));
+  const fam = akt.headers.get('set-cookie').split(';')[0];
+  assert.equal((await h(req('POST', '/api/sms/test', { cookies: fam, body: { telefon: '777123456' } }))).status, 403);
+  // bez webhooku: 400 a jasná hláška
+  const { h: h2 } = handler();
+  const n = await h2(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '777123456' } }));
+  assert.equal(n.status, 400); assert.match((await n.json()).error, /vps-env\.sh/);
+});

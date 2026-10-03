@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 1.0 · oprava 3. 10. 2026 (odpoledne)
+
+- SMS rodině (pozvánky, žádosti o plný obraz) jdou přes Twilio: scénář Make
+  `Famicura_Tapo_SMS_Pozvanka` místo SMSzasilam používá stejné Twilio spojení
+  a číslo jako „JARVIS poslání SMS přes Twilio“ (SMSzasilam hlásil úspěch,
+  ale SMS nedocházely). Server bere SMS za odeslanou jen po odpovědi scénáře
+  `{"ok":true}`; „Accepted“ nebo chyba Twilia se ukáže dispečinku.
+- Nastavení dispečinku (ozubené kolečko): sekce SMS rodině se stavem
+  a tlačítkem Poslat zkušební SMS na vlastní číslo (`POST /api/sms/test`).
+- Log serveru píše každou SMS (konec čísla, typ, Twilio SID nebo chyba),
+  nikdy text.
+
 ## 1.0 · 3. 10. 2026
 
 První označená verze. Obsahuje:

@@ -46,7 +46,7 @@ fi
 unset P P2
 
 echo
-echo "Pozvánky rodině SMS přes webhook Make (jako Péče doma). Enter = nechat, jak je."
+echo "SMS rodině (pozvánky, žádosti o obraz) přes webhook Make → Twilio (scénář Famicura_Tapo_SMS_Pozvanka). Enter = nechat, jak je."
 read -r -p "SMS_WEBHOOK_URL (https://hook.eu2.make.com/…): " W
 if [ -n "$W" ]; then
   [[ "$W" =~ ^https://[A-Za-z0-9./_-]+$ ]] || { echo "Adresa webhooku musí začínat https:// a být bez mezer."; exit 1; }
