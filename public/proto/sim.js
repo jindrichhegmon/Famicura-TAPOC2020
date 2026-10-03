@@ -250,7 +250,7 @@ export function mountPanel({ role, patientIds, onPatient }) {
         <label><input type="checkbox" class="night"> Simulovat noc</label>
       </div>
       <div class="grp">
-        <a class="small" href="/proto/rodina.html" target="rodina">Rodina</a> ·
+        <a class="small" href="/proto/rodina.html?simulace=1" target="rodina">Rodina</a> ·
         <a class="small" href="/proto/dispecink.html" target="dispecink">Dispečink</a> ·
         <a class="small" href="/proto/provoz.html" target="provoz">Provoz</a> ·
         <a class="small" href="/" target="app">Aplikace</a>

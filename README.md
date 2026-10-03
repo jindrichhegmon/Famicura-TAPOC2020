@@ -200,6 +200,8 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
+Verze všech aplikací je na jednom místě (`public/verze.js`, teď **1.0**) a
+ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
 obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
@@ -254,6 +256,9 @@ dojde na telefon rodiny a její odpověď zpět. Prohlížeč se každé 2 s pt�
 na číslo verze a stáhne stav jen při změně; skutečné události kamery do
 něj skládá server sám. Bez přihlášení (ukázka) zůstává stav jen v tom
 prohlížeči, sdílený mezi okny přes localStorage a BroadcastChannel.
+Panel **Simulace** má aplikace rodiny jen na vyžádání
+(`/proto/rodina.html?simulace=1`) nebo v ukázce (`?ukazka=1`); skutečná
+rodina ho nevidí. Dispečink a provoz ho mají vždy.
 Hodiny (noc 22–6, „jen v hodinách“) se počítají v pražském čase i na
 serveru v UTC. Panel **Simulace** vlevo dole vyvolá pád, překročení
 čáry, SOS z náramku, výpadek kamery, žádost dispečera o plný obraz nebo
@@ -262,6 +267,10 @@ nastavení aplikace (plány, sledování, kamery) nemění.
 
 ### Přihlášení rodiny, účty a pozvánka SMS
 
+Když dispečink požádá o plný obraz, server pošle každému členovi rodiny
+s účtem u té kamery SMS (`textZadosti`: ať otevře aplikaci a žádost povolí
+nebo odmítne); dispečink vidí, kolika lidem odešla. Bez `SMS_WEBHOOK_URL`
+se SMS neposílá a dispečink to ví.
 Heslo v SMS není: rodina si ho zvolí sama po otevření odkazu. Platný odkaz
 z pozvánky má přednost před čímkoli přihlášeným v tom prohlížeči (jiný člen
 rodiny, nebo poskytovatel, který odkaz zkouší u sebe): vždy ukáže volbu
@@ -311,6 +320,15 @@ iPhone poslal do Safari) a ta se po přihlášení vrátí zpět
 (`/?zpet=/proto/dispecink.html`; přijímá jen cesty do `/proto/`). Ikony vznikly
 skriptem v Pillow (srdce s křivkou tepu v modré Famicury); zdroj je
 v historii gitu u tohoto commitu.
+
+## Verze
+
+Číslo verze je v `public/verze.js` (teď 1.0) a vidí ho každá aplikace
+v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
+`public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
+nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
+`git tag -a v1.1 -m "Famicura Kamera 1.1" && git push origin v1.1`.
+Drobné opravy mezi verzemi číslo nemění.
 
 ## Prezentace a video
 

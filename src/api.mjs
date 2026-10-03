@@ -31,7 +31,7 @@
  * rodiny smí jen obraz a události svých kamer; nastavení je poskytovatele.
  */
 import { kdo, cookie, cookieRodina, odhlaseni, hesloSedi } from './session.mjs';
-import { createUzivatele, textPozvanky, formatTelefon } from './uzivatele.mjs';
+import { createUzivatele, textPozvanky, textZadosti, formatTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
 import { createProtoStav } from './proto-stav.mjs';
 import { createAsistent } from './asistent.mjs';
@@ -263,7 +263,22 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'POST' && path === '/api/proto/akce') {
         const { akce, args } = await telo(req);
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
-        return json({ ok: true, ...(await proto.proved(akce, args)) });
+        const vysledek = await proto.proved(akce, args);
+        // Žádost dispečinku o plný obraz: rodině u té kamery odejde SMS, ať otevře aplikaci a rozhodne.
+        if (akce === 'requestFull' && !rodina && vysledek.vysledek && typeof vysledek.vysledek === 'object') {
+          const r = vysledek.vysledek;
+          const prijemci = (await uzivatele.seznam()).filter((u) => u.aktivni && u.kamery.includes(r.patientId));
+          const posk = (vysledek.state.poskytovatel && vysledek.state.poskytovatel.nazev) || 'Poskytovatel';
+          const text = textZadosti({ poskytovatel: posk, duvod: r.reason, odkaz: `${verejnaAdresa(req)}/proto/rodina.html` });
+          const stav = { prijemci: prijemci.length, odeslano: 0, chyba: null };
+          if (!sms.nastaveno) stav.chyba = prijemci.length ? 'SMS není na serveru nastavená (SMS_WEBHOOK_URL).' : null;
+          else for (const u of prijemci) {
+            const o = await sms.posli({ telefon: u.telefon, text, typ: 'FAMICURA_ZADOST', poznamka: `Žádost o plný obraz, kamera ${r.patientId}.` });
+            if (o.ok) stav.odeslano++; else stav.chyba = o.error;
+          }
+          r.sms = stav;
+        }
+        return json({ ok: true, ...vysledek });
       }
 
       // Asistent dispečinku: AI přes webhook Make, když je nastavený; jinak odpovídá prohlížeč z nápovědy.

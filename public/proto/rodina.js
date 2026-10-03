@@ -56,7 +56,9 @@ function startSource(deviceId) {
 
 function setupPatients() {
   patientId = FAMILY[0];
-  panel = mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) => { patientId = id; render(); } });
+  // Panel Simulace má rodina jen na vyžádání odkazem (?simulace=1) nebo v ukázce (?ukazka=1); skutečná rodina ho nevidí.
+  const seSimulaci = demo || params.get('simulace') === '1';
+  panel = seSimulaci ? mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) => { patientId = id; render(); } }) : { select() {}, patient: () => patientId, refresh() {} };
   $('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');
   $('patient').classList.toggle('hide', FAMILY.length < 2);
   $('patient').onchange = () => { patientId = $('patient').value; panel.select(patientId); render(); };

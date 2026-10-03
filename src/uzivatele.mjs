@@ -175,3 +175,14 @@ export function pozvankaPlati(vsichni, token, now = Date.now()) {
   const u = Object.values(vsichni).find((x) => x.pozvanka && x.pozvanka.hash === h);
   return u && u.pozvanka.platiDo >= now ? { platna: true, jmeno: u.jmeno } : { platna: false };
 }
+
+/**
+ * SMS rodině, když dispečink požádá o plný obraz: ať otevře aplikaci a žádost
+ * povolí nebo odmítne. Jen ASCII a do 160 znaků, aby to byla jedna SMS.
+ */
+export function textZadosti({ poskytovatel, duvod, odkaz }) {
+  const bez = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const kdo = bez(poskytovatel).slice(0, 40) || 'Poskytovatel';
+  const proc = bez(duvod).slice(0, 40);
+  return `Famicura: ${kdo} zada o plny obraz${proc ? ' (' + proc + ')' : ''}. Otevrete aplikaci a zadost povolte nebo odmitnete: ${odkaz}`;
+}

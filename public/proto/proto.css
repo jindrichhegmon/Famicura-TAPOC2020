@@ -362,3 +362,6 @@ body.withAuth .cm.ovl{padding-top:72px}
 
 /* dispečink: bez přihlášení poskytovatele se nic neukáže (server posílá přihlášení, stránka si to ještě ověří) */
 body.pending .desk,body.pending #critBanner{visibility:hidden}
+
+/* verze v hlavičce */
+.verze{font-size:.62em;font-weight:600;opacity:.75;vertical-align:middle;margin-left:4px}

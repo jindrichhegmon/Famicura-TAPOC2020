@@ -522,3 +522,22 @@ test('asistent dispečinku: bez webhooku server řekne, že odpovídá prohlíž
   const fam = akt.headers.get('set-cookie').split(';')[0];
   assert.equal((await h(req('POST', '/api/proto/asistent', { cookies: fam, body: { dotaz: 'jak' } }))).status, 403);
 });
+
+test('žádost o plný obraz: rodině u kamery odejde SMS s výzvou k rozhodnutí; rodina sama SMS nespouští', async () => {
+  const sms = { nastaveno: true, calls: [], async posli(x) { this.calls.push(x); return { ok: true }; } };
+  const { h, uzivatele } = handler({ sms });
+  const a = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  await uzivatele.aktivuj(a.token, 'tajne-heslo-1');
+  const b = await uzivatele.vytvor({ jmeno: 'Jana', telefon: '777000111', kamery: ['tapoc2020'] });   // neaktivní: bez hesla, SMS nedostane
+  await uzivatele.vytvor({ jmeno: 'Cizí', telefon: '777999888', kamery: ['jina'] });
+  const r = await (await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'requestFull', args: ['tapoc2020', 'Dispečerka Jana', 'ověření alertu'] } }))).json();
+  assert.equal(r.vysledek.sms.prijemci, 1); assert.equal(r.vysledek.sms.odeslano, 1); assert.equal(r.vysledek.sms.chyba, null);
+  assert.equal(sms.calls.length, 1); assert.equal(sms.calls[0].telefon, '777123456'); assert.equal(sms.calls[0].typ, 'FAMICURA_ZADOST');
+  assert.match(sms.calls[0].text, /^Famicura: Pecovatelska sluzba Kladno zada o plny obraz \(overeni alertu\)\. Otevrete aplikaci a zadost povolte nebo odmitnete: http:\/\/localhost\/proto\/rodina\.html$/);
+  assert.ok(sms.calls[0].text.length <= 160, 'jedna SMS');
+  // bez nastavené SMS: žádost projde, dispečink se dozví proč SMS neodešla
+  const { h: h2 } = handler({ store: (await (async () => { const st = memStore(); const u = createUzivatele(st); const t = await u.vytvor({ jmeno: 'P', telefon: '777123456', kamery: ['tapoc2020'] }); await u.aktivuj(t.token, 'tajne-heslo-1'); return st; })()) });
+  const r2 = await (await h2(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'requestFull', args: ['tapoc2020', 'D', 'x'] } }))).json();
+  assert.equal(r2.vysledek.sms.odeslano, 0); assert.match(r2.vysledek.sms.chyba, /SMS_WEBHOOK_URL/);
+  void b;
+});

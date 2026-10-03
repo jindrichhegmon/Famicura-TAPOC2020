@@ -305,7 +305,15 @@ function renderDetail(rebuild = false) {
   if (changed) {
     d.querySelector('#askG')?.addEventListener('click', () => { askOpen = true; renderDetail(); });
     d.querySelector('#askCancel')?.addEventListener('click', () => { askOpen = false; renderDetail(); });
-    d.querySelector('#askSend')?.addEventListener('click', () => { const reason = d.querySelector('#askReason').value; askOpen = false; sim.requestFull(p.id, `Dispečerka ${ME()}`, reason); });
+    d.querySelector('#askSend')?.addEventListener('click', async () => {
+      const reason = d.querySelector('#askReason').value; askOpen = false;
+      const r = await sim.requestFull(p.id, `Dispečerka ${ME()}`, reason);
+      const sm = r?.sms;
+      if (!sm) return;
+      if (sm.prijemci === 0) toast('Žádost odeslána. Rodina u téhle kamery nemá účet, SMS nikomu neodešla.');
+      else if (sm.odeslano === sm.prijemci) toast(`Žádost odeslána, SMS odešla rodině (${sm.odeslano}).`);
+      else toast(`Žádost odeslána; SMS rodině ${sm.odeslano} z ${sm.prijemci}: ${sm.chyba || 'chyba'}`, 'crit');
+    });
     d.querySelector('#emerg')?.addEventListener('click', () => { emergOpen = true; renderDetail(); });
     d.querySelector('#emergNo')?.addEventListener('click', () => { emergOpen = false; renderDetail(); });
     d.querySelector('#emergYes')?.addEventListener('click', () => { emergOpen = false; sim.emergencyAccess(p.id, `Dispečerka ${ME()}`); });

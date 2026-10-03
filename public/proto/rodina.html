@@ -16,6 +16,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Famicura">
 <link rel="stylesheet" href="/proto/proto.css">
+<script src="/verze.js"></script>
 </head>
 <body class="app pending">
 <!-- Brána: aplikace rodiny je jen pro přihlášené. Účet zakládá poskytovatel a posílá pozvánku SMS. -->
@@ -53,7 +54,7 @@
       <div class="avatar" id="avatar">TT</div>
       <div>
         <div class="t" id="pname">…</div>
-        <div class="s" id="whoami">Rodina</div>
+        <div class="s"><span id="whoami">Rodina</span> <span class="verze" data-verze></span></div>
       </div>
     </div>
     <select id="patient" class="pill" aria-label="Pacient"></select>
