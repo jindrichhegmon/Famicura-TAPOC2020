@@ -22,8 +22,10 @@ JAKO="su - jhnapps -c"
 
 cd "$(dirname "$0")/.."
 # Pomocník musí být na VPS i tehdy, když se od posledního nasazení změnil.
-$SSH "$VPS" "mkdir -p $DIR/scripts && chown -R jhnapps:jhnapps $DIR"
+$SSH "$VPS" "mkdir -p $DIR/scripts $DIR/deploy && chown -R jhnapps:jhnapps $DIR"
 rsync -az -e "$SSH" scripts/set-env.mjs "$VPS:$DIR/scripts/"
+rsync -az -e "$SSH" deploy/prevezmi-jhn.sh "$VPS:$DIR/deploy/"
+PREVEZMI="bash $DIR/deploy/prevezmi-jhn.sh"
 rsync -az -e "$SSH" .env.example "$VPS:$DIR/"
 $SSH "$VPS" "chown -R jhnapps:jhnapps $DIR && $JAKO 'cd $DIR && ( [ -f .env ] || cp .env.example .env ) && chmod 600 .env'"
 
@@ -43,26 +45,24 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs generuj SESSION_KEY'"
 echo
 echo "Databáze PeceDomaPlus (tenanti a data poskytovatelů, login pecedomaplus_app): heslo z $JHN_ZDROJ, jinak ručně."
 # jhn-apps má spojení pojmenovaná DB_<NAZEV>_PASSWORD (nebo celé jako DB_<NAZEV>_URL); spojení PeceDomaPlus se jmenuje pecedomaplus.
-KLIC_PDP=$($SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs najdi $JHN_ZDROJ \"^DB_PECEDOMAPLUS_(PASSWORD|URL)\$|PECEDOMAPLUS.*(PASSWORD|HESLO)|PDP_SQL_PASSWORD\"'" 2>/dev/null | head -1 || true)
-if [ -n "$KLIC_PDP" ] && $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako PDP_SQL_PASSWORD $KLIC_PDP $JHN_ZDROJ'"; then
-  # server, uživatel a databáze jen když je jhn-apps má zapsané jinak než výchozí (jinak zůstane SQL_SERVER / pecedomaplus_app / PeceDomaPlus)
+# Soubor čte na serveru root (prevezmi-jhn.sh), hodnota jde rovnou do našeho .env a nikam necestuje.
+if $SSH "$VPS" "$PREVEZMI PDP_SQL_PASSWORD '^DB_PECEDOMAPLUS_(PASSWORD|URL)\$|PECEDOMAPLUS.*(PASSWORD|HESLO)' $JHN_ZDROJ $DIR"; then
+  # server, port, uživatel a databáze jen když je jhn-apps má zapsané (jinak zůstane SQL_SERVER / pecedomaplus_app / PeceDomaPlus)
   for K in SERVER PORT USER DATABASE; do
-    Z="${KLIC_PDP/PASSWORD/$K}"; [ "$Z" = "$KLIC_PDP" ] && Z="DB_PECEDOMAPLUS_$K"
-    $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako PDP_SQL_$K $Z $JHN_ZDROJ'" 2>/dev/null || true
+    $SSH "$VPS" "$PREVEZMI PDP_SQL_$K '^DB_PECEDOMAPLUS_($K|URL)\$' $JHN_ZDROJ $DIR" 2>/dev/null || true
   done
 else
-  echo "Heslo k PeceDomaPlus se v $JHN_ZDROJ nenašlo. Spojení, která tam jsou (jen názvy):"
-  $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs najdi $JHN_ZDROJ \"^DB_[A-Z0-9]+_(DATABASE|URL)\$\"'" 2>/dev/null | sed 's/^/   /' || echo "   (žádná)"
-  echo "Zadejte heslo ručně (stejné jako má portál Péče doma plus pro login pecedomaplus_app; Enter = nechat, jak je)."
+  echo "Heslo k PeceDomaPlus se v $JHN_ZDROJ nenašlo. Klíče, které tam jsou (jen názvy, bez hodnot):"
+  $SSH "$VPS" "$PREVEZMI seznam '^DB_|TOKEN|PECEDOMA' $JHN_ZDROJ" 2>/dev/null | sed 's/^/   /' || echo "   (soubor nejde přečíst)"
+  echo "Zadejte heslo ručně (login pecedomaplus_app, stejné jako má portál Péče doma plus; Enter = nechat, jak je)."
   read -rs -p "PDP_SQL_PASSWORD: " H; echo
   [ -n "$H" ] && printf '%s' "$H" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav PDP_SQL_PASSWORD'"
   unset H
 fi
-unset KLIC_PDP
 
 echo
 echo "Přihlášení dispečera účtem Péče doma plus přes aplikační server jhn-apps: token z $JHN_ZDROJ (FAMICURA_REPORTY_TOKEN), jinak ručně."
-if $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako JHN_APPS_TOKEN FAMICURA_REPORTY_TOKEN $JHN_ZDROJ'"; then :; else
+if $SSH "$VPS" "$PREVEZMI JHN_APPS_TOKEN '^FAMICURA_REPORTY_TOKEN\$' $JHN_ZDROJ $DIR"; then :; else
   echo "Token se převzít nepodařilo – zadejte ho ručně (Enter = nechat, jak je)."
   read -rs -p "JHN_APPS_TOKEN: " H; echo
   [ -n "$H" ] && printf '%s' "$H" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav JHN_APPS_TOKEN'"

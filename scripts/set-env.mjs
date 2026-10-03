@@ -4,6 +4,7 @@
  *
  *   node scripts/set-env.mjs stav                 → které klíče jsou vyplněné (bez hodnot)
  *   node scripts/set-env.mjs nastav KLIC  < hodnota
+ *   node scripts/set-env.mjs nastav-z-url KLIC  < url   → z URL spojení jen část podle klíče (heslo, uživatel, server…)
  *   node scripts/set-env.mjs prevezmi KLIC /opt/jina-aplikace/.env
  *   node scripts/set-env.mjs prevezmi-jako KLIC CIZI_KLIC /opt/jina-aplikace/.env
  *   node scripts/set-env.mjs najdi /opt/jina-aplikace/.env REGEX   → názvy vyplněných klíčů (bez hodnot)
@@ -100,6 +101,14 @@ async function main([akce, klic, zdroj]) {
     return;
   }
 
+  if (akce === 'nastav-z-url') {
+    const val = zUrl(await stdin(), klic);
+    if (!val) throw new Error(`Z URL nejde vzít ${klic} – nechávám beze změny.`);
+    zapis(nastavit(precti(SOUBOR), klic, val));
+    console.log(`${klic}: nastaveno (z URL).`);
+    return;
+  }
+
   if (akce === 'prevezmi') {
     const nas = precti(SOUBOR);
     const cizi = precti(zdroj);
@@ -147,7 +156,7 @@ async function main([akce, klic, zdroj]) {
     return;
   }
 
-  throw new Error('Použití: stav | nastav KLIC | prevezmi KLIC /cesta/.env | prevezmi-jako KLIC CIZI_KLIC /cesta/.env | najdi /cesta/.env REGEX | generuj KLIC');
+  throw new Error('Použití: stav | nastav KLIC | nastav-z-url KLIC | prevezmi KLIC /cesta/.env | prevezmi-jako KLIC CIZI_KLIC /cesta/.env | najdi /cesta/.env REGEX | generuj KLIC');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
