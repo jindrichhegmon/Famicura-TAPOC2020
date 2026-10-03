@@ -14,7 +14,13 @@
  *   GET  /api/diag              počty řádků v CLB1
  *   POST /api/clb               { typ: 'udalost' | 'nahravka', ... } → zápis do CLB1
  *
- * Rodina (aplikace rodiny, src/uzivatele.mjs):
+ * Tenant (poskytovatel) jako v Péče doma plus: dispečink a rodina pracují
+ * vždy s daty jednoho tenanta z databáze PeceDomaPlus (src/najemci.mjs).
+ *   GET  /api/tenant?id=        název tenanta pro přihlašovací stránku (bez přihlášení)
+ *   POST /api/dispecink/login   { tenant, login, heslo } → cookie dispečera (účet Péče doma plus přes jhn-apps)
+ *   POST /api/login             { password [, tenant] } → cookie správce serveru (s tenantem vidí jeho dispečink)
+ *
+ * Rodina (aplikace rodiny, src/uzivatele.mjs, tabulka tenanta):
  *   GET    /api/rodina/uzivatele                 seznam (poskytovatel)
  *   POST   /api/rodina/uzivatele                 { jmeno, telefon, kamery, poslatSms } → pozvánka (poskytovatel)
  *   POST   /api/rodina/uzivatele/:id/pozvanka    { poslatSms } nová pozvánka = nové heslo (poskytovatel)
@@ -23,19 +29,22 @@
  *   POST   /api/rodina/aktivace   { token, heslo } odkaz z SMS → heslo → přihlášen
  *   POST   /api/rodina/login      { telefon, heslo } → cookie na 30 dní
  *   POST   /api/rodina/odhlaseni
- *   GET    /api/rodina/ja         kdo jsem a které kamery vidím
+ *   GET    /api/rodina/ja         kdo jsem (role, tenant, jméno) a které kamery vidím
  *   POST   /api/rodina/heslo      { stare, nove }
  *
  * Stránka i API běží na jedné adrese (VPS za Caddy), takže bez CORS.
  * Všechno kromě health, login, aktivace a odhlášení chce přihlášení. Uživatel
  * rodiny smí jen obraz a události svých kamer; nastavení je poskytovatele.
  */
-import { kdo, cookie, cookieRodina, odhlaseni, hesloSedi } from './session.mjs';
+import { kdo, cookie, cookieRodina, cookieDispecer, odhlaseni, hesloSedi } from './session.mjs';
 import { createUzivatele, textPozvanky, textZadosti, formatTelefon, normalizeTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
-import { createProtoStav } from './proto-stav.mjs';
 import { createAsistent } from './asistent.mjs';
 import { createUpozorneni } from './upozorneni.mjs';
+import { createPdp } from './pdp.mjs';
+import { createNajemci } from './najemci.mjs';
+import { createDispecer } from './dispecer.mjs';
+import { normTenant } from './tabulky.mjs';
 import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
 import { normalizeIntervals, isDeviceId, MAX_INTERVALS } from './plan-pravidla.mjs';
@@ -83,17 +92,22 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, proto = null, asistent = null }) {
-  uzivatele = uzivatele || createUzivatele(store);
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null,
+                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [] }) {
   sms = sms || createSms();
-  proto = proto || createProtoStav({ store, udalosti, upozorni: createUpozorneni({ sms }) });
   asistent = asistent || createAsistent();
-  // Each camera carries what it can report itself, so the page offers only that.
+  pdp = pdp || createPdp();
+  uzivatele = uzivatele || createUzivatele(pdp.tabulky || { async vyber() { return []; }, async vloz() {}, async uprav() { return 0; }, async smaz() { return 0; } });
+  najemci = najemci || createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }) });
+  dispecer = dispecer || createDispecer();
+  // Each camera carries what it can report itself and which tenant it belongs to (cameras.json).
   async function kamery() {
     const names = cameraNames();
     const st = udalosti ? udalosti.stav() : {};
-    return (await go2rtc.streams()).map((id) => ({ id, name: names[id] || id, events: st[id]?.events || [] }));
+    const tenanty = Object.fromEntries((await kameryTenanty()).map((k) => [k.id, normTenant(k.tenant)]));
+    return (await go2rtc.streams()).map((id) => ({ id, name: names[id] || id, tenant: tenanty[id] || '', events: st[id]?.events || [] }));
   }
+  const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
 
   async function telo(req) {
     try { return await req.json(); }
@@ -106,19 +120,42 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     const m = req.method.toUpperCase();
 
     try {
-      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json(health());
+      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno });
+
+      // Tenant pro přihlašovací stránku: jen název, aby uživatel viděl, že je u správného poskytovatele.
+      if (m === 'GET' && path === '/api/tenant') {
+        const t = await najemci.tenant(url.searchParams.get('id') || '');
+        return json({ ok: true, tenant: { id: t.id, nazev: t.nazev } });
+      }
 
       if (m === 'POST' && path === '/api/login') {
         const ip = klientIp(req);
         const cekat = limiter.blokovano(ip);
         if (cekat) return json({ ok: false, error: `Příliš mnoho pokusů. Zkuste to za ${Math.ceil(cekat / 60)} min.` }, 429);
-        const { password } = await telo(req);
+        const { password, tenant } = await telo(req);
         if (!hesloSedi(password)) {
           limiter.chyba(ip);
           return json({ ok: false, error: 'Nesprávné heslo Famicura.' }, 401);
         }
         limiter.uspech(ip);
-        return json({ ok: true }, 200, { 'Set-Cookie': cookie() });
+        // Správce se zvoleným tenantem (?tenant= v odkazu) vidí jeho dispečink; neznámý tenant je chyba, ne tiché přihlášení bez něj.
+        const t = tenant ? (await najemci.tenant(tenant)).id : '';
+        return json({ ok: true, tenant: t }, 200, { 'Set-Cookie': cookie(Date.now(), t) });
+      }
+
+      // Dispečer: účet Péče doma plus tenanta (jhn-apps pecedomaplus-auth), cookie vydá tenhle server.
+      if (m === 'POST' && path === '/api/dispecink/login') {
+        const ip = klientIp(req);
+        const cekat = limiter.blokovano(ip);
+        if (cekat) return json({ ok: false, error: `Příliš mnoho pokusů. Zkuste to za ${Math.ceil(cekat / 60)} min.` }, 429);
+        const { tenant, login, heslo } = await telo(req);
+        const t = await najemci.tenant(tenant);
+        if (typeof login !== 'string' || !login.trim() || typeof heslo !== 'string') return json({ ok: false, error: 'Zadejte přihlašovací jméno a heslo.' }, 400);
+        let v;
+        try { v = await dispecer.login({ tenant: t.id, login: login.trim(), heslo }); }
+        catch (e) { if (e.status === 401 || e.status === 403) limiter.chyba(ip); throw e; }
+        limiter.uspech(ip);
+        return json({ ok: true, uzivatel: v.uzivatel, tenant: { id: t.id, nazev: t.nazev } }, 200, { 'Set-Cookie': cookieDispecer(t.id, v.uzivatel.id, v.uzivatel.jmeno) });
       }
 
       if (m === 'GET' && path === '/api/status') {
@@ -148,7 +185,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const { token, heslo } = await telo(req);
         if (typeof token !== 'string' || token.length > 100) return json({ ok: false, error: 'Chybí odkaz z pozvánky.' }, 400);
         const u = await uzivatele.aktivuj(token, heslo);
-        return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.id) });
+        return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.tenant, u.id) });
       }
       if (m === 'POST' && path === '/api/rodina/login') {
         const ip = klientIp(req);
@@ -158,7 +195,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const u = await uzivatele.prihlas(telefon, heslo);
         if (!u) { limiter.chyba(ip); return json({ ok: false, error: 'Telefon nebo heslo nesedí.' }, 401); }
         limiter.uspech(ip);
-        return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.id) });
+        return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.tenant, u.id) });
       }
       if (m === 'POST' && path === '/api/rodina/odhlaseni') return json({ ok: true }, 200, { 'Set-Cookie': odhlaseni() });
       // Odkaz z SMS klepnutý podruhé: stránka se zeptá, zda pozvánka ještě platí, a jinak rovnou nabídne přihlášení.
@@ -169,22 +206,33 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       }
 
       const ja = kdo(req.headers);
-      if (!ja) return json({ ok: false, error: 'Přihlaste se heslem Famicura.' }, 401);
+      if (!ja) return json({ ok: false, error: 'Přihlaste se.' }, 401);
+      const tenant = ja.tenant || '';
       // A family login outlives the account: a deleted user is logged out at once.
-      const rodina = ja.role === 'rodina' ? await uzivatele.podleId(ja.id) : null;
+      const rodina = ja.role === 'rodina' ? await uzivatele.pro(tenant).podleId(ja.id) : null;
       if (ja.role === 'rodina' && !rodina) return json({ ok: false, error: 'Účet už neexistuje. Požádejte poskytovatele o novou pozvánku.' }, 401, { 'Set-Cookie': odhlaseni() });
-      const smiKameru = (id) => !rodina || rodina.kamery.includes(id);
+      // Kamera je vidět: rodině jen její, dispečinku a správci s tenantem jen kamery tenanta, správci bez tenanta všechny.
+      const smiKameru = (c) => {
+        const id = typeof c === 'string' ? c : c.id;
+        if (rodina) return rodina.kamery.includes(id);
+        if (!tenant) return true;
+        return (typeof c === 'string' ? '' : normTenant(c.tenant)) === tenant;
+      };
+      const smiKameruId = async (id) => smiKameru((await kamery()).find((c) => c.id === id) || { id, tenant: '' });
       const jenPoskytovatel = () => json({ ok: false, error: 'Tohle nastavuje poskytovatel.' }, 403);
+      const uz = () => { if (!tenant) throw chyba('Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…', 400); return uzivatele.pro(tenant); };
+      const stavTenanta = () => { if (!tenant) throw chyba('Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…', 400); return najemci.pro(tenant); };
 
       if (m === 'GET' && path === '/api/rodina/ja') {
         const vse = await kamery();
-        return json({ ok: true, role: ja.role, jmeno: rodina ? rodina.jmeno : 'Poskytovatel', telefon: rodina ? formatTelefon(rodina.telefon) : null,
-          kamery: vse.filter((c) => smiKameru(c.id)) });
+        const t = tenant ? await najemci.tenant(tenant).catch(() => ({ id: tenant, nazev: '' })) : null;
+        return json({ ok: true, role: ja.role, tenant: t ? { id: t.id, nazev: t.nazev } : null, jmeno: rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce',
+          telefon: rodina ? formatTelefon(rodina.telefon) : null, kamery: vse.filter(smiKameru).map(({ id, name, events }) => ({ id, name, events })) });
       }
       if (m === 'POST' && path === '/api/rodina/heslo') {
-        if (!rodina) return json({ ok: false, error: 'Heslo poskytovatele mění ./deploy/vps-env.sh.' }, 400);
+        if (!rodina) return json({ ok: false, error: 'Heslo dispečera mění portál Péče doma plus, heslo správce ./deploy/vps-env.sh.' }, 400);
         const { stare, nove } = await telo(req);
-        await uzivatele.zmenHeslo(rodina.id, stare, nove);
+        await uz().zmenHeslo(rodina.id, stare, nove);
         return json({ ok: true });
       }
 
@@ -201,22 +249,25 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       };
       if (path === '/api/rodina/uzivatele') {
         if (rodina) return jenPoskytovatel();
-        if (m === 'GET') return json({ ok: true, uzivatele: await uzivatele.seznam(), smsNastaveno: sms.nastaveno });
+        if (m === 'GET') return json({ ok: true, uzivatele: await uz().seznam(), smsNastaveno: sms.nastaveno });
         if (m !== 'POST') return json({ ok: false, error: 'GET nebo POST' }, 405);
         const { jmeno, telefon, kamery: k, poslatSms } = await telo(req);
         if (k && Array.isArray(k) && !k.every((id) => isDeviceId(id))) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
-        return pozvanka(await uzivatele.vytvor({ jmeno, telefon, kamery: k }), !!poslatSms);
+        // jen kamery tenanta: účet rodiny u cizí kamery by jí otevřel cizí obraz
+        const moje = (await kamery()).filter(smiKameru).map((c) => c.id);
+        if (Array.isArray(k) && k.some((id) => !moje.includes(id))) return json({ ok: false, error: 'Kamera nepatří tomuto poskytovateli.' }, 403);
+        return pozvanka(await uz().vytvor({ jmeno, telefon, kamery: k }), !!poslatSms);
       }
       const mu = path.match(/^\/api\/rodina\/uzivatele\/([a-z0-9]{1,40})(\/pozvanka)?$/);
       if (mu) {
         if (rodina) return jenPoskytovatel();
-        if (mu[2] && m === 'POST') { const { poslatSms } = await telo(req).catch(() => ({})); return pozvanka(await uzivatele.novaPozvanka(mu[1]), !!poslatSms); }
-        if (!mu[2] && m === 'DELETE') { await uzivatele.smaz(mu[1]); return json({ ok: true }); }
+        if (mu[2] && m === 'POST') { const { poslatSms } = await telo(req).catch(() => ({})); return pozvanka(await uz().novaPozvanka(mu[1]), !!poslatSms); }
+        if (!mu[2] && m === 'DELETE') { await uz().smaz(mu[1]); return json({ ok: true }); }
         return json({ ok: false, error: 'Neznámá adresa.' }, 404);
       }
 
       if (m === 'GET' && path === '/api/devices') {
-        return json({ ok: true, devices: (await kamery()).filter((c) => smiKameru(c.id)) });
+        return json({ ok: true, devices: (await kamery()).filter(smiKameru) });
       }
 
       if (path === '/api/stream') {
@@ -228,7 +279,10 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           return json({ ok: false, error: 'Chybí SDP offer.' }, 400);
         }
         // Only a stream go2rtc knows: the id goes into its URL.
-        if (!(await go2rtc.streams()).includes(deviceId) || !smiKameru(deviceId)) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        if (!(await go2rtc.streams()).includes(deviceId) || !(await smiKameruId(deviceId))) {
+          console.error(`[famicura-tapo] obraz kamery ${deviceId} odmítnut: ${ja.role}${tenant ? ' ' + tenant : ''}${rodina ? ' uživatel ' + rodina.id : ''} – kamera není v go2rtc nebo nepatří tomuhle tenantovi / uživateli`);
+          return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        }
         return json({ ok: true, sdpAnswer: await go2rtc.webrtc(deviceId, sdpOffer), sessionUrl: null });
       }
 
@@ -238,7 +292,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'GET' && (path === '/api/stream.mp4' || path === '/api/stream.m3u8')) {
         const id = url.searchParams.get('deviceId') || '';
         if (!isDeviceId(id)) return json({ ok: false, error: 'Chybí nebo je neplatné deviceId.' }, 400);
-        if (!(await go2rtc.streams()).includes(id) || !smiKameru(id)) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        if (!(await go2rtc.streams()).includes(id) || !(await smiKameruId(id))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         return go2rtc.proxy(`${path}?src=${encodeURIComponent(id)}&video=h264`, { signal: req.signal });
       }
       if (m === 'GET' && path.startsWith('/api/hls/')) {
@@ -256,7 +310,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // Rodina i poskytovatel ho vidí celý: jsou to ukázková data plus
       // souhlasy a události k jejich kameře; nastavení serveru v něm není.
       if (m === 'GET' && path === '/api/proto/stav') {
-        const s = await proto.stav();
+        const s = await (await stavTenanta()).stav();
         const v = Number(url.searchParams.get('v'));
         if (v && v === s.v) return json({ ok: true, v: s.v, zmena: false });
         return json({ ok: true, v: s.v, zmena: true, state: s.state });
@@ -264,11 +318,11 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'POST' && path === '/api/proto/akce') {
         const { akce, args } = await telo(req);
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
-        const vysledek = await proto.proved(akce, args);
+        const vysledek = await (await stavTenanta()).proved(akce, args);
         // Žádost dispečinku o plný obraz: rodině u té kamery odejde SMS, ať otevře aplikaci a rozhodne.
         if (akce === 'requestFull' && !rodina && vysledek.vysledek && typeof vysledek.vysledek === 'object') {
           const r = vysledek.vysledek;
-          const prijemci = (await uzivatele.seznam()).filter((u) => u.aktivni && u.kamery.includes(r.patientId));
+          const prijemci = (await uz().seznam()).filter((u) => u.aktivni && u.kamery.includes(r.patientId));
           const posk = (vysledek.state.poskytovatel && vysledek.state.poskytovatel.nazev) || 'Poskytovatel';
           const text = textZadosti({ poskytovatel: posk, duvod: r.reason, odkaz: `${verejnaAdresa(req)}/proto/rodina.html` });
           const stav = { prijemci: prijemci.length, odeslano: 0, chyba: null };
@@ -317,10 +371,11 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'GET' && path === '/api/events') {
         const since = Number(url.searchParams.get('since')) || 0;
         const cas = Date.now();                 // before the list, so nothing slips between
-        return json({ ok: true, cas, events: (udalosti ? udalosti.nedavne(since) : []).filter((e) => smiKameru(e.kameraId)) });
+        const moje = (await kamery()).filter(smiKameru).map((c) => c.id);
+        return json({ ok: true, cas, events: (udalosti ? udalosti.nedavne(since) : []).filter((e) => moje.includes(e.kameraId)) });
       }
 
-      if (rodina) return jenPoskytovatel();   // everything below changes settings or writes to CLB1
+      if (ja.role !== 'admin') return jenPoskytovatel();   // everything below is the server itself: plans, analysis, CLB1
 
       if (path === '/api/schedules') {
         if (m === 'GET') return json({ ok: true, max: MAX_INTERVALS, schedules: await store.nacti('schedules') });

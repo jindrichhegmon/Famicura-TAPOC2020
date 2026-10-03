@@ -1,18 +1,20 @@
 /**
- * Uživatelé rodiny: zakládá je poskytovatel (dispečink), rodina dostane
- * pozvánku SMS s odkazem, při prvním otevření si zvolí heslo a přihlašuje se
- * telefonem a heslem. Stejný princip jako aplikace pacienta Péče doma (kód
- * z SMS od centrály), navíc s heslem, protože rodina vidí obraz.
+ * Uživatelé rodiny: zakládá je dispečink poskytovatele (tenanta), rodina
+ * dostane pozvánku SMS s odkazem, při prvním otevření si zvolí heslo a
+ * přihlašuje se telefonem a heslem. Stejný princip jako aplikace pacienta
+ * Péče doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz.
  *
- * Uloženo v DATA_DIR/uzivatele.json (store.mjs). Heslo jen jako scrypt hash,
- * pozvánka jen jako SHA-256 jejího tokenu: kdo soubor přečte, nepřihlásí se.
+ * Uloženo v PeceDomaPlus, tabulka A_KAM_UzivatelRodiny tenanta (src/tabulky.mjs).
+ * Heslo jen jako scrypt hash, pozvánka jen jako SHA-256 jejího tokenu: kdo
+ * tabulku přečte, nepřihlásí se. Odkaz z SMS a přihlášení telefonem tenanta
+ * neznají, hledají se přes všechny tenanty ('*') a vrátí i ten jeho.
  */
 import crypto from 'node:crypto';
 import { isDeviceId } from './plan-pravidla.mjs';
 
 export const POZVANKA_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const HESLO_MIN = 8;
-const SOUBOR = 'uzivatele';
+const TAB = 'A_KAM_UzivatelRodiny';
 
 /** „+420 777 123 456“, „00420777123456“, „777123456“ → „777123456“; jinak null. */
 export function normalizeTelefon(raw) {
@@ -51,107 +53,95 @@ export function overHeslo(heslo) {
   return null;
 }
 
+const kameryZ = (v) => { try { const k = JSON.parse(v || '[]'); return Array.isArray(k) ? k.map(String) : []; } catch { return []; } };
+const iso = (ms) => (ms ? new Date(Number(ms)).toISOString() : null);
+
 /** Co o uživateli smí vidět dispečink i on sám (bez hashů). */
-function verejne(u) {
-  return { id: u.id, jmeno: u.jmeno, telefon: u.telefon, kamery: [...u.kamery], aktivni: !!u.heslo,
-    pozvankaPlatiDo: u.pozvanka ? u.pozvanka.platiDo : null, vytvoren: u.vytvoren, posledniPrihlaseni: u.posledniPrihlaseni || null };
+function verejne(r) {
+  return { id: r.Id, jmeno: r.Jmeno, telefon: r.Telefon, kamery: kameryZ(r.Kamery), aktivni: !!r.HesloHash,
+    pozvankaPlatiDo: r.PozvankaHash ? r.PozvankaDo : null, vytvoren: iso(r.Vytvoren), posledniPrihlaseni: iso(r.PosledniPrihlaseni), tenant: r.IDTENANT || undefined };
 }
 
-export function createUzivatele(store, { now = Date.now, nahoda = (n) => crypto.randomBytes(n) } = {}) {
-  const nacti = async () => (await store.nacti(SOUBOR)) || {};
-  const uloz = (vsichni) => store.uloz(SOUBOR, vsichni);
+export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypto.randomBytes(n) } = {}) {
+  const pozvankaPro = () => { const token = nahoda(16).toString('base64url'); return { token, PozvankaHash: hashTokenu(token), PozvankaDo: now() + POZVANKA_TTL_MS }; };
+  const podleTokenu = async (token) => (await tabulky.vyber('*', TAB, { kde: { PozvankaHash: hashTokenu(token || '') }, limit: 1 }))[0] || null;
 
-  function pozvankaPro(u) {
-    const token = nahoda(16).toString('base64url');   // 22 znaků: v SMS každý znak hraje roli
-    u.pozvanka = { hash: hashTokenu(token), platiDo: now() + POZVANKA_TTL_MS };
-    return token;
+  /** Účty jednoho tenanta (dispečink, aplikace rodiny po přihlášení). */
+  function pro(tenant) {
+    const t = String(tenant || '').toUpperCase();
+    return {
+      async seznam() {
+        return (await tabulky.vyber(t, TAB)).map(verejne).sort((a, b) => a.jmeno.localeCompare(b.jmeno, 'cs'));
+      },
+      async podleId(id) {
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        return r ? verejne(r) : null;
+      },
+      /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). */
+      async vytvor({ jmeno, telefon, kamery }) {
+        const j = String(jmeno ?? '').trim();
+        if (!j || j.length > 60 || /[\r\n]/.test(j)) throw chyba('Jméno: 1 až 60 znaků.');
+        const tel = normalizeTelefon(telefon);
+        if (!tel) throw chyba('Telefon musí být české mobilní číslo, např. 777 123 456.');
+        const k = Array.isArray(kamery) ? kamery.map(String) : [];
+        if (!k.length || k.length > 10 || !k.every(isDeviceId)) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
+        if ((await tabulky.vyber(t, TAB, { kde: { Telefon: tel }, limit: 1 })).length) throw chyba('Uživatel s tímhle telefonem už existuje.', 409);
+        const id = nahoda(8).toString('hex');
+        const p = pozvankaPro();
+        const r = { Id: id, Jmeno: j, Telefon: tel, HesloHash: null, Kamery: [...new Set(k)], PozvankaHash: p.PozvankaHash, PozvankaDo: p.PozvankaDo, Vytvoren: now(), PosledniPrihlaseni: null };
+        await tabulky.vloz(t, TAB, r);
+        return { uzivatel: verejne(r), token: p.token };
+      },
+      /** Nová pozvánka = nové heslo: staré přestane platit, uživatel si zvolí jiné. */
+      async novaPozvanka(id) {
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        if (!r) throw chyba('Uživatel neexistuje.', 404);
+        const p = pozvankaPro();
+        await tabulky.uprav(t, TAB, { Id: r.Id }, { HesloHash: null, PozvankaHash: p.PozvankaHash, PozvankaDo: p.PozvankaDo });
+        return { uzivatel: verejne({ ...r, HesloHash: null, PozvankaHash: p.PozvankaHash, PozvankaDo: p.PozvankaDo }), token: p.token };
+      },
+      async zmenHeslo(id, stare, nove) {
+        const chybaHesla = overHeslo(nove);
+        if (chybaHesla) throw chyba(chybaHesla);
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        if (!r || !r.HesloHash || !hesloOdpovida(stare, r.HesloHash)) throw chyba('Současné heslo nesedí.', 401);
+        await tabulky.uprav(t, TAB, { Id: r.Id }, { HesloHash: hashHesla(nove) });
+        return verejne(r);
+      },
+      async smaz(id) {
+        if (!(await tabulky.smaz(t, TAB, { Id: String(id) }))) throw chyba('Uživatel neexistuje.', 404);
+      },
+    };
   }
 
   return {
-    async seznam() {
-      return Object.values(await nacti()).sort((a, b) => a.jmeno.localeCompare(b.jmeno, 'cs')).map(verejne);
+    pro,
+    /** Je pozvánka k tomuto tokenu platná (nepoužitá a nepropadlá)? Pro stránku, bez změny stavu. */
+    async pozvanka(token) {
+      if (typeof token !== 'string' || !token) return { platna: false };
+      const r = await podleTokenu(token);
+      return r && r.PozvankaDo >= now() ? { platna: true, jmeno: r.Jmeno, tenant: r.IDTENANT } : { platna: false };
     },
-
-    async podleId(id) {
-      const u = (await nacti())[id];
-      return u ? verejne(u) : null;
-    },
-
-    async pozvanka(token) { return pozvankaPlati(await nacti(), token, now()); },
-
-    /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). */
-    async vytvor({ jmeno, telefon, kamery }) {
-      const j = String(jmeno ?? '').trim();
-      if (!j || j.length > 60 || /[\r\n]/.test(j)) throw chyba('Jméno: 1 až 60 znaků.');
-      const t = normalizeTelefon(telefon);
-      if (!t) throw chyba('Telefon musí být české mobilní číslo, např. 777 123 456.');
-      const k = Array.isArray(kamery) ? kamery.map(String) : [];
-      if (!k.length || k.length > 10 || !k.every(isDeviceId)) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
-      const vsichni = await nacti();
-      if (Object.values(vsichni).some((u) => u.telefon === t)) throw chyba('Uživatel s tímhle telefonem už existuje.', 409);
-      const id = nahoda(8).toString('hex');
-      const u = { id, jmeno: j, telefon: t, kamery: [...new Set(k)], heslo: null, vytvoren: new Date(now()).toISOString() };
-      const token = pozvankaPro(u);
-      vsichni[id] = u;
-      await uloz(vsichni);
-      return { uzivatel: verejne(u), token };
-    },
-
-    /** Nová pozvánka = nové heslo: staré přestane platit, uživatel si zvolí jiné. */
-    async novaPozvanka(id) {
-      const vsichni = await nacti();
-      const u = vsichni[id];
-      if (!u) throw chyba('Uživatel neexistuje.', 404);
-      u.heslo = null;
-      const token = pozvankaPro(u);
-      await uloz(vsichni);
-      return { uzivatel: verejne(u), token };
-    },
-
-    /** Odkaz z SMS: token → nastavení hesla. Vrací uživatele k přihlášení. */
+    /** Odkaz z SMS: token → nastavení hesla. Vrací uživatele (s tenantem) k přihlášení. */
     async aktivuj(token, heslo) {
       const chybaHesla = overHeslo(heslo);
       if (chybaHesla) throw chyba(chybaHesla);
-      const vsichni = await nacti();
-      const h = hashTokenu(token || '');
-      const u = Object.values(vsichni).find((x) => x.pozvanka && x.pozvanka.hash === h);
-      if (!u || u.pozvanka.platiDo < now()) throw chyba('Odkaz z pozvánky neplatí. Požádejte poskytovatele o novou pozvánku.', 410);
-      u.heslo = hashHesla(heslo);
-      delete u.pozvanka;
-      u.posledniPrihlaseni = new Date(now()).toISOString();
-      await uloz(vsichni);
-      return verejne(u);
+      const r = await podleTokenu(token);
+      if (!r || r.PozvankaDo < now()) throw chyba('Odkaz z pozvánky neplatí. Požádejte poskytovatele o novou pozvánku.', 410);
+      const zmeny = { HesloHash: hashHesla(heslo), PozvankaHash: null, PozvankaDo: null, PosledniPrihlaseni: now() };
+      await tabulky.uprav(r.IDTENANT, TAB, { Id: r.Id }, zmeny);
+      return verejne({ ...r, ...zmeny });
     },
-
-    /** Telefon + heslo → uživatel, nebo null (stejná odpověď pro neznámý telefon i špatné heslo). */
+    /** Telefon + heslo → uživatel (s tenantem), nebo null (stejná odpověď pro neznámý telefon i špatné heslo). */
     async prihlas(telefon, heslo) {
-      const t = normalizeTelefon(telefon);
-      const vsichni = await nacti();
-      const u = t ? Object.values(vsichni).find((x) => x.telefon === t) : null;
-      // Even for an unknown number the hash runs, so timing tells nothing apart.
-      const ok = hesloOdpovida(heslo, u?.heslo || hashHesla('x'));
-      if (!u || !u.heslo || !ok) return null;
-      u.posledniPrihlaseni = new Date(now()).toISOString();
-      await uloz(vsichni);
-      return verejne(u);
-    },
-
-    async zmenHeslo(id, stare, nove) {
-      const chybaHesla = overHeslo(nove);
-      if (chybaHesla) throw chyba(chybaHesla);
-      const vsichni = await nacti();
-      const u = vsichni[id];
-      if (!u || !u.heslo || !hesloOdpovida(stare, u.heslo)) throw chyba('Současné heslo nesedí.', 401);
-      u.heslo = hashHesla(nove);
-      await uloz(vsichni);
-      return verejne(u);
-    },
-
-    async smaz(id) {
-      const vsichni = await nacti();
-      if (!vsichni[id]) throw chyba('Uživatel neexistuje.', 404);
-      delete vsichni[id];
-      await uloz(vsichni);
+      const tel = normalizeTelefon(telefon);
+      const kandidati = tel ? await tabulky.vyber('*', TAB, { kde: { Telefon: tel } }) : [];
+      // I pro neznámé číslo hash běží, aby čas nic neprozradil; při víc tenantech se stejným číslem vyhraje správné heslo.
+      let u = null;
+      for (const r of kandidati) if (r.HesloHash && hesloOdpovida(heslo, r.HesloHash)) { u = r; break; }
+      if (!u) { hesloOdpovida(heslo, hashHesla('x')); return null; }
+      await tabulky.uprav(u.IDTENANT, TAB, { Id: u.Id }, { PosledniPrihlaseni: now() });
+      return verejne({ ...u, PosledniPrihlaseni: now() });
     },
   };
 }
@@ -169,19 +159,12 @@ export function textPozvanky({ jmeno, odkaz }) {
     + 'Priste se jen prihlasite telefonem a heslem.';
 }
 
-/** Je pozvánka k tomuto tokenu platná (nepoužitá a nepropadlá)? Pro stránku, bez změny stavu. */
-export function pozvankaPlati(vsichni, token, now = Date.now()) {
-  const h = hashTokenu(token || '');
-  const u = Object.values(vsichni).find((x) => x.pozvanka && x.pozvanka.hash === h);
-  return u && u.pozvanka.platiDo >= now ? { platna: true, jmeno: u.jmeno } : { platna: false };
-}
-
 /**
  * SMS rodině, když dispečink požádá o plný obraz: ať otevře aplikaci a žádost
  * povolí nebo odmítne. Jen ASCII a do 160 znaků, aby to byla jedna SMS.
  */
 export function textZadosti({ poskytovatel, duvod, odkaz }) {
-  const bez = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const bez = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
   const kdo = bez(poskytovatel).slice(0, 40) || 'Poskytovatel';
   const proc = bez(duvod).slice(0, 40);
   return `Famicura: ${kdo} zada o plny obraz${proc ? ' (' + proc + ')' : ''}. Otevrete aplikaci a zadost povolte nebo odmitnete: ${odkaz}`;

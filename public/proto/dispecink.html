@@ -16,21 +16,17 @@
   <div class="gatecard">
     <img class="gatelogo" src="/proto/ikony/famicura-192.png" alt="" width="72" height="72">
     <h1>Famicura · Dispečink</h1>
-    <p class="gatesub" id="gateSub">Přihlaste se heslem Famicura (poskytovatel). Po přihlášení je obraz z kamery k dispozici.</p>
-    <form id="gLogin" class="gateform" autocomplete="on">
-      <label>Heslo Famicura<input type="password" id="gPw" name="password" autocomplete="current-password" required autofocus></label>
-      <p class="gateerr hide" id="gLoginErr"></p>
-      <button class="btn wide" type="submit">Přihlásit se</button>
-      <p class="hint">Stejné heslo jako do hlavní aplikace. Přihlášení platí 12 hodin pro dispečink, provoz i hlavní aplikaci v tomhle prohlížeči.</p>
-    </form>
+    <p class="gatesub" id="gateSub">Přihlášení vypršelo nebo nejste přihlášeni jako dispečer poskytovatele.</p>
+    <p><a class="btn wide" id="gZnovu" href="/proto/dispecink.html">Přihlásit se</a></p>
+    <p class="hint">Dispečer se hlásí účtem Péče doma plus u svého poskytovatele (ID tenanta je v odkazu ?tenant=…), správce serveru heslem Famicura.</p>
   </div>
 </div>
 <div class="desk">
   <div class="deskbar">
-    <div><h1>Famicura · Dispečink <span class="verze" data-verze></span></h1><div class="small" id="hlavicka"></div></div>
+    <div><h1>Famicura · Dispečink <span class="verze" data-verze></span></h1><div class="small" id="hlavicka"></div><div class="small muted" id="jaInfo"></div></div>
     <div class="right">
       <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
-      <div class="hbtn"><button class="sm sec" id="napovedaBtn" title="Nápověda a asistent"><span class="ico">?</span> Nápověda</button><button class="sm sec icon" id="hlUprav" title="Nastavení poskytovatele a dispečinku" aria-label="Nastavení"><span class="ico">⚙</span></button></div>
+      <div class="hbtn"><button class="sm sec" id="napovedaBtn" title="Nápověda a asistent"><span class="ico">?</span> Nápověda</button><button class="sm sec icon" id="hlUprav" title="Nastavení poskytovatele a dispečinku" aria-label="Nastavení"><span class="ico">⚙</span></button><button class="sm sec" id="odhlasit" title="Odhlásit se">Odhlásit</button></div>
     </div>
   </div>
   <div id="critBanner"></div>

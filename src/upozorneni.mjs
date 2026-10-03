@@ -3,7 +3,7 @@
  * v dispečinku (až tři čísla na SMS a tři e-maily, sim-core setKontakty),
  * podle zatržení SMS / E-mail u události v Nastavení (watch[kind].sms/mail).
  *
- * Volá se ze stavu prototypu (src/proto-stav.mjs) po každé zapsané
+ * Volá se ze stavu tenanta (src/stav-tenant.mjs) po každé zapsané
  * události, skutečné z kamery i simulované. SMS a e-mail jdou stejným
  * webhookem Make jako pozvánky (src/sms.mjs); výsledek se zapíše k události
  * (ev.upozorneni), aby dispečink viděl, kolik zpráv odešlo a proč ne.

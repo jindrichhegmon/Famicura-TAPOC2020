@@ -578,7 +578,7 @@ $('loadDevices').onclick = async () => {
     return `
     <div class="dev">
       <div class="meta">
-        <span class="name">${esc(d.name)}</span>
+        <span class="name">${esc(d.name)}</span>${d.tenant ? ` <span class="muted small" title="Poskytovatel (tenant) z Péče doma plus">· ${esc(d.tenant)}</span>` : ' <span class="muted small" title="Kameru zatím nevidí žádný dispečink: ./deploy/vps-kamera.sh tenant ID_KAMERY ID_TENANTA">· bez poskytovatele</span>'}
         ${d.online === false ? '<span class="badge">offline</span>' : ''}
         ${planned ? `<span class="badge plan">${planned}× plán</span>` : ''}
       </div>

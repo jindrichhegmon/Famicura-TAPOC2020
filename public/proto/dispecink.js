@@ -6,12 +6,15 @@ const $ = (id) => document.getElementById(id);
  * jen tady a ukládají do sdíleného stavu na serveru: stejně je vidí všichni
  * dispečeři, detail kamery i aplikace rodiny. Jméno dispečera jde do převzetí
  * alertů a do žádostí o obraz. */
-const ME = () => sim.poskytovatel.dispecer;
+/* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
+let JA = null;
+const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
 const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
   $('hlavicka').textContent = [h.nazev, h.telefon, h.dispecer, h.smena, h.zaloha ? `záloha: ${h.zaloha}` : ''].filter(Boolean).join(' · ');
+  if (JA) $('jaInfo').textContent = `${JA.tenant ? `${JA.tenant.nazev || JA.tenant.id} (${JA.tenant.id})` : 'bez poskytovatele'} · přihlášen(a): ${JA.jmeno}${JA.role === 'admin' ? ' (správce serveru)' : ''}`;
   renderSmena();
 }
 /** Karta Směna: text z nastavení a čísla spočítaná z dnešních alertů (ne vymyšlená). */
@@ -136,32 +139,40 @@ let detailUnreg = null;
 /* Bez přihlášení se přihlašuje rovnou tady (heslo Famicura), ne oklikou přes
  * hlavní aplikaci. Po přihlášení se stránka načte znovu: obraz, stav ze
  * serveru i účty rodiny už jdou s cookie. */
-(async () => {
-  let role = null;
-  try { const r = await fetch('/api/rodina/ja', { cache: 'no-store' }); if (r.ok) role = (await r.json()).role; } catch { /* server away: stránka zůstane schovaná a gate ukáže chybu při pokusu o přihlášení */ }
-  if (role === 'admin') { document.body.classList.remove('pending'); return; }
-  if (role === 'rodina') $('gateSub').textContent = 'Jste přihlášen(a) jako rodina. Dispečink je jen pro poskytovatele: přihlaste se heslem Famicura.';
+/* Server stránku pošle jen přihlášenému dispečerovi tenanta (jinak přihlašovací
+ * stránku); tady se jen zjistí, kdo to je a jaké má kamery. Když mezitím
+ * přihlášení vypršelo, brána nabídne nové načtení (server pak dá přihlášení). */
+const pripraveno = (async () => {
+  try { const r = await fetch('/api/rodina/ja', { cache: 'no-store' }); if (r.ok) JA = await r.json(); } catch { /* server away */ }
+  if (JA && (JA.role === 'dispecer' || (JA.role === 'admin' && JA.tenant))) {
+    document.body.classList.remove('pending');
+    for (const k of JA.kamery || []) await sim.ensurePatient({ id: k.id, name: k.name });
+    renderHlavicka();
+    return true;
+  }
+  if (JA && JA.role === 'rodina') $('gateSub').textContent = 'Jste přihlášen(a) jako rodina. Dispečink je jen pro dispečery poskytovatele.';
   $('gate').classList.remove('hide');
-  setTimeout(() => $('gPw').focus(), 50);
-  $('gLogin').onsubmit = async (e) => {
-    e.preventDefault();
-    const err = $('gLoginErr'); err.classList.add('hide');
-    const b = e.target.querySelector('button'); b.disabled = true;
-    try {
-      const r = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: $('gPw').value }) });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) { err.textContent = body.error || `Chyba (${r.status})`; err.classList.remove('hide'); b.disabled = false; return; }
-      location.reload();
-    } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); b.disabled = false; }
-  };
+  return false;
 })();
+$('odhlasit').onclick = async () => { await fetch('/api/rodina/odhlaseni', { method: 'POST' }).catch(() => {}); location.reload(); };
 
-const src = createSource({ deviceId: 'tapoc2020' });
-window.__zdroj = src;
-src.connect();
-mountAuthBanner(src);
-src.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'obraz: skutečná kamera (HTTPS)' : 'obraz: skutečná kamera') : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
-sim.startRealEvents('tapoc2020');
+/* Obraz: každá kamera svůj zdroj (WebRTC, náhradně HTTPS), založený až když ji
+ * stránka poprvé kreslí. Lišta nahoře a poznámka v záhlaví sledují první kameru. */
+const zdroje = new Map();
+function zdrojPro(deviceId) {
+  let z = zdroje.get(deviceId);
+  if (!z) { z = createSource({ deviceId }); zdroje.set(deviceId, z); z.connect(); }
+  return z;
+}
+const prvniKamera = () => (JA?.kamery?.[0]?.id) || sim.state.patients.find((p) => p.real)?.id || 'tapoc2020';
+let srcHlavni = null;
+pripraveno.then(() => {
+  srcHlavni = zdrojPro(prvniKamera());
+  window.__zdroj = srcHlavni;
+  mountAuthBanner(srcHlavni);
+  srcHlavni.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'obraz: skutečná kamera (HTTPS)' : 'obraz: skutečná kamera') : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
+  if (!sim.naServeru) sim.startRealEvents(prvniKamera());
+});
 /* Přepínač zdroje: „Jen skutečné kamery“ ukáže jen kamery připojené k serveru
  * (pacient s real: true), „Demo“ i fiktivní pacienty. Volba je na tomhle
  * zařízení (localStorage), stav simulace zůstává společný; ?zdroj=demo|real ji přepne. */
@@ -169,6 +180,8 @@ const ZDROJ_KEY = 'famicura.proto.zdroj';
 const zParam = new URLSearchParams(location.search).get('zdroj');
 let zdroj = ['real', 'demo'].includes(zParam) ? zParam : (localStorage.getItem(ZDROJ_KEY) === 'demo' ? 'demo' : 'real');
 const visible = (p) => zdroj === 'demo' || !!p.real;
+// Se stavem na serveru (data tenanta) jsou všechny kamery skutečné: přepínač Demo nemá co ukázat.
+pripraveno.then((ok) => { if (ok && sim.naServeru) { $('zdroj').classList.add('hide'); $('zdrojNastaveni').closest('.fld').classList.add('hide'); } });
 function renderZdroj() { $('zdroj').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj))); }
 function nastavZdroj(z) {
   zdroj = z; localStorage.setItem(ZDROJ_KEY, zdroj); renderZdroj();
@@ -183,10 +196,7 @@ const panel = mountPanel({ role: 'dispecink', patientIds: () => sim.state.patien
 // ?rezim=full|blur|skeleton|none opens the real camera in that mode (as if the
 // family had set it for day and night) and straight in the detail.
 const rezim = new URLSearchParams(location.search).get('rezim');
-if (rezim && ['full', 'blur', 'skeleton', 'none'].includes(rezim)) {
-  sim.setConsent('tapoc2020', { den: rezim, noc: rezim });
-  selected = 'tapoc2020';
-}
+if (rezim && ['full', 'blur', 'skeleton', 'none'].includes(rezim)) pripraveno.then(() => { const id = prvniKamera(); sim.setConsent(id, { den: rezim, noc: rezim }); selected = id; renderDetail(true); renderTiles(); });
 
 /** What the tile of this patient may draw. */
 function tileMode(pid) {
@@ -235,7 +245,7 @@ function renderTiles() {
     box.innerHTML = list.map((p) => `<div class="tile" data-id="${p.id}"><div class="stage"><canvas></canvas><span class="tag"></span></div><div class="nm"><span>${esc(p.name)}</span><span class="badge st-badge"></span></div><div class="st"></div></div>`).join('');
     box.querySelectorAll('.tile').forEach((t) => {
       const pid = t.dataset.id;
-      tileRegs.set(pid, src.register(t.querySelector('canvas'), () => tileMode(pid)));
+      tileRegs.set(pid, zdrojPro(pid).register(t.querySelector('canvas'), () => tileMode(pid)));
       t.onclick = () => { selected = pid; askOpen = emergOpen = false; panel.select(pid); renderDetail(true); renderTiles(); };
     });
   }
@@ -322,7 +332,7 @@ function renderDetail(rebuild = false) {
         <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS</th><th>E-mail</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td><td><input type="checkbox" class="sms"></td><td><input type="checkbox" class="mail"></td></tr>`).join('')}</tbody></table>
         <p class="small muted" id="dwatchPozn"></p>
       </section>`;
-    detailUnreg = src.register(d.querySelector('#dcv'), () => detailMode(selected));
+    detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
     const tabs = d.querySelector('#dtabs');
     const ukazTab = (t) => { dtab = t; tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t))); d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== t)); };
     tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => ukazTab(b.dataset.t); });

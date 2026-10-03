@@ -1,6 +1,6 @@
 /*
  * Jádro simulace prototypu: data i akce bez prohlížeče, aby stejný kód běžel
- * v prohlížeči (sim.js) i na serveru (src/proto-stav.mjs). Na serveru je stav
+ * v prohlížeči (sim.js) i na serveru (src/stav-tenant.mjs). Na serveru je stav
  * sdílený: souhlas, který rodina nastaví na telefonu, vidí dispečink na Macu.
  */
 export const TZ = 'Europe/Prague';

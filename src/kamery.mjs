@@ -32,6 +32,9 @@ export function normalizeCamera(raw) {
   const stream = String(raw.stream ?? 'stream1').trim();
   const rtspPort = port(raw.rtspPort, RTSP_PORT);
   const onvifPort = port(raw.onvifPort, ONVIF_PORT);
+  // Tenant (poskytovatel) jako v Péče doma plus: ID z dbo.Tenants, 4–16 písmen a číslic; prázdné = kamera zatím bez poskytovatele.
+  const tenant = String(raw.tenant ?? '').trim().toUpperCase();
+  const place = String(raw.place ?? '').trim();
 
   if (!ID.test(id)) return { ok: false, error: 'ID kamery: malá písmena, číslice, - a _, nejvýš 40 znaků.' };
   // CAMERA_NAMES is "id=name; id=name", one line of .env.
@@ -43,8 +46,10 @@ export function normalizeCamera(raw) {
   if (user.includes(':')) return { ok: false, error: 'Uživatel kamery nesmí obsahovat dvojtečku.' };
   if (!STREAMS.includes(stream)) return { ok: false, error: 'Stream musí být stream1 (plné rozlišení) nebo stream2 (nízké).' };
   if (!rtspPort || !onvifPort) return { ok: false, error: 'Port RTSP a ONVIF musí být číslo 1–65535 (běžně 554 a 2020).' };
+  if (tenant && !/^[A-Z0-9]{4,16}$/.test(tenant)) return { ok: false, error: 'ID tenanta: 4 až 16 písmen a číslic (např. 22202480FAMICURA).' };
+  if (place.length > 120 || /[\r\n]/.test(place)) return { ok: false, error: 'Místo kamery: nejvýš 120 znaků.' };
 
-  return { ok: true, kamera: { id, name, ip, user, pass, stream, rtspPort, onvifPort } };
+  return { ok: true, kamera: { id, name, ip, user, pass, stream, rtspPort, onvifPort, tenant, place } };
 }
 
 /** „192.168.1.50“ pro kameru napřímo, „127.0.0.1:10554“ pro tunel SSH. */

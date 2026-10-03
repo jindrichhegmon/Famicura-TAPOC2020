@@ -200,7 +200,7 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
-Verze všech aplikací je na jednom místě (`public/verze.js`, teď **1.1**) a
+Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.0**) a
 ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
@@ -216,13 +216,13 @@ o plný obraz přijde přes celou obrazovku, bliká a zní, dokud ji rodina
 nepovolí, neodmítne nebo nezavře), **dispečink poskytovatele** (dlaždice
 pacientů v režimu, který rodina povolila, fronta alertů s převzetím a
 uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup;
-přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery
-připojené k serveru, demo přidá fiktivní pacienty; volba se pamatuje
-v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne; bez
-přihlášení se dispečink přihlašuje heslem Famicura rovnou ve svém okně
-a po přihlášení naběhne s obrazem kamery; bez přihlášení poskytovatele
-server místo `dispecink.html` a `provoz.html` pošle `prihlaseni.html`
-(žádná aplikace ani ukázková data); pod obrazem v detailu je trvalá
+dlaždice jsou **jen kamery přiřazené poskytovateli (tenantovi)**, žádné
+demo; dispečink se otevírá odkazem s ID tenanta
+(`/proto/dispecink.html?tenant=22202480FAMICURA`, ID si prohlížeč pamatuje)
+a bez přihlášení server místo `dispecink.html` a `provoz.html` pošle
+`prihlaseni.html` (žádná aplikace ani data): dispečer se přihlásí účtem
+Péče doma plus, správce serveru heslem správce, a dispečink naběhne
+s obrazem kamer; v záhlaví je poskytovatel, kdo je přihlášen a Odhlásit; pod obrazem v detailu je trvalá
 **Poznámka ke klientovi** (upravuje poskytovatel, změna jde do logu);
 u každé kamery jsou **poznámky dispečinku** (datum, čas a jméno se doplní samy, zapisují se do logu
 kamery jako události a jsou vidět i samostatně; rodina je nevidí);
@@ -230,8 +230,8 @@ kamery jako události a jsou vidět i samostatně; rodina je nevidí);
 drží všechny údaje poskytovatele a dispečinku, které se kdekoli
 zobrazují (název služby, telefon, e-mail, dispečer, směna, záloha
 s telefonem, vedoucí s telefonem, po kolika minutách eskaluje nepřevzatý
-kritický alert) a volbu Jen skutečné / Demo pro ten počítač; ukládají se
-do sdíleného stavu a stejně je vidí všichni dispečeři, detail kamery,
+kritický alert); název začíná jménem poskytovatele z `dbo.Tenants`, ostatní
+pole prázdná; ukládají se k tenantovi a stejně je vidí všichni jeho dispečeři, detail kamery,
 karta Směna i aplikace rodiny; jméno dispečera se zapisuje k převzetí
 alertů a k žádostem o obraz; karta Směna počítá dobu převzetí a podíl
 planých poplachů z dnešních alertů; **? Nápověda** otevře okno v grafice
@@ -249,9 +249,10 @@ se počítá jednou a sdílí. Bez přihlášení nebo bez kamery kreslí náhra
 scénu s animovanou postavou (stojí, sedí, leží). Všechno ostatní je
 simulace: pacienti, souhlasy, události, žádosti a notifikace. Data i
 akce jsou v `public/proto/sim-core.js`, stejný kód běží v prohlížeči i na
-serveru. **Přihlášeným drží stav server** (`src/proto-stav.mjs`,
-`GET /api/proto/stav`, `POST /api/proto/akce`, soubor
-`data/proto-stav.json`): rozostření, které rodina nastaví na telefonu,
+serveru. **Přihlášeným drží stav server, zvlášť pro každého
+poskytovatele** (`src/stav-tenant.mjs`, `GET /api/proto/stav`,
+`POST /api/proto/akce`, tabulky `A_KAM_*` v databázi PeceDomaPlus, viz
+níže): rozostření, které rodina nastaví na telefonu,
 vidí dispečink na jiném počítači do 2 s, žádost dispečinku o plný obraz
 dojde na telefon rodiny a její odpověď zpět. Prohlížeč se každé 2 s ptá
 na číslo verze a stáhne stav jen při změně; skutečné události kamery do
@@ -263,8 +264,60 @@ rodina ho nevidí. Dispečink a provoz ho mají vždy.
 Hodiny (noc 22–6, „jen v hodinách“) se počítají v pražském čase i na
 serveru v UTC. Panel **Simulace** vlevo dole vyvolá pád, překročení
 čáry, SOS z náramku, výpadek kamery, žádost dispečera o plný obraz nebo
-noc a tlačítkem Vynulovat vrátí výchozí stav pro všechny. Prototyp
-nastavení aplikace (plány, sledování, kamery) nemění.
+noc (události jdou do dat tenanta jako skutečné, jen bez příznaku
+„skutečná“); tlačítko Vynulovat je jen v ukázce bez přihlášení, data
+poskytovatele se nenulují. Nastavení aplikace (plány, sledování, kamery)
+to nemění.
+
+### Poskytovatelé (tenanti) a databáze Péče doma plus
+
+Od verze 2.0 nemá kamerové sledování žádný společný „prototypový“ stav:
+**každý poskytovatel má svá data** a pozná se stejně jako v portálu Péče
+doma plus, podle **ID tenanta** (`dbo.Tenants` v databázi `PeceDomaPlus`,
+např. `22202480FAMICURA` = FamiCura s.r.o.). Do Softru se nepíše nic.
+
+- **Tabulky** (`src/tabulky.mjs`, zakládá je server při startu, jen když
+  chybí): `A_KAM_Kamera` (kamera = klient: název, místo, poznámka, souhlas
+  rodiny, sledování, kontakty, dočasné nastavení, klid), `A_KAM_Udalost`
+  (události a alerty včetně převzetí, uzavření, eskalace a výsledku
+  upozornění), `A_KAM_Zadost` (žádosti o plný obraz), `A_KAM_Povoleni`
+  (platná povolení a kdo se dívá), `A_KAM_Nastaveni` (údaje poskytovatele,
+  notifikace) a `A_KAM_UzivatelRodiny` (účty rodiny: scrypt hash hesla,
+  SHA-256 pozvánky, kamery). Každá má `IDTENANT char(16)` s výchozí
+  hodnotou `SESSION_CONTEXT('IDTENANT')`, primární klíč začíná tenantem a
+  tabulka je ve stejné politice Row-Level Security (`sec.TenantPolicy`,
+  `sec.fn_TenantPredicate`) jako ostatní tabulky Plus. Každá dávka začíná
+  `EXEC sp_set_session_context 'IDTENANT'`, takže databáze pustí jen
+  řádky tenanta; dotazy navíc filtrují `IDTENANT` i samy.
+- **Spojení**: `PDP_SQL_SERVER` / `PDP_SQL_PORT` (prázdné = stejný server
+  jako CLB1), `PDP_SQL_DATABASE=PeceDomaPlus`, `PDP_SQL_USER=pecedomaplus_app`,
+  `PDP_SQL_PASSWORD` (`src/pdp.mjs`). Bez hesla server běží jen pro ukázku
+  bez přihlášení a při startu to hlásí. Vývoj bez SQL Serveru:
+  `PDP_FAKE_TENANTS="22202480FAMICURA=FamiCura s.r.o."` drží tenanty
+  a tabulky jen v paměti procesu.
+- **Stav tenanta** (`src/stav-tenant.mjs`, registr `src/najemci.mjs`): při
+  prvním použití se načte z tabulek, akce jsou tytéž jako v prohlížeči
+  (`sim-core.js`), po každé změně se zapíšou jen změněné řádky (otisk
+  řádku). Skutečné události kamer tenanta do něj skládá server sám a hned
+  posílá upozornění (`src/upozorneni.mjs`). Akce patří jen kamerám
+  tenanta (cizí kamera 404), vynulování neexistuje.
+- **Kamera patří tenantovi**: v `cameras.json` má pole `tenant` a `place`;
+  `./deploy/vps-kamera.sh` se na ně ptá při zavedení kamery, dodatečně
+  `./deploy/vps-kamera.sh tenant tapoc2020 22202480FAMICURA "Kancelář"`.
+  Kamera bez tenanta se v žádném dispečinku neukáže (hlavní aplikace ji
+  vypíše jako „bez poskytovatele“).
+- **Přihlášení** (`src/session.mjs`): cookie nese tenanta a roli. Dispečer
+  = účet Péče doma plus (`POST /api/dispecink/login { tenant, login, heslo }`
+  → aplikace `pecedomaplus-auth` na aplikačním serveru jhn-apps,
+  `JHN_APPS_URL` + `JHN_APPS_TOKEN`, `src/dispecer.mjs`; heslo se zde
+  neukládá ani neověřuje); správce serveru = `FAMICURA_PASSWORD` plus
+  zvolený tenant (`POST /api/login { password, tenant }`), v dispečinku
+  vystupuje jako „Správce“; rodina = telefon a heslo z tabulky tenanta.
+  Stránka `prihlaseni.html` vezme tenanta z odkazu (`?tenant=`), ověří ho
+  (`GET /api/tenant?id=`), uloží do prohlížeče a z adresy ho odstraní.
+  Každé API s daty (`/api/proto/*`, `/api/rodina/*`, `/api/devices`,
+  `/api/stream*`, `/api/events`) pracuje jen s tenantem z cookie;
+  nastavení serveru (plány, sledování, diagnostika) má jen správce.
 
 ### Přihlášení rodiny, účty a pozvánka SMS
 
@@ -329,8 +382,9 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
    se dál přihlašuje jen poskytovatel heslem Famicura; jeho cookie platí
    i v dispečinku a v aplikaci rodiny.
 
-Účty jsou v `data/uzivatele.json`: heslo jen jako scrypt hash, pozvánka jen
-jako SHA-256 tokenu. Přihlášení rodiny má stejný limit pokusů jako heslo
+Účty jsou v tabulce `A_KAM_UzivatelRodiny` tenanta (PeceDomaPlus): heslo jen
+jako scrypt hash, pozvánka jen jako SHA-256 tokenu; telefon je jedinečný
+v rámci tenanta. Přihlášení rodiny má stejný limit pokusů jako heslo
 Famicura. Bez přihlášení nabízí stránka rodiny **ukázku** (simulace bez
 skutečné kamery), aby šel prototyp dál předvádět.
 
@@ -353,11 +407,11 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 1.1) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.0) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
-`git tag -a v1.2 -m "Famicura Kamera 1.2" && git push origin v1.2`.
+`git tag -a v2.1 -m "Famicura Kamera 2.1" && git push origin v2.1`.
 Drobné opravy mezi verzemi číslo nemění.
 
 ## Prezentace a video
@@ -528,8 +582,8 @@ může zůstat nainstalovaný; nepřekáží.
 
 ```
 ./deploy/vps-deploy.sh      # aplikace + go2rtc pod pm2, port 3112, otevře 8555
-./deploy/vps-env.sh         # heslo do aplikace; heslo k SQL převezme, klíč vygeneruje
-./deploy/vps-kamera.sh      # IP kamery, účet kamery (heslo skrytě), název
+./deploy/vps-env.sh         # heslo správce; hesla k SQL (CLB1, PeceDomaPlus) a token jhn-apps převezme, klíč vygeneruje; SMS a asistent
+./deploy/vps-kamera.sh      # IP kamery, účet kamery (heslo skrytě), název, ID tenanta a místo
 ```
 
 `vps-kamera.sh` na konci ověří, že kamera posílá obraz. S Windows
@@ -567,7 +621,7 @@ Diagnostika uvidíte go2rtc, jestli kamera posílá obraz a připojení k CLB1.
 | složka | `/opt/famicura-tapo` (uživatel `jhnapps`) |
 | pm2 | `famicura-tapo` (server), `famicura-go2rtc` |
 | porty | 3112 (jen localhost, za Caddy), 8555 TCP+UDP (WebRTC), 51821 UDP (WireGuard), 1984 jen localhost (API go2rtc) |
-| stav | `.env`, `cameras.json`, `go2rtc.yaml`, `data/` (plány, sledované události). Nasazení je nepřepisuje. |
+| stav | `.env`, `cameras.json`, `go2rtc.yaml`, `data/` (plány, sledované události). Nasazení je nepřepisuje. Data poskytovatelů (kamery, události, souhlasy, účty rodiny) jsou v databázi PeceDomaPlus. |
 | go2rtc | verze 1.9.14, stažená z GitHubu a ověřená SHA-256 |
 
 Logy:
@@ -575,6 +629,15 @@ Logy:
 ```
 ssh -i ~/.ssh/id_ed25519_jhnapps root@95.216.201.2 "su - jhnapps -c 'pm2 logs famicura-tapo famicura-go2rtc --lines 50'"
 ```
+
+### PeceDomaPlus
+
+Tenanti (`dbo.Tenants`) a data každého poskytovatele v tabulkách `A_KAM_*`
+(viz „Poskytovatelé (tenanti) a databáze Péče doma plus“). Login
+`pecedomaplus_app` (db_owner, stejný jako portál Plus), heslo
+`PDP_SQL_PASSWORD` bere `vps-env.sh` z `/opt/jhn-apps/.env`. Tabulky si
+server založí sám při prvním startu s heslem; DDL vypíše
+`node -e "import('./src/tabulky.mjs').then(m => console.log(m.ddl()))"`.
 
 ### CLB1
 

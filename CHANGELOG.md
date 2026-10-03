@@ -5,6 +5,36 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.0 · 3. 10. 2026 · ostrý provoz podle poskytovatele (tenanta)
+
+- **Konec prototypu se společným stavem.** Každý poskytovatel (tenant Péče
+  doma plus, `dbo.Tenants`) má svá data v databázi **PeceDomaPlus**
+  v tabulkách `A_KAM_Kamera`, `A_KAM_Udalost`, `A_KAM_Zadost`,
+  `A_KAM_Povoleni`, `A_KAM_Nastaveni` a `A_KAM_UzivatelRodiny`
+  (`src/tabulky.mjs`; server je při startu založí, každá má `IDTENANT`
+  a Row-Level Security podle `SESSION_CONTEXT('IDTENANT')` jako ostatní
+  tabulky Plus). Soubory `data/proto-stav.json` a `data/uzivatele.json`
+  se už nepoužívají, do Softru se nepíše nic.
+- **Dispečink se spouští s ID tenanta v odkazu** jako Péče doma plus:
+  `/proto/dispecink.html?tenant=22202480FAMICURA`. ID si prohlížeč
+  zapamatuje, z adresy zmizí. Dispečer se přihlašuje **účtem Péče doma
+  plus** (jméno a heslo z portálu, ověřuje aplikační server jhn-apps);
+  správce serveru heslem správce. V záhlaví je vidět poskytovatel a kdo je
+  přihlášen, vpravo Odhlásit.
+- **Kamery patří tenantovi**: `./deploy/vps-kamera.sh` se ptá na ID tenanta
+  a místo; dodatečně `./deploy/vps-kamera.sh tenant tapoc2020 22202480FAMICURA
+  "Kancelář"`. Dispečink, provoz, rodina i obraz (`/api/stream`) pustí jen
+  kamery toho tenanta; cizí kamera je 404. Přepínač Jen skutečné / Demo
+  a tlačítko Vynulovat v ostrém provozu nejsou (ukázka bez přihlášení
+  zůstává jen v prohlížeči).
+- **Údaje poskytovatele** (⚙) začínají názvem z `dbo.Tenants`, ostatní pole
+  prázdná; uloží se k tenantovi. Účty rodiny jsou v tabulce tenanta, telefon
+  je jedinečný v rámci tenanta.
+- Nastavení serveru: `PDP_SQL_PASSWORD` (login `pecedomaplus_app`) a
+  `JHN_APPS_TOKEN` v `.env`; `./deploy/vps-env.sh` je vezme z
+  `/opt/jhn-apps/.env` na serveru, nebo se zeptá. Vývoj bez SQL Serveru:
+  `PDP_FAKE_TENANTS="ID=Název"` (jen v paměti).
+
 ## 1.1 · 3. 10. 2026
 
 - Aplikace rodiny: vlastní obraz na telefonu je vždy ostrý; volba zobrazení

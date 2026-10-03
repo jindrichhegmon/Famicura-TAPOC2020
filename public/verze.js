@@ -1,6 +1,6 @@
 /* Verze všech aplikací Famicura Kamera (hlavní aplikace, rodina, dispečink,
  * provoz): jedno místo, v hlavičce každé stránky jako „v1.0“. */
-window.FAMICURA_VERZE = '1.1';
+window.FAMICURA_VERZE = '2.0';
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-verze]').forEach((el) => { el.textContent = 'v' + window.FAMICURA_VERZE; });
 });

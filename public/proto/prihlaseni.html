@@ -10,35 +10,92 @@
 <script src="/verze.js"></script>
 </head>
 <body>
-<!-- Dispečink a provoz jsou jen pro přihlášeného poskytovatele: bez přihlášení
-     server místo nich pošle tuhle stránku (server.mjs). Po přihlášení se
-     původní adresa načte znovu. -->
+<!-- Dispečink a provoz jsou jen pro přihlášeného dispečera poskytovatele (tenanta):
+     bez přihlášení server místo nich pošle tuhle stránku (server.mjs). Tenant je
+     v odkazu (?tenant=ID) jako v Péče doma plus, nebo z minula v prohlížeči.
+     Dispečer se hlásí účtem Péče doma plus (jméno a heslo); správce serveru
+     heslem Famicura. Po přihlášení se původní adresa načte znovu. -->
 <div class="gate" id="gate">
   <div class="gatecard">
     <img class="gatelogo" src="/proto/ikony/famicura-192.png" alt="" width="72" height="72">
     <h1>Famicura · Poskytovatel <span class="verze" data-verze></span></h1>
-    <p class="gatesub" id="gateSub">Dispečink a provoz jsou jen pro přihlášeného poskytovatele. Přihlaste se heslem Famicura.</p>
-    <form id="gLogin" class="gateform" autocomplete="on">
-      <label>Heslo Famicura<input type="password" id="gPw" name="password" autocomplete="current-password" required autofocus></label>
+    <p class="gatesub" id="gateSub">Dispečink a provoz jsou jen pro přihlášené dispečery poskytovatele.</p>
+    <form id="gTenant" class="gateform hide" autocomplete="off">
+      <label>ID poskytovatele (tenanta)<input type="text" id="gTenantId" maxlength="16" placeholder="např. 22202480FAMICURA" autocomplete="off" required></label>
+      <p class="gateerr hide" id="gTenantErr"></p>
+      <button class="btn wide" type="submit">Pokračovat</button>
+      <p class="hint">Stejné ID jako v portálu Péče doma plus. Dostanete ho od správce, obvykle je v odkazu na dispečink (?tenant=…).</p>
+    </form>
+    <form id="gLogin" class="gateform hide" autocomplete="on">
+      <p class="hint" id="gKdo"></p>
+      <label>Přihlašovací jméno<input type="text" id="gUser" name="username" autocomplete="username" required autofocus></label>
+      <label>Heslo<input type="password" id="gPw" name="password" autocomplete="current-password" required></label>
       <p class="gateerr hide" id="gLoginErr"></p>
       <button class="btn wide" type="submit">Přihlásit se</button>
-      <p class="hint">Stejné heslo jako do hlavní aplikace. Přihlášení platí 12 hodin pro dispečink, provoz i hlavní aplikaci v tomhle prohlížeči. Rodina používá vlastní aplikaci: <a href="/proto/rodina.html">aplikace rodiny</a>.</p>
+      <p class="hint">Stejný účet jako do portálu Péče doma plus (Uživatelé a přihlašování). Přihlášení platí 12 hodin v tomhle prohlížeči. <a href="#" id="gJiny">Jiný poskytovatel</a> · <a href="#" id="gSpravce">Správce serveru</a></p>
     </form>
+    <form id="gAdmin" class="gateform hide" autocomplete="on">
+      <p class="hint" id="gKdoAdmin"></p>
+      <label>Heslo Famicura (správce serveru)<input type="password" id="gAdminPw" name="password" autocomplete="current-password" required></label>
+      <p class="gateerr hide" id="gAdminErr"></p>
+      <button class="btn wide" type="submit">Přihlásit se jako správce</button>
+      <p class="hint">Heslo z hlavní aplikace; správce vidí dispečink zvoleného poskytovatele jako „Správce“. <a href="#" id="gZpet">Zpět na přihlášení dispečera</a></p>
+    </form>
+    <p class="hint" style="margin-top:12px">Rodina používá vlastní aplikaci: <a href="/proto/rodina.html">aplikace rodiny</a>.</p>
   </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
-$('gLogin').onsubmit = async (e) => {
-  e.preventDefault();
-  const err = $('gLoginErr'); err.classList.add('hide');
-  const b = e.target.querySelector('button'); b.disabled = true;
+const TENANT_KEY = 'famicura.tenant';
+const params = new URLSearchParams(location.search);
+let tenant = (params.get('tenant') || localStorage.getItem(TENANT_KEY) || '').trim().toUpperCase();
+let tenantInfo = null;
+const ukaz = (co) => { for (const f of ['gTenant', 'gLogin', 'gAdmin']) $(f).classList.toggle('hide', f !== co); const i = $(co).querySelector('input'); if (i) setTimeout(() => i.focus(), 50); };
+const chyba = (id, text) => { const e = $(id); e.textContent = text || ''; e.classList.toggle('hide', !text); };
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `Chyba (${r.status})`);
+  return d;
+}
+async function overTenanta(id) {
+  const r = await fetch('/api/tenant?id=' + encodeURIComponent(id), { cache: 'no-store' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `Chyba (${r.status})`);
+  return d.tenant;
+}
+async function start() {
+  if (!tenant) { ukaz('gTenant'); return; }
   try {
-    const r = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: $('gPw').value }) });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) { err.textContent = body.error || `Chyba (${r.status})`; err.classList.remove('hide'); b.disabled = false; return; }
-    location.reload();
-  } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); b.disabled = false; }
+    tenantInfo = await overTenanta(tenant);
+    localStorage.setItem(TENANT_KEY, tenantInfo.id);
+    if (params.has('tenant')) { params.delete('tenant'); history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '')); }
+    $('gKdo').textContent = `Poskytovatel: ${tenantInfo.nazev || tenantInfo.id} (${tenantInfo.id})`;
+    $('gKdoAdmin').textContent = $('gKdo').textContent;
+    ukaz('gLogin');
+  } catch (e) {
+    localStorage.removeItem(TENANT_KEY);
+    $('gTenantId').value = tenant; tenant = '';
+    ukaz('gTenant'); chyba('gTenantErr', e.message);
+  }
+}
+$('gTenant').onsubmit = (e) => { e.preventDefault(); tenant = $('gTenantId').value.trim().toUpperCase(); chyba('gTenantErr', ''); start(); };
+$('gJiny').onclick = (e) => { e.preventDefault(); localStorage.removeItem(TENANT_KEY); tenant = ''; $('gTenantId').value = ''; ukaz('gTenant'); };
+$('gSpravce').onclick = (e) => { e.preventDefault(); ukaz('gAdmin'); };
+$('gZpet').onclick = (e) => { e.preventDefault(); ukaz('gLogin'); };
+$('gLogin').onsubmit = async (e) => {
+  e.preventDefault(); chyba('gLoginErr', '');
+  const b = e.target.querySelector('button'); b.disabled = true;
+  try { await post('/api/dispecink/login', { tenant, login: $('gUser').value, heslo: $('gPw').value }); location.reload(); }
+  catch (ex) { chyba('gLoginErr', ex.message); b.disabled = false; }
 };
+$('gAdmin').onsubmit = async (e) => {
+  e.preventDefault(); chyba('gAdminErr', '');
+  const b = e.target.querySelector('button'); b.disabled = true;
+  try { await post('/api/login', { password: $('gAdminPw').value, tenant }); location.reload(); }
+  catch (ex) { chyba('gAdminErr', ex.message); b.disabled = false; }
+};
+start();
 </script>
 </body>
 </html>

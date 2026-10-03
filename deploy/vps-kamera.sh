@@ -3,6 +3,7 @@
 #   ./deploy/vps-kamera.sh            (zeptá se na údaje)
 #   ./deploy/vps-kamera.sh seznam     (kamery bez hesel)
 #   ./deploy/vps-kamera.sh smaz ID
+#   ./deploy/vps-kamera.sh tenant ID_KAMERY ID_TENANTA [místo]   (kameru přiřadí poskytovateli z Péče doma plus)
 #
 # Kam go2rtc na kameru chodí, pozná ze souboru /etc/wireguard/famicura-rezim na VPS:
 #   linux    přímo na IP kamery tunelem WireGuard
@@ -39,6 +40,8 @@ case "$1" in
   seznam) $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs seznam'"; exit 0 ;;
   smaz)   platne_id "$2"
           $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs smaz $2'"; restart; exit 0 ;;
+  tenant) platne_id "$2"; [[ "$3" =~ ^[A-Za-z0-9]{4,16}$ ]] || { echo "Použití: $0 tenant ID_KAMERY ID_TENANTA [místo]"; exit 1; }
+          $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs tenant $2 $3 ${4:-}'"; restart; exit 0 ;;
 esac
 
 read -r -p "ID kamery [tapoc2020]: " ID;            ID="${ID:-tapoc2020}"; platne_id "$ID"
@@ -58,6 +61,9 @@ else
   read -r -p "IP adresa kamery v místní síti: " IP
   [[ "$IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "IP adresa musí vypadat jako 192.168.1.50."; exit 1; }
 fi
+read -r -p "ID tenanta – poskytovatele z Péče doma plus (např. 22202480FAMICURA; Enter = zatím bez): " TENANT
+[ -z "$TENANT" ] || [[ "$TENANT" =~ ^[A-Za-z0-9]{4,16}$ ]] || { echo "ID tenanta je 4 až 16 písmen a číslic."; exit 1; }
+read -r -p "Místo kamery (např. Byt 7, Kladno; Enter = nic): " MISTO
 read -r -p "Uživatel účtu kamery: " UZIV
 read -rs -p "Heslo účtu kamery: " HESLO; echo
 read -r -p "Kvalita – 1 = plné rozlišení, 2 = nízké [1]: " Q
@@ -65,10 +71,10 @@ read -r -p "Kvalita – 1 = plné rozlišení, 2 = nízké [1]: " Q
 
 # JSON skládá node z proměnných prostředí: heslo s uvozovkou nebo lomítkem
 # tak nerozbije ani JSON, ani příkaz – a do ssh jde přes stdin.
-ID="$ID" NAZEV="$NAZEV" IP="$IP" UZIV="$UZIV" HESLO="$HESLO" STREAM="$STREAM" RTSP_PORT="$RTSP_PORT" ONVIF_PORT="$ONVIF_PORT" node -e '
+ID="$ID" NAZEV="$NAZEV" IP="$IP" UZIV="$UZIV" HESLO="$HESLO" STREAM="$STREAM" RTSP_PORT="$RTSP_PORT" ONVIF_PORT="$ONVIF_PORT" TENANT="$TENANT" MISTO="$MISTO" node -e '
   const e = process.env;
   process.stdout.write(JSON.stringify({ id: e.ID, name: e.NAZEV, ip: e.IP, user: e.UZIV, pass: e.HESLO, stream: e.STREAM,
-    rtspPort: Number(e.RTSP_PORT), onvifPort: Number(e.ONVIF_PORT) }));
+    rtspPort: Number(e.RTSP_PORT), onvifPort: Number(e.ONVIF_PORT), tenant: e.TENANT, place: e.MISTO }));
 ' | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs nastav'"
 unset HESLO
 

@@ -13,6 +13,7 @@
  */
 import sql from 'mssql';
 import { ddl, rlsSql, TABULKY, createTabulky, normTenant } from './tabulky.mjs';
+import { createTabulkyPamet } from './tabulky-pamet.mjs';
 
 const env = (k, d = '') => (process.env[k] ?? d).toString().trim();
 const bool = (k, d) => { const v = env(k); return v === '' ? d : /^(1|true|yes|ano)$/i.test(v); };
@@ -54,13 +55,20 @@ export function createPdpDb(cfg = pdpConfig()) {
  * Tenanti a tabulky nad spojením. `db` jde podstrčit (testy), výchozí je
  * skutečné spojení z prostředí. `tenant(id)` čte dbo.Tenants s krátkou cache.
  */
-export function createPdp({ db = null, log = console, cacheMs = 60000, now = Date.now } = {}) {
+export function createPdp({ db = null, log = console, cacheMs = 60000, now = Date.now, fakeTenanti = process.env.PDP_FAKE_TENANTS || '' } = {}) {
+  // Vývoj a ukázka bez SQL Serveru: PDP_FAKE_TENANTS="ID=Název;ID2=Název2" dá tenanty a tabulky jen v paměti procesu.
+  if (!db && fakeTenanti) {
+    const tenanti = Object.fromEntries(fakeTenanti.split(';').map((x) => x.trim()).filter(Boolean).map((x) => { const [id, ...n] = x.split('='); const t = normTenant(id); return [t, { id: t, nazev: n.join('=').trim() || t, ico: '', famicuraProviderId: '' }]; }).filter(([t]) => t));
+    log.error('[pdp] POZOR: tenanti a tabulky jen v paměti (PDP_FAKE_TENANTS) – jen pro vývoj a ukázku, data po restartu zmizí.');
+    return { nastaveno: true, pamet: true, db: null, tabulky: createTabulkyPamet(), async tenant(id) { return tenanti[normTenant(id)] || null; }, async zajistiTabulky() { return true; } };
+  }
   const spojeni = db || (pdpNastaveno() ? createPdpDb() : null);
   const tabulky = spojeni ? createTabulky(spojeni) : null;
   const cache = new Map();
   let tabulkyOk = false;
   return {
     nastaveno: !!spojeni,
+    pamet: false,
     db: spojeni,
     tabulky,
     /** Aktivní tenant podle ID → { id, nazev, ico, famicuraProviderId } nebo null. */

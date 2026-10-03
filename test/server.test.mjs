@@ -48,10 +48,16 @@ after(async () => {
   await new Promise((r) => go2rtc.close(r));
 });
 
+/** Správce bez tenanta přes /api/login; dispečink chce tenanta, ten dá cookie podepsaná stejným klíčem (bez databáze tenantů). */
 async function cookie() {
   const r = await fetch(`http://127.0.0.1:${port}/api/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: 'heslo' }) });
   assert.equal(r.status, 200);
   return r.headers.get('set-cookie').split(';')[0];
+}
+async function cookieDispecinku() {
+  process.env.SESSION_KEY = 'klic';
+  const { cookieDispecer } = await import('../src/session.mjs');
+  return cookieDispecer('TEST1234', 7, 'Eva Testová').split(';')[0];
 }
 
 test('složka s prototypem se otevře na /proto/ i bez index.html v adrese; mimo public nic', async () => {
@@ -116,8 +122,9 @@ test('dispečink a provoz jen po přihlášení: bez cookie přijde stránka př
     assert.match(t, /Přihlášení poskytovatele/, p);
     assert.doesNotMatch(t, /id="tiles"|id="fleet"/, p + ': bez přihlášení žádná aplikace');
   }
-  const c = await cookie();
-  const d = await (await fetch(`http://127.0.0.1:${port}/proto/dispecink.html`, { headers: { cookie: c } })).text();
+  const jenSprava = await (await fetch(`http://127.0.0.1:${port}/proto/dispecink.html`, { headers: { cookie: await cookie() } })).text();
+  assert.match(jenSprava, /Přihlášení poskytovatele/, 'správce bez zvoleného tenanta dispečink nedostane');
+  const d = await (await fetch(`http://127.0.0.1:${port}/proto/dispecink.html`, { headers: { cookie: await cookieDispecinku() } })).text();
   assert.match(d, /id="tiles"/);
   assert.doesNotMatch(d, /Přihlášení poskytovatele/);
   assert.match(await (await fetch(`http://127.0.0.1:${port}/proto/rodina.html`)).text(), /id="gAktivace"/, 'rodina má vlastní přihlášení a ukázku');

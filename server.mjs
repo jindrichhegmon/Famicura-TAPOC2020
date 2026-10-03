@@ -39,16 +39,22 @@ const { createGo2rtc } = await import('./src/go2rtc.mjs');
 const { createStore } = await import('./src/store.mjs');
 const { BEZPECNOSTNI_HLAVICKY } = await import('./src/csp.mjs');
 const { createCameraEvents } = await import('./src/udalosti-kamer.mjs');
-const { kdo } = await import('./src/session.mjs');
+const { kdo, dispecinkTenanta } = await import('./src/session.mjs');
+const { createPdp } = await import('./src/pdp.mjs');
+const { createNajemci } = await import('./src/najemci.mjs');
+const { createUzivatele } = await import('./src/uzivatele.mjs');
+const { createSms } = await import('./src/sms.mjs');
+const { createUpozorneni } = await import('./src/upozorneni.mjs');
 const store = createStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 // The camera's own detections: the server subscribes to each camera in
 // cameras.json (the same account go2rtc uses) and writes them to CLB1 itself.
 const KAMERY = process.env.CAMERAS_FILE || path.join(ROOT, 'cameras.json');
-const udalosti = createCameraEvents({ store, dbs, kamery: async () => {
+const nactiKamery = async () => {
   try { return JSON.parse(await readFile(KAMERY, 'utf8')); }
   catch (e) { if (e.code === 'ENOENT') return []; throw e; }
-} });
+};
+const udalosti = createCameraEvents({ store, dbs, kamery: nactiKamery });
 udalosti.start().catch((e) => console.error('[famicura-tapo] události kamer:', e.message));
 // pm2 stops with SIGINT: cancel the subscriptions, the camera keeps only a few.
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { udalosti.stop().finally(() => process.exit(0)); });
@@ -57,7 +63,16 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { udalosti.stop()
 if (process.env.SMS_WEBHOOK_URL && process.env.SMS_WEBHOOK_URL === process.env.ASISTENT_WEBHOOK_URL) {
   console.error('[famicura-tapo] POZOR: SMS_WEBHOOK_URL je stejná jako ASISTENT_WEBHOOK_URL – SMS jdou do scénáře asistenta a nedojdou. Opravte ./deploy/vps-env.sh (scénář Famicura_Tapo_SMS_Pozvanka).');
 }
-const handle = createHandler({ dbs, go2rtc: createGo2rtc(), store, udalosti });
+// Data poskytovatelů: databáze PeceDomaPlus (tenanti jako v Péče doma plus). Bez ní
+// jede jen hlavní aplikace a ukázka v prohlížeči; dispečink a rodina dostanou 503.
+const pdp = createPdp();
+if (!pdp.nastaveno) console.error('[famicura-tapo] POZOR: PeceDomaPlus není nastavená (PDP_SQL_PASSWORD) – dispečink a aplikace rodiny nepoběží, jen ukázka. Spusťte ./deploy/vps-env.sh.');
+else pdp.zajistiTabulky().catch((e) => console.error('[famicura-tapo] tabulky PeceDomaPlus:', e.message));
+const kameryTenanty = async () => (await nactiKamery()).map((k) => ({ id: k.id, name: k.name || k.id, tenant: k.tenant || '', place: k.place || '' }));
+const sms = createSms();
+const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }) });
+const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
+const handle = createHandler({ dbs, go2rtc: createGo2rtc(), store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 const MAX_BODY = 256 * 1024;
@@ -95,7 +110,8 @@ const server = http.createServer(async (req, res) => {
     if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
     // Dispečink a provoz jen po přihlášení poskytovatele: bez něj jde místo
     // stránky přihlášení (stejná adresa, po přihlášení se načte znovu).
-    if (/^proto[/\\](dispecink|provoz)\.html$/.test(rel) && kdo(req.headers)?.role !== 'admin') file = path.join(PUBLIC, 'proto', 'prihlaseni.html');
+    // Dispečink a provoz jen pro dispečera tenanta (účet Péče doma plus) nebo správce se zvoleným tenantem.
+    if (/^proto[/\\](dispecink|provoz)\.html$/.test(rel) && !dispecinkTenanta(req.headers)) file = path.join(PUBLIC, 'proto', 'prihlaseni.html');
     // A folder (/proto/) serves its index.html, like any web server.
     if (await stat(file).then((st) => st.isDirectory(), () => false)) file = path.join(file, 'index.html');
     const data = await readFile(file);

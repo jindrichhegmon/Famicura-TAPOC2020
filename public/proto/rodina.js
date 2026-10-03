@@ -52,7 +52,7 @@ function startSource(deviceId) {
       : demo ? 'Ukázka bez přihlášení: náhradní scéna místo skutečné kamery.'
       : `Obraz z kamery teď nejde (${s.error || 'kamera nedostupná'}). Ukazuji náhradní scénu; poskytovatel o výpadku ví z diagnostiky.`;
   });
-  sim.startRealEvents(deviceId);
+  if (!sim.naServeru) sim.startRealEvents(deviceId);
 }
 
 function setupPatients() {
@@ -70,16 +70,21 @@ function setupPatients() {
 function boot(ja) {
   hideGate();
   sim.pripojit();   // po přihlášení: stav ze serveru, společný s dispečinkem
+  const posk = ja.tenant ? (ja.tenant.nazev || ja.tenant.id) : '';
+  for (const k of ja.kamery || []) sim.ensurePatient({ id: k.id, name: k.name });
+  FAMILY = (ja.kamery || []).map((k) => k.id);
   if (ja.role === 'rodina') {
-    for (const k of ja.kamery) sim.ensurePatient({ id: k.id, name: k.name });
-    FAMILY = ja.kamery.map((k) => k.id);
-    $('whoami').textContent = `${ja.jmeno} · rodina`;
-    $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}. ${ja.kamery.length ? '' : 'Poskytovatel vám zatím nepřiřadil kameru.'}`;
-    if (!FAMILY.length) FAMILY = ['tapoc2020'];
+    $('whoami').textContent = `${ja.jmeno} · rodina${posk ? ' · ' + posk : ''}`;
+    $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. ${ja.kamery.length ? '' : 'Poskytovatel vám zatím nepřiřadil kameru.'}`;
   } else {
-    $('whoami').textContent = 'Poskytovatel · přihlášen v hlavní aplikaci';
-    $('ucetInfo').textContent = 'Jste přihlášeni heslem Famicura (poskytovatel). Vidíte skutečnou kameru i ukázkového pacienta.';
+    $('whoami').textContent = `${ja.jmeno || 'Poskytovatel'} · ${ja.role === 'dispecer' ? 'dispečink' : 'správce'}${posk ? ' · ' + posk : ''}`;
+    $('ucetInfo').textContent = ja.role === 'dispecer' ? `Jste přihlášeni jako dispečer (${ja.jmeno}). Vidíte aplikaci rodiny pro kamery poskytovatele ${posk}.` : 'Jste přihlášeni jako správce serveru. Vidíte aplikaci rodiny pro kamery zvoleného poskytovatele.';
     $('pwOpen').classList.add('hide');
+  }
+  if (!FAMILY.length) {
+    // bez kamery není co kreslit: stránka řekne proč a nabídne ukázku
+    $('srcNote').textContent = 'Poskytovatel vám zatím nepřiřadil kameru. Až ji přiřadí, obraz se tu objeví sám.';
+    FAMILY = [sim.state.patients[0]?.id || 'tapoc2020'];
   }
   setupPatients();
   startSource(FAMILY[0]);

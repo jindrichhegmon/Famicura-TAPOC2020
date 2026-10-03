@@ -273,6 +273,8 @@ export function mountPanel({ role, patientIds, onPatient }) {
   const refresh = () => { const sel = el.querySelector('.pat'); const html = opts(); if (sel.__html === html) return; const v = sel.value; sel.innerHTML = html; sel.__html = html; if ([...sel.options].some((o) => o.value === v)) sel.value = v; else onPatient?.(sel.value); };
   sim.subscribe((s) => { night.checked = s.night; refresh();
     el.querySelector('#simKde').textContent = sim.naServeru ? 'Stav drží server: změna na jednom zařízení se u ostatních přihlášených projeví do 2 s.' : 'Bez přihlášení běží simulace jen v tomhle prohlížeči (okna vedle sebe se vidí).';
+    // data poskytovatele na serveru se nenulují (jen ukázka v prohlížeči)
+    el.querySelector('[data-act=reset]').classList.toggle('hide', sim.naServeru);
     const d = s.lastDropped; el.querySelector('#simDropped').textContent = d && Date.now() - d.at < 20000 ? `Událost „${KINDS[d.kind]?.label}“ se nezapsala: ${d.reason} (nastavení poskytovatele).` : ''; });
   el.classList.add('min');
   return { patient: pat, select: (id) => { el.querySelector('.pat').value = id; }, refresh };

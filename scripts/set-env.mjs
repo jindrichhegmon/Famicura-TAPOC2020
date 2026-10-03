@@ -5,10 +5,15 @@
  *   node scripts/set-env.mjs stav                 → které klíče jsou vyplněné (bez hodnot)
  *   node scripts/set-env.mjs nastav KLIC  < hodnota
  *   node scripts/set-env.mjs prevezmi KLIC /opt/jina-aplikace/.env
+ *   node scripts/set-env.mjs prevezmi-jako KLIC CIZI_KLIC /opt/jina-aplikace/.env
+ *   node scripts/set-env.mjs najdi /opt/jina-aplikace/.env REGEX   → názvy vyplněných klíčů (bez hodnot)
  *   node scripts/set-env.mjs generuj KLIC          → náhodná hodnota, jen když je prázdný
  *
  * "prevezmi" kopíruje jen tehdy, když druhá aplikace míří na stejný SQL
  * server a stejného uživatele – jinak by heslo patřilo někomu jinému.
+ * "prevezmi-jako" bere hodnotu pod jiným názvem (heslo PeceDomaPlus a token
+ * aplikačního serveru z /opt/jhn-apps/.env); "najdi" řekne, pod jakým názvem
+ * tam je, aniž by hodnotu vypsal.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import crypto from 'node:crypto';
@@ -17,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOUBOR = path.join(ROOT, '.env');
-const POVINNE = ['SQL_SERVER', 'SQL_USER', 'SQL_PASSWORD', 'FAMICURA_PASSWORD', 'SESSION_KEY'];
+const POVINNE = ['SQL_SERVER', 'SQL_USER', 'SQL_PASSWORD', 'FAMICURA_PASSWORD', 'SESSION_KEY', 'PDP_SQL_PASSWORD', 'JHN_APPS_TOKEN', 'SMS_WEBHOOK_URL', 'SMS_WEBHOOK_KLIC'];
 
 const RADEK = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/;
 
@@ -28,6 +33,16 @@ export function hodnota(text, klic) {
     if (m && !line.trim().startsWith('#') && m[1] === klic) return m[2].replace(/^"(.*)"$/, '$1');
   }
   return '';
+}
+
+/** Názvy vyplněných klíčů, které odpovídají regulárnímu výrazu (hodnoty se nevypisují). */
+export function klice(text, regex) {
+  const re = new RegExp(regex, 'i'), out = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = RADEK.exec(line);
+    if (m && !line.trim().startsWith('#') && re.test(m[1]) && m[2].replace(/^"(.*)"$/, '$1') && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
 }
 
 /** Přepíše první výskyt klíče, nebo ho přidá na konec. Ostatní řádky nechá být. */
@@ -88,6 +103,25 @@ async function main([akce, klic, zdroj]) {
     return;
   }
 
+  if (akce === 'prevezmi-jako') {
+    // KLIC CIZI_KLIC /cesta/.env: hodnota jiné aplikace pod naším názvem (heslo PeceDomaPlus, token jhn-apps).
+    const [, , ciziKlic, cesta] = process.argv.slice(1);
+    const nas = precti(SOUBOR);
+    const val = hodnota(precti(cesta), ciziKlic);
+    if (!val) throw new Error(`${ciziKlic} je v ${cesta} prázdné nebo tam není.`);
+    zapis(nastavit(nas, klic, val));
+    console.log(`${klic}: převzato z ${cesta} (${ciziKlic}).`);
+    return;
+  }
+
+  if (akce === 'najdi') {
+    // /cesta/.env REGEX: jen názvy, hodnoty zůstanou v souboru.
+    const nalezene = klice(precti(klic), zdroj || '.');
+    if (!nalezene.length) { console.error(`V ${klic} nic jako /${zdroj}/ není.`); process.exit(2); }
+    console.log(nalezene.join('\n'));
+    return;
+  }
+
   if (akce === 'generuj') {
     // A signing key nobody has to know: made here, never leaves the server.
     // An existing one is kept, or everybody would be logged out on every run.
@@ -98,7 +132,7 @@ async function main([akce, klic, zdroj]) {
     return;
   }
 
-  throw new Error('Použití: stav | nastav KLIC | prevezmi KLIC /cesta/.env | generuj KLIC');
+  throw new Error('Použití: stav | nastav KLIC | prevezmi KLIC /cesta/.env | prevezmi-jako KLIC CIZI_KLIC /cesta/.env | najdi /cesta/.env REGEX | generuj KLIC');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

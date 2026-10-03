@@ -3,8 +3,11 @@
 #   ./deploy/vps-env.sh
 #
 # SQL_PASSWORD se převezme přímo na serveru z aplikace se stejným SQL
-# serverem i uživatelem (clb1_app), takže nikudy necestuje. SESSION_KEY se
-# na serveru vygeneruje. Na FAMICURA_PASSWORD (heslo do aplikace) se skript
+# serverem i uživatelem (clb1_app), takže nikudy necestuje. Heslo k databázi
+# PeceDomaPlus (PDP_SQL_PASSWORD, login pecedomaplus_app) a token aplikačního
+# serveru jhn-apps (JHN_APPS_TOKEN = FAMICURA_REPORTY_TOKEN) se vezmou z
+# /opt/jhn-apps/.env na serveru; když tam nejsou, skript se zeptá. SESSION_KEY
+# se na serveru vygeneruje. Na FAMICURA_PASSWORD (heslo správce) se skript
 # zeptá; hodnota jde do ssh přes stdin, ne na příkazovou řádku, a v historii
 # ani ve výpisu procesů se neobjeví.
 set -e
@@ -13,6 +16,7 @@ KEY="${KEY:-$HOME/.ssh/id_ed25519_jhnapps}"
 DIR=/opt/famicura-tapo
 PORT="${PORT:-3112}"
 SQL_ZDROJ="${SQL_ZDROJ:-/opt/pecedoma-sestra/.env}"
+JHN_ZDROJ="${JHN_ZDROJ:-/opt/jhn-apps/.env}"
 SSH="ssh -i $KEY -o BatchMode=yes"
 JAKO="su - jhnapps -c"
 
@@ -36,7 +40,27 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi SQL_PASSWORD $S
 
 $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs generuj SESSION_KEY'"
 
-echo "Heslo, kterým se budete přihlašovat do aplikace Famicura Tapo."
+echo
+echo "Databáze PeceDomaPlus (tenanti a data poskytovatelů, login pecedomaplus_app): heslo z $JHN_ZDROJ, jinak ručně."
+KLIC_PDP=$($SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs najdi $JHN_ZDROJ \"PECEDOMAPLUS.*(PASSWORD|HESLO)|PDP_SQL_PASSWORD|PECEDOMA_DB_PASSWORD\"'" 2>/dev/null | head -1 || true)
+if [ -n "$KLIC_PDP" ] && $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako PDP_SQL_PASSWORD $KLIC_PDP $JHN_ZDROJ'"; then :; else
+  echo "Heslo k PeceDomaPlus se převzít nepodařilo – zadejte ho ručně (Enter = nechat, jak je)."
+  read -rs -p "PDP_SQL_PASSWORD: " H; echo
+  [ -n "$H" ] && printf '%s' "$H" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav PDP_SQL_PASSWORD'"
+  unset H
+fi
+unset KLIC_PDP
+
+echo
+echo "Přihlášení dispečera účtem Péče doma plus přes aplikační server jhn-apps: token z $JHN_ZDROJ (FAMICURA_REPORTY_TOKEN), jinak ručně."
+if $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako JHN_APPS_TOKEN FAMICURA_REPORTY_TOKEN $JHN_ZDROJ'"; then :; else
+  echo "Token se převzít nepodařilo – zadejte ho ručně (Enter = nechat, jak je)."
+  read -rs -p "JHN_APPS_TOKEN: " H; echo
+  [ -n "$H" ] && printf '%s' "$H" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav JHN_APPS_TOKEN'"
+  unset H
+fi
+
+echo "Heslo správce serveru (hlavní aplikace, nouzový vstup do dispečinku bez účtu Péče doma plus)."
 read -rs -p "FAMICURA_PASSWORD (Enter = nechat, jak je): " P; echo
 if [ -n "$P" ]; then
   read -rs -p "Ještě jednou pro kontrolu: " P2; echo

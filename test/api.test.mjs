@@ -6,15 +6,25 @@ import { createLimiter } from '../src/limit.mjs';
 import { pripravit } from '../src/zaznamy.mjs';
 import { mockDbs } from './mock-db.mjs';
 import { createUzivatele } from '../src/uzivatele.mjs';
+import { createMockTabulky } from './mock-tabulky.mjs';
+import { createNajemci } from '../src/najemci.mjs';
+import { createUpozorneni } from '../src/upozorneni.mjs';
+import { cookieRodina, cookieDispecer } from '../src/session.mjs';
+
+/* Tenanti jako v Péče doma plus: testy běží u tenanta T; T2 je cizí poskytovatel. */
+const T = '22202480FAMICURA', T2 = '02570459DSIDEQAJ';
+const TENANTI = { [T]: { id: T, nazev: 'FamiCura s.r.o.', ico: '22202480' }, [T2]: { id: T2, nazev: 'Centrum LB', ico: '02570459' } };
 
 process.env.SESSION_KEY = 'testovaci-klic';
 process.env.FAMICURA_PASSWORD = 'spravne-heslo';
 
-/** Stejná cookie, jakou vydává /api/login. */
-function cookie(expiresAt = Date.now() + 3600_000, key = process.env.SESSION_KEY) {
-  const sig = crypto.createHmac('sha256', key).update(`famicura-tapo:${expiresAt}`, 'utf8').digest('base64url');
-  return `fam_tapo=${expiresAt}.${sig}`;
+/** Cookie správce serveru; s tenantem (výchozí T) vidí jeho dispečink, bez tenanta jen server. */
+function cookie(expiresAt = Date.now() + 3600_000, key = process.env.SESSION_KEY, tenant = T) {
+  const subjekt = tenant ? `a:${tenant}` : 'admin';
+  const sig = crypto.createHmac('sha256', key).update(`famicura-tapo:${expiresAt}:${subjekt}`, 'utf8').digest('base64url');
+  return `fam_tapo=${expiresAt}.${subjekt}.${sig}`;
 }
+const cookieServer = () => cookie(Date.now() + 3600_000, process.env.SESSION_KEY, '');
 
 const req = (method, path, { body, cookies, ip } = {}) =>
   new Request('http://localhost' + path, {
@@ -45,9 +55,16 @@ function handler(over = {}) {
   const db = mockDbs(over.radky);
   const go2rtc = over.go2rtc || fakeGo2rtc();
   const store = over.store || memStore();
-  const uzivatele = createUzivatele(store);
-  const sms = over.sms || { nastaveno: false, async posli() { return { ok: false, error: 'SMS není nastavená.' }; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null }), ...db, go2rtc, store, uzivatele };
+  const tabulky = over.tabulky || createMockTabulky();
+  const uzivatele = createUzivatele(tabulky);
+  const sms = over.sms || { nastaveno: false, async posli() { return { ok: false, error: 'SMS není nastavená.' }; }, async posliMail() { return { ok: false, error: 'SMS není nastavená.' }; } };
+  // kamery ze serveru (cameras.json): tapoc2020 patří T, cizi T2; go2rtc streamuje obě
+  const kameryTenanty = over.kameryTenanty || (async () => [{ id: 'tapoc2020', name: 'TAPO Test', tenant: T, place: 'Kancelář Famicura' }, { id: 'cizi', name: 'Cizí kamera', tenant: T2, place: '' }]);
+  const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
+  const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, log: { log() {} } }), log: { log() {}, error() {} } });
+  const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty }),
+    ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
 test('health nepotřebuje přihlášení a vrací verzi', async () => {
@@ -219,10 +236,10 @@ test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
   process.env.CAMERA_NAMES = 'tapoc2020=Pokoj 12';
   try {
     const { h } = handler({ go2rtc: fakeGo2rtc({ online: false }) });
-    const b = await (await h(req('GET', '/api/status', { cookies: cookie() }))).json();
+    const b = await (await h(req('GET', '/api/status', { cookies: cookieServer() }))).json();
     assert.equal(b.go2rtc.ok, true);
     assert.equal(b.go2rtc.version, '1.9.14');
-    assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', events: [], online: false, detail: 'dial tcp: i/o timeout',
+    assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', tenant: T, events: [], online: false, detail: 'dial tcp: i/o timeout',
       eventsOk: null, eventsError: null, eventsLast: null, eventsRejected: null, clbError: null, eventsOther: [] }]);
   } finally { delete process.env.CAMERA_NAMES; }
 });
@@ -230,9 +247,12 @@ test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
 test('seznam kamer bere názvy z CAMERA_NAMES, jinak ID', async () => {
   process.env.CAMERA_NAMES = 'tapoc2020=Pokoj 12 – okno; x=y';
   try {
-    const { h } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
+    const { h } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha', 'cizi'] }) });
+    const vse = await (await h(req('GET', '/api/devices', { cookies: cookieServer() }))).json();
+    assert.deepEqual(vse.devices, [{ id: 'tapoc2020', name: 'Pokoj 12 – okno', tenant: T, events: [] }, { id: 'druha', name: 'druha', tenant: '', events: [] }, { id: 'cizi', name: 'cizi', tenant: T2, events: [] }], 'správce serveru vidí všechny kamery');
     const b = await (await h(req('GET', '/api/devices', { cookies: cookie() }))).json();
-    assert.deepEqual(b.devices, [{ id: 'tapoc2020', name: 'Pokoj 12 – okno', events: [] }, { id: 'druha', name: 'druha', events: [] }]);
+    assert.deepEqual(b.devices.map((d) => d.id), ['tapoc2020'], 'dispečink tenanta jen své kamery (bez poskytovatele a cizí ne)');
+    assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'cizi', sdpOffer: 'v=0' } }))).status, 404, 'cizí kamera jako by nebyla');
   } finally { delete process.env.CAMERA_NAMES; }
   assert.deepEqual(cameraNames('a=Jméno = s rovnítkem;;  b = B '), { a: 'Jméno = s rovnítkem', b: 'B' });
 });
@@ -380,7 +400,7 @@ test('obraz přes HTTPS: jen známá kamera, jen obraz, díly HLS jen podle id',
 const setCookie = (r) => (r.headers.get('set-cookie') || '').split(';')[0];
 
 test('rodina: poskytovatel založí uživatele, dostane odkaz a text SMS; bez SMS webhooku se SMS neodešle', async () => {
-  const { h, store } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
+  const { h, tabulky } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
   const r = await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr Novák', telefon: '777 123 456', kamery: ['tapoc2020'], poslatSms: true } }));
   assert.equal(r.status, 200);
   const b = await r.json();
@@ -389,7 +409,8 @@ test('rodina: poskytovatel založí uživatele, dostane odkaz a text SMS; bez SM
   assert.equal(b.sms.odeslano, false);
   assert.equal(b.smsNastaveno, false);
   assert.equal(b.uzivatel.aktivni, false);
-  assert.ok(!JSON.stringify(store.data.uzivatele).includes(b.odkaz.split('=')[1]), 'token v úložišti není');
+  assert.ok(!JSON.stringify(tabulky.data).includes(b.odkaz.split('/r/')[1]), 'token v tabulce není, jen hash');
+  assert.equal((await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'X', telefon: '777000999', kamery: ['cizi'] } }))).status, 403, 'účet k cizí kameře založit nejde');
   const list = await (await h(req('GET', '/api/rodina/uzivatele', { cookies: cookie() }))).json();
   assert.equal(list.uzivatele.length, 1);
   assert.equal(list.uzivatele[0].telefon, '777123456');
@@ -414,18 +435,19 @@ test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení 
   const { h, go2rtc } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
   const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] } }))).json();
   const token = b.odkaz.split('/r/')[1];
-  assert.deepEqual(await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json(), { ok: true, platna: true, jmeno: 'Petr' });
+  assert.deepEqual(await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json(), { ok: true, platna: true, jmeno: 'Petr', tenant: T });
   assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'kratke' } }))).status, 400);
   const a = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }));
   assert.equal(a.status, 200);
   const c = setCookie(a);
-  assert.match(c, /^fam_tapo=\d+\.r:[a-f0-9]+\./);
+  assert.match(c, new RegExp(`^fam_tapo=\\d+\\.r:${T}:[a-f0-9]+\\.`), 'cookie rodiny nese tenanta');
   assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }))).status, 410, 'odkaz je na jedno použití');
   assert.equal((await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json()).platna, false, 'stránka pozná použitý odkaz');
 
   const ja = await (await h(req('GET', '/api/rodina/ja', { cookies: c }))).json();
   assert.equal(ja.role, 'rodina');
   assert.equal(ja.jmeno, 'Petr');
+  assert.deepEqual(ja.tenant, { id: T, nazev: 'FamiCura s.r.o.' });
   assert.deepEqual(ja.kamery.map((k) => k.id), ['tapoc2020']);
   const dev = await (await h(req('GET', '/api/devices', { cookies: c }))).json();
   assert.deepEqual(dev.devices.map((d) => d.id), ['tapoc2020'], 'cizí kamera v seznamu není');
@@ -461,7 +483,8 @@ test('rodina: události jen vlastní kamery; smazaný uživatel je hned odhláš
   const ev = await (await h(req('GET', '/api/events', { cookies: c }))).json();
   assert.deepEqual(ev.events.map((e) => e.kameraId), ['tapoc2020']);
   const adminEv = await (await h(req('GET', '/api/events', { cookies: cookie() }))).json();
-  assert.equal(adminEv.events.length, 2);
+  assert.deepEqual(adminEv.events.map((e) => e.kameraId), ['tapoc2020'], 'dispečink tenanta vidí jen události svých kamer');
+  assert.equal((await (await h(req('GET', '/api/events', { cookies: cookieServer() }))).json()).events.length, 2, 'správce serveru všechny');
 
   const p = await (await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/pozvanka`, { cookies: cookie(), body: {} }))).json();
   assert.ok(p.odkaz);
@@ -525,18 +548,20 @@ test('asistent dispečinku: bez webhooku server řekne, že odpovídá prohlíž
 
 test('žádost o plný obraz: rodině u kamery odejde SMS s výzvou k rozhodnutí; rodina sama SMS nespouští', async () => {
   const sms = { nastaveno: true, calls: [], async posli(x) { this.calls.push(x); return { ok: true }; } };
-  const { h, uzivatele } = handler({ sms });
+  const { h, uzivatele, vsichni } = handler({ sms });
   const a = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
-  await uzivatele.aktivuj(a.token, 'tajne-heslo-1');
+  await vsichni.aktivuj(a.token, 'tajne-heslo-1');
   const b = await uzivatele.vytvor({ jmeno: 'Jana', telefon: '777000111', kamery: ['tapoc2020'] });   // neaktivní: bez hesla, SMS nedostane
   await uzivatele.vytvor({ jmeno: 'Cizí', telefon: '777999888', kamery: ['jina'] });
+  const cizi = await vsichni.pro(T2).vytvor({ jmeno: 'U jiného poskytovatele', telefon: '777555666', kamery: ['tapoc2020'] });
+  await vsichni.aktivuj(cizi.token, 'tajne-heslo-2');
   const r = await (await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'requestFull', args: ['tapoc2020', 'Dispečerka Jana', 'ověření alertu'] } }))).json();
   assert.equal(r.vysledek.sms.prijemci, 1); assert.equal(r.vysledek.sms.odeslano, 1); assert.equal(r.vysledek.sms.chyba, null);
   assert.equal(sms.calls.length, 1); assert.equal(sms.calls[0].telefon, '777123456'); assert.equal(sms.calls[0].typ, 'FAMICURA_ZADOST');
-  assert.match(sms.calls[0].text, /^Famicura: Pecovatelska sluzba Kladno zada o plny obraz \(overeni alertu\)\. Otevrete aplikaci a zadost povolte nebo odmitnete: http:\/\/localhost\/proto\/rodina\.html$/);
+  assert.match(sms.calls[0].text, /^Famicura: FamiCura s.r.o. zada o plny obraz \(overeni alertu\)\. Otevrete aplikaci a zadost povolte nebo odmitnete: http:\/\/localhost\/proto\/rodina\.html$/);
   assert.ok(sms.calls[0].text.length <= 160, 'jedna SMS');
   // bez nastavené SMS: žádost projde, dispečink se dozví proč SMS neodešla
-  const { h: h2 } = handler({ store: (await (async () => { const st = memStore(); const u = createUzivatele(st); const t = await u.vytvor({ jmeno: 'P', telefon: '777123456', kamery: ['tapoc2020'] }); await u.aktivuj(t.token, 'tajne-heslo-1'); return st; })()) });
+  const { h: h2 } = handler({ tabulky: (await (async () => { const tb = createMockTabulky(); const u = createUzivatele(tb); const t = await u.pro(T).vytvor({ jmeno: 'P', telefon: '777123456', kamery: ['tapoc2020'] }); await u.aktivuj(t.token, 'tajne-heslo-1'); return tb; })()) });
   const r2 = await (await h2(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'requestFull', args: ['tapoc2020', 'D', 'x'] } }))).json();
   assert.equal(r2.vysledek.sms.odeslano, 0); assert.match(r2.vysledek.sms.chyba, /SMS_WEBHOOK_URL/);
   void b;

@@ -7,7 +7,8 @@ let real = null;           // /api/status of the real site
 let selected = null;
 mountPanel({ role: 'provoz' });
 mountAuthBanner(null);
-sim.startRealEvents('tapoc2020');
+let JA = null;
+fetch('/api/rodina/ja', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((j) => { JA = j; if (j && j.kamery) for (const k of j.kamery) sim.ensurePatient({ id: k.id, name: k.name }); if (!sim.naServeru) sim.startRealEvents(j?.kamery?.[0]?.id || 'tapoc2020'); render(); }).catch(() => {});
 
 async function loadReal() {
   try { const r = await fetch('/api/status'); real = await r.json(); } catch (e) { real = { error: e.message }; }
@@ -17,27 +18,27 @@ loadReal(); setInterval(loadReal, 15000);
 
 function dot(ok, warn) { return `<span class="dot ${ok ? 'ok' : warn ? 'warn' : 'crit'}"></span>`; }
 
-function realCam() { return real?.cameras?.find((c) => c.id === 'tapoc2020') || null; }
+function realCam(id = selected) { return real?.cameras?.find((c) => c.id === id) || null; }
 
 function siteRow(p) {
   const isReal = p.real;
-  const cam = isReal ? realCam() : null;
+  const cam = isReal ? realCam(p.id) : null;
   const authed = real?.authenticated;
   const tunnelOk = isReal ? (authed ? !!real?.go2rtc?.ok : null) : !p.offline;
   const camOk = isReal ? (cam ? cam.online : null) : !p.offline;
   const evOk = isReal ? (cam ? cam.eventsOk : null) : !p.offline;
   const last = isReal ? (cam?.eventsLast ? `${fmtT(new Date(cam.eventsLast.at).getTime())} ${cam.eventsLast.text}` : (authed ? 'bez událostí' : 'nepřihlášeno v aplikaci')) : (p.offline ? `výpadek ${ago(sim.state.events.find((e) => e.patientId === p.id && e.kind === 'offline')?.at || Date.now())}` : `před ${ago(Date.now() - (p.id.charCodeAt(1) % 5) * 60000)}`);
   const na = (v, t) => v === null ? '<span class="muted">–</span>' : dot(v) + t;
-  return `<tr data-id="${p.id}" class="${selected === p.id ? 'sel' : ''}"><td>${esc(p.place)}${isReal ? ' <span class="badge ok">skutečné</span>' : ''}</td><td>${esc(p.name)}</td><td>${esc(GATE[p.id])}</td>
+  return `<tr data-id="${p.id}" class="${selected === p.id ? 'sel' : ''}"><td>${esc(p.place)}${isReal ? ' <span class="badge ok">skutečné</span>' : ''}</td><td>${esc(p.name)}</td><td>${esc(GATE[p.id] || (isReal ? 'brána u klienta' : ''))}</td>
     <td>${na(tunnelOk, tunnelOk ? 'navázán' : 'bez odezvy')}</td><td>${na(camOk, camOk ? 'obraz jde' : 'bez obrazu')}</td><td>${na(evOk, evOk ? 'odebírám' : 'neodebírám')}</td>
-    <td>${esc(FW[p.id])}${/stará/.test(FW[p.id]) ? ' <span class="badge warn">aktualizovat</span>' : ''}</td><td class="small">${esc(last)}</td><td><button class="sm sec" data-diag="${p.id}">Diagnostika</button></td></tr>`;
+    <td>${esc(FW[p.id] || '–')}${/stará/.test(FW[p.id] || '') ? ' <span class="badge warn">aktualizovat</span>' : ''}</td><td class="small">${esc(last)}</td><td><button class="sm sec" data-diag="${p.id}">Diagnostika</button></td></tr>`;
 }
 
 function render() {
   const s = sim.state;
   $('fleet').innerHTML = s.patients.map(siteRow).join('');
   $('fleet').querySelectorAll('[data-diag]').forEach((b) => { b.onclick = () => { selected = b.dataset.diag; renderDiag(); render(); }; });
-  const bad = s.patients.filter((p) => p.offline || (p.real && real?.authenticated && (!real.go2rtc?.ok || realCam()?.online === false)));
+  const bad = s.patients.filter((p) => p.offline || (p.real && real?.authenticated && (!real.go2rtc?.ok || realCam(p.id)?.online === false)));
   $('nSites').textContent = s.patients.length; $('nBad').textContent = bad.length; $('nOk').textContent = s.patients.length - bad.length;
   const techs = s.events.filter((e) => KINDS[e.kind]?.level === 'tech' && e.state !== 'uzavřen').slice(0, 5);
   const camTamper = s.events.filter((e) => e.kind === 'tamper' && e.state !== 'uzavřen').slice(0, 3);
@@ -50,7 +51,7 @@ function renderDiag() {
   const p = sim.patient(selected); if (!p) return;
   const box = $('diagCard');
   if (p.real) {
-    const cam = realCam();
+    const cam = realCam(p.id);
     const rows = [];
     if (!real?.authenticated) rows.push(['Přihlášení', '<span class="bad">nejste přihlášeni v hlavní aplikaci – stav nelze číst</span>']);
     else {
