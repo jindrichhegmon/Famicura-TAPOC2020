@@ -61,17 +61,15 @@
 
   <div class="zadost hide" id="zadost" role="alertdialog" aria-live="assertive">
     <div class="zadostcard">
-      <div class="zadostic">👁</div>
-      <h2 id="zadostT">Poskytovatel žádá o plný obraz</h2>
-      <p id="zadostKdo"></p>
+      <div class="zadosthead"><span class="zadostic">👁</span><div><h2 id="zadostT">Žádost o plný obraz</h2><p id="zadostKdo"></p></div></div>
       <p class="zadostproc" id="zadostProc"></p>
-      <div class="zadostbtn">
-        <button class="btn wide" id="zadost15">Povolit na 15 minut</button>
-        <button class="btn wide sec2" id="zadostNavzdy">Povolit do odvolání</button>
-        <button class="btn wide bad" id="zadostNe">Odmítnout</button>
+      <div class="modesel three zadostbtn">
+        <button id="zadost15"><span class="ic">✅</span>Povolit<small>na 15 minut</small></button>
+        <button id="zadostNavzdy"><span class="ic">♾️</span>Povolit<small>do odvolání</small></button>
+        <button id="zadostNe" class="ne"><span class="ic">⛔</span>Odmítnout<small>&nbsp;</small></button>
       </div>
-      <p class="small" id="zadostPozn"></p>
-      <button class="sm sec" id="zadostZavrit">Zavřít, rozhodnu později</button>
+      <p class="hint" id="zadostPozn"></p>
+      <button class="zadostzavrit" id="zadostZavrit">Zavřít, rozhodnu později</button>
     </div>
   </div>
   <section id="hero" class="hero-ok">
@@ -128,7 +126,8 @@
         <select id="cDen"><option value="none">žádný obraz, jen události</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></label>
       <label class="crow"><span class="cl"><span class="ic">🌙</span>V noci</span>
         <select id="cNoc"><option value="none">žádný obraz, jen události</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></label>
-      <div class="crow times"><span class="cl"><span class="ic">🕕</span>Den začíná v</span><input type="time" id="cDenOd" step="300"><span class="cl"><span class="ic">🕙</span>noc v</span><input type="time" id="cNocOd" step="300"></div>
+      <label class="crow"><span class="cl"><span class="ic">🌅</span>Den začíná v</span><input type="time" id="cDenOd" step="300"></label>
+      <label class="crow"><span class="cl"><span class="ic">🌃</span>Noc začíná v</span><input type="time" id="cNocOd" step="300"></label>
       <label class="crow sw"><span class="cl"><span class="ic">🚨</span>V nouzi plný obraz<small>při pádu nebo SOS na 10 minut bez čekání, dozvíte se to hned</small></span>
         <span class="switch"><input type="checkbox" id="cNouze"><i></i></span></label>
     </div>

@@ -212,7 +212,7 @@ function renderZadost() {
   const ceka = r.state === 'čeká';
   if (zadostZobrazena !== r.id) { zadostZobrazena = r.id; posledniTon = 0; }
   el.classList.remove('hide'); el.classList.toggle('vyprselo', !ceka);
-  $('zadostT').textContent = ceka ? 'Poskytovatel žádá o plný obraz' : 'Žádost o plný obraz vypršela';
+  $('zadostT').textContent = ceka ? 'Žádost o plný obraz' : 'Žádost o plný obraz vypršela';
   $('zadostKdo').innerHTML = `<strong>${esc(r.from)}</strong> · ${fmtT(r.at)}`;
   $('zadostProc').textContent = `Důvod: ${r.reason || 'neuveden'}`;
   $('zadostPozn').textContent = ceka ? `Bez odpovědi do ${fmtT(r.until)} zůstane ${CONSENT[sim.effectiveMode(patientId)] || 'nastavený režim'}.` : 'Poskytovatel může požádat znovu.';
