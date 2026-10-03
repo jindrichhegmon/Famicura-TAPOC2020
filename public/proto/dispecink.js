@@ -16,7 +16,21 @@ src.connect();
 mountAuthBanner(src);
 src.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'obraz: skutečná kamera (HTTPS)' : 'obraz: skutečná kamera') : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
 sim.startRealEvents('tapoc2020');
-const panel = mountPanel({ role: 'dispecink', onPatient: () => {} });
+/* Přepínač zdroje: „Jen skutečné kamery“ ukáže jen kamery připojené k serveru
+ * (pacient s real: true), „Demo“ i fiktivní pacienty. Volba je na tomhle
+ * zařízení (localStorage), stav simulace zůstává společný; ?zdroj=demo|real ji přepne. */
+const ZDROJ_KEY = 'famicura.proto.zdroj';
+const zParam = new URLSearchParams(location.search).get('zdroj');
+let zdroj = ['real', 'demo'].includes(zParam) ? zParam : (localStorage.getItem(ZDROJ_KEY) === 'demo' ? 'demo' : 'real');
+const visible = (p) => zdroj === 'demo' || !!p.real;
+function renderZdroj() { $('zdroj').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj))); }
+$('zdroj').querySelectorAll('button').forEach((b) => { b.onclick = () => {
+  zdroj = b.dataset.z; localStorage.setItem(ZDROJ_KEY, zdroj); renderZdroj();
+  if (selected && !visible(sim.patient(selected))) { selected = null; renderDetail(); }
+  panel.refresh(); renderTiles(); renderQueue();
+}; });
+renderZdroj();
+const panel = mountPanel({ role: 'dispecink', patientIds: () => sim.state.patients.filter(visible).map((p) => p.id), onPatient: () => {} });
 
 // ?rezim=full|blur|skeleton|none opens the real camera in that mode (as if the
 // family had set it for day and night) and straight in the detail.
@@ -59,7 +73,7 @@ function beep() {
 function renderTiles() {
   const s = sim.state;
   const only = $('onlyOpen').checked;
-  const list = s.patients.filter((p) => !only || openAlerts(p.id).length || p.offline);
+  const list = s.patients.filter(visible).filter((p) => !only || openAlerts(p.id).length || p.offline);
   const order = { crit: 0, warn: 1, off: 2, klid: 3 };
   // the real camera first, always; the rest by how urgent they are
   list.sort((a, b) => (b.real ? 1 : 0) - (a.real ? 1 : 0) || order[statusOf(a)] - order[statusOf(b)]);
@@ -85,11 +99,12 @@ function renderTiles() {
     const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent');
     t.querySelector('.st').textContent = last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí';
   });
-  $('nPat').textContent = s.patients.length;
-  const opens = s.events.filter((e) => e.state === 'nový' && KINDS[e.kind] && KINDS[e.kind].level !== 'info');
+  $('nPat').textContent = s.patients.filter(visible).length;
+  const vis = (e) => visible(sim.patient(e.patientId) || {});
+  const opens = s.events.filter((e) => e.state === 'nový' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && vis(e));
   $('nNew').textContent = opens.length;
   $('nCrit').textContent = opens.filter((e) => KINDS[e.kind].level === 'crit').length;
-  const crit = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind]?.level === 'crit');
+  const crit = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind]?.level === 'crit' && vis(e));
   const critHtml = crit.slice(0, 3).map((e) => `<div class="banner crit pulse"><span class="badge crit">kritické</span><strong>${esc(sim.patient(e.patientId)?.name)}</strong><span class="grow">${esc(eventText(e))} · ${fmtT(e.at)} · ${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}${e.escalated ? ' · <span class="esc">ESKALOVÁNO vedoucímu</span>' : ''}</span>
     ${e.state === 'nový' ? `<button class="sm" data-take="${e.id}">Převzít</button>` : ''}<button class="sm sec" data-open="${e.patientId}">Otevřít obraz</button><button class="sm sec" data-call="${e.patientId}">Zavolat rodině</button></div>`).join('');
   if (setHtml($('critBanner'), critHtml)) bindQueueButtons($('critBanner'));
@@ -105,7 +120,7 @@ function bindQueueButtons(root) {
 
 function renderQueue() {
   const s = sim.state;
-  const items = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info');
+  const items = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {}));
   const order = { crit: 0, warn: 1, tech: 2 };
   items.sort((a, b) => order[KINDS[a.kind].level] - order[KINDS[b.kind].level] || a.at - b.at);
   const queueHtml = items.map((e) => {
@@ -255,7 +270,7 @@ sim.subscribe((s, info) => {
     if (seen.has(e.id)) continue; seen.add(e.id);
     // celý stav odjinud (první načtení ze serveru): staré události nehlásit
     if (info?.nahrazeno) continue;
-    const k = KINDS[e.kind]; if (!k || k.level === 'info') continue;
+    const k = KINDS[e.kind]; if (!k || k.level === 'info' || !visible(sim.patient(e.patientId) || {})) continue;
     if (k.level === 'crit') { beep(); toast(`🚨 ${sim.patient(e.patientId)?.name}: ${k.label}`, 'crit', () => { selected = e.patientId; renderDetail(true); renderTiles(); }); }
     else toast(`${sim.patient(e.patientId)?.name}: ${k.label}`);
   }

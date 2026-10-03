@@ -204,9 +204,12 @@ Na `/proto/` (po přihlášení v aplikaci, stejný prohlížeč) jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
 obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
 zapnout k normálnímu i rozostřenému obrazu a na černém pozadí je vždy;
-notifikace, co smí vidět poskytovatel, žádosti o plný obraz, historie), **dispečink poskytovatele** (dlaždice všech
+notifikace, co smí vidět poskytovatel, žádosti o plný obraz, historie), **dispečink poskytovatele** (dlaždice
 pacientů v režimu, který rodina povolila, fronta alertů s převzetím a
-uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup)
+uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup;
+přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery
+připojené k serveru, demo přidá fiktivní pacienty; volba se pamatuje
+v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne)
 a **provoz** (flotila míst, provozní alarmy, diagnostika, průvodce novým
 místem). Obraz je skutečný, z vaší kamery, kreslený jednou a do každé
 dlaždice zvlášť v jejím režimu (`public/proto/zdroj.js`); drátěný model

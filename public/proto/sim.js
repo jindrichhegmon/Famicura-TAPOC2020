@@ -223,7 +223,9 @@ export function mountAuthBanner(src) {
 /** The floating simulation panel: events, requests, night, reset. `role` decides which controls make sense. */
 export function mountPanel({ role, patientIds, onPatient }) {
   const el = document.createElement('div'); el.id = 'simPanel';
-  const opts = () => sim.state.patients.filter((p) => !patientIds || patientIds.includes(p.id)).map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  // patientIds: pole, nebo funkce (dispečink podle přepínače skutečné/demo); seznam se obnovuje sám
+  const ids = () => (typeof patientIds === 'function' ? patientIds() : patientIds);
+  const opts = () => sim.state.patients.filter((p) => { const i = ids(); return !i || i.includes(p.id); }).map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   el.innerHTML = `
     <div class="hd"><strong>Simulace</strong><span class="small">▴ rozbalit / sbalit</span></div>
     <div class="bd">
@@ -270,9 +272,10 @@ export function mountPanel({ role, patientIds, onPatient }) {
   el.querySelector('[data-act=request]').onclick = () => sim.requestFull(pat(), 'Dispečerka Jana Nováková', 'ověření alertu');
   el.querySelector('[data-act=reset]').onclick = () => { if (confirm(sim.naServeru ? 'Vynulovat simulaci pro všechny (dispečink, rodina i provoz na všech zařízeních)?' : 'Vynulovat simulaci ve všech oknech?')) sim.reset(); };
   const night = el.querySelector('.night'); night.checked = sim.state.night; night.onchange = () => sim.setNight(night.checked);
-  sim.subscribe((s) => { night.checked = s.night;
+  const refresh = () => { const sel = el.querySelector('.pat'); const html = opts(); if (sel.__html === html) return; const v = sel.value; sel.innerHTML = html; sel.__html = html; if ([...sel.options].some((o) => o.value === v)) sel.value = v; else onPatient?.(sel.value); };
+  sim.subscribe((s) => { night.checked = s.night; refresh();
     el.querySelector('#simKde').textContent = sim.naServeru ? 'Stav drží server: změna na jednom zařízení se u ostatních přihlášených projeví do 2 s.' : 'Bez přihlášení běží simulace jen v tomhle prohlížeči (okna vedle sebe se vidí).';
     const d = s.lastDropped; el.querySelector('#simDropped').textContent = d && Date.now() - d.at < 20000 ? `Událost „${KINDS[d.kind]?.label}“ se nezapsala: ${d.reason} (nastavení poskytovatele).` : ''; });
   el.classList.add('min');
-  return { patient: pat, select: (id) => { el.querySelector('.pat').value = id; } };
+  return { patient: pat, select: (id) => { el.querySelector('.pat').value = id; }, refresh };
 }
