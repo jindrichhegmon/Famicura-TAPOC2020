@@ -9,7 +9,8 @@ dispečinku. Postup nové verze je v README, část „Verze“.
 
 - Aplikace rodiny: vlastní obraz na telefonu je vždy ostrý; volba zobrazení
   (normální, rozostření, černé pozadí, drátěný model) je schovaná za jedním
-  tlačítkem **Test obrazu** a zavřením testu se vrátí ostrý obraz. Tři
+  tlačítkem **Test obrazu** a zavřením testu se vrátí ostrý obraz; drátěný
+  model je zapnutý jako výchozí a jde přidat k ostrému i rozmazanému obrazu. Tři
   tlačítka Ostrý / Rozmazaný / Drátěný model, kterými rodina přepíná, co vidí
   poskytovatel, zůstávají v kartě Přístup poskytovatele.
 - Dispečink: detail kamery ve třech sekcích. **Monitoring** (obraz, režim,

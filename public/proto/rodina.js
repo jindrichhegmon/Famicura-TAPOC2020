@@ -13,7 +13,8 @@ const REZIM = { full: ['full', false], normal: ['full', false], blur: ['blur', f
 const SKEL_KEY = 'famicura.proto.skel';
 const zRezimu = REZIM[params.get('rezim')];
 let baseMode = zRezimu ? zRezimu[0] : 'full';
-let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) === '1';
+// Drátěný model je výchozí (rodina si ho může vypnout); k ostrému i rozmazanému obrazu jde kdykoli přidat.
+let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) !== '0';
 const viewMode = () => baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
 let filter = 'all';
 const seen = new Set(sim.state.notifications.map((n) => n.id));
@@ -176,7 +177,7 @@ function renderModes() {
  * poskytovateli se nic nemění (to je karta Přístup poskytovatele). */
 const testObrazu = (on) => { $('testObrazu').classList.toggle('hide', !on); $('testStart').classList.toggle('hide', on); };
 $('testBtn').onclick = () => { testObrazu(true); $('testObrazu').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
-$('testZavrit').onclick = () => { baseMode = 'full'; skel = false; localStorage.setItem(SKEL_KEY, '0'); renderModes(); render(); testObrazu(false); };
+$('testZavrit').onclick = () => { baseMode = 'full'; skel = true; localStorage.setItem(SKEL_KEY, '1'); renderModes(); render(); testObrazu(false); };
 if (zRezimu && (zRezimu[0] !== 'full' || zRezimu[1])) testObrazu(true);   // ?rezim= otevře test rovnou v tom zobrazení
 $('modes').querySelectorAll('button').forEach((b) => { b.onclick = () => { baseMode = b.dataset.mode; renderModes(); render(); }; });
 $('skelSw').onchange = () => { skel = $('skelSw').checked; localStorage.setItem(SKEL_KEY, skel ? '1' : '0'); renderModes(); render(); };
