@@ -2,30 +2,62 @@ import { createSource } from '/proto/zdroj.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
-/* Záhlaví si dispečink nastaví sám (poskytovatel, dispečer, směna, záloha);
- * platí pro tento počítač (localStorage). Jméno dispečera jde do převzetí
- * alertů a do žádostí o obraz, které vidí rodina. */
-const HL_KEY = 'famicura.proto.dispecink';
-const HL_VYCHOZI = { poskytovatel: 'Pečovatelská služba Kladno', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák' };
-let hlavicka = { ...HL_VYCHOZI };
-try { hlavicka = { ...HL_VYCHOZI, ...JSON.parse(localStorage.getItem(HL_KEY) || '{}') }; } catch { /* výchozí */ }
-const ME = () => hlavicka.dispecer || HL_VYCHOZI.dispecer;
+/* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
+ * jen tady a ukládají do sdíleného stavu na serveru: stejně je vidí všichni
+ * dispečeři, detail kamery i aplikace rodiny. Jméno dispečera jde do převzetí
+ * alertů a do žádostí o obraz. */
+const ME = () => sim.poskytovatel.dispecer;
+const HL_POLE = ['nazev', 'telefon', 'dispecer', 'smena', 'zaloha'];
 function renderHlavicka() {
-  $('hlavicka').textContent = [hlavicka.poskytovatel, hlavicka.dispecer, hlavicka.smena, hlavicka.zaloha ? `záloha: ${hlavicka.zaloha}` : ''].filter(Boolean).join(' · ');
+  const h = sim.poskytovatel;
+  $('hlavicka').textContent = [h.nazev, h.telefon, h.dispecer, h.smena, h.zaloha ? `záloha: ${h.zaloha}` : ''].filter(Boolean).join(' · ');
 }
 $('hlUprav').onclick = () => {
-  for (const k of Object.keys(HL_VYCHOZI)) $('hl' + k[0].toUpperCase() + k.slice(1)).value = hlavicka[k] || '';
-  $('hlForm').classList.toggle('hide'); $('hlDispecer').focus();
+  const h = sim.poskytovatel;
+  for (const k of HL_POLE) $('hl' + k[0].toUpperCase() + k.slice(1)).value = h[k] || '';
+  $('hlForm').classList.toggle('hide'); $('hlNazev').focus();
 };
 $('hlZrusit').onclick = () => $('hlForm').classList.add('hide');
-$('hlForm').onsubmit = (e) => {
+$('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  for (const k of Object.keys(HL_VYCHOZI)) hlavicka[k] = $('hl' + k[0].toUpperCase() + k.slice(1)).value.trim();
-  if (!hlavicka.dispecer) hlavicka.dispecer = HL_VYCHOZI.dispecer;
-  localStorage.setItem(HL_KEY, JSON.stringify(hlavicka));
-  $('hlForm').classList.add('hide'); renderHlavicka(); toast('Záhlaví uloženo.');
+  const p = {}; for (const k of HL_POLE) p[k] = $('hl' + k[0].toUpperCase() + k.slice(1)).value.trim();
+  await sim.setPoskytovatel(p);
+  $('hlForm').classList.add('hide'); renderHlavicka(); toast('Údaje poskytovatele uloženy.');
 };
 renderHlavicka();
+
+/* ---------- nápověda a asistent ---------- */
+import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
+  const nap = $('napoveda');
+  $('napTemata').innerHTML = TEMATA.map((t) => `<details class="naptema" id="nap-${t.id}"><summary>${esc(t.nazev)}</summary><p>${esc(t.text)}</p></details>`).join('');
+  const tab = (name) => { nap.querySelectorAll('.naptabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === name))); $('napTemata').classList.toggle('hide', name !== 'temata'); $('napChat').classList.toggle('hide', name !== 'chat'); if (name === 'chat') $('chatIn').focus(); };
+  nap.querySelectorAll('.naptabs button').forEach((b) => { b.onclick = () => tab(b.dataset.tab); });
+  $('napovedaBtn').onclick = () => { nap.classList.toggle('hide'); if (!nap.classList.contains('hide')) tab('temata'); };
+  $('napZavrit').onclick = () => nap.classList.add('hide');
+  const log = $('chatLog');
+  const zprava = (text, kdo, tema) => { const d = document.createElement('div'); d.className = 'msg ' + kdo; d.innerHTML = (tema ? `<span class="tema">${esc(tema)}</span>` : '') + esc(text); log.append(d); log.scrollTop = log.scrollHeight; return d; };
+  zprava('Dobrý den, jsem asistent dispečinku. Zeptejte se třeba: jak požádat o plný obraz, co je nouzový přístup, jak založit účet rodině.', 'bot');
+  let aiNaServeru = null;   // null = ještě nevíme, false = neodpovídá AI, true = odpovídá AI přes webhook
+  $('chatForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const q = $('chatIn').value.trim(); if (!q) return;
+    $('chatIn').value = ''; zprava(q, 'ja');
+    const lokalni = odpovez(q);
+    if (aiNaServeru === false) { zprava(lokalni.text, 'bot', lokalni.nazev); return; }
+    const cekam = zprava('…', 'bot');
+    try {
+      const r = await fetch('/api/proto/asistent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dotaz: q, kontext: napovedaText() }) });
+      const b = await r.json().catch(() => ({}));
+      if (b.nastaveno === false) { aiNaServeru = false; cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev); return; }
+      aiNaServeru = true; $('chatPozn').textContent = 'Asistent odpovídá přes AI (webhook Make) s nápovědou dispečinku jako podkladem.';
+      cekam.remove();
+      if (r.ok && b.odpoved) zprava(b.odpoved, 'bot', 'AI');
+      else { zprava(lokalni.text, 'bot', lokalni.nazev); zprava(`AI teď neodpovídá (${b.error || r.status}), odpověděl jsem z nápovědy.`, 'bot'); }
+    } catch { cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev); }
+  };
+  // odkaz z asistenta na téma: po kliknutí na odpověď s tématem ho otevře v záložce Témata
+  log.addEventListener('click', (e) => { const t = e.target.closest('.msg.bot .tema'); if (!t || t.textContent === 'AI') return; const d = [...document.querySelectorAll('.naptema')].find((x) => x.querySelector('summary').textContent === t.textContent); if (d) { tab('temata'); d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } });
+});
 let selected = null;
 let overlay = false;                 // skeleton over a full or blurred picture in the detail
 let askOpen = false, emergOpen = false;   // inline forms in the detail
@@ -192,7 +224,7 @@ function renderDetail(rebuild = false) {
       <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
       <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
       <div class="row" id="dbtn"></div>
-      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(p.provider)}</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
+      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka</dt><dd>${esc(p.note || '–')}</dd></div>
       <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
       <div id="dusers"></div>
       <h3 style="margin-top:12px">Sledování a nahrávání <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí</span></h3>
@@ -319,6 +351,6 @@ sim.subscribe((s, info) => {
     if (k.level === 'crit') { beep(); toast(`🚨 ${sim.patient(e.patientId)?.name}: ${k.label}`, 'crit', () => { selected = e.patientId; renderDetail(true); renderTiles(); }); }
     else toast(`${sim.patient(e.patientId)?.name}: ${k.label}`);
   }
-  renderTiles(); renderQueue(); renderDetail();
+  renderHlavicka(); renderTiles(); renderQueue(); renderDetail();
 });
 setInterval(() => { renderTiles(); renderQueue(); renderDetail(); }, 5000);

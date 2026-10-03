@@ -217,10 +217,17 @@ přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery
 připojené k serveru, demo přidá fiktivní pacienty; volba se pamatuje
 v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne; bez
 přihlášení se dispečink přihlašuje heslem Famicura rovnou ve svém okně
-a po přihlášení naběhne s obrazem kamery; záhlaví (poskytovatel,
-dispečer, směna, záloha) si dispečink nastaví tlačítkem Upravit, platí
-pro ten počítač a jméno dispečera se zapisuje k převzetí alertů
-a k žádostem o obraz, které vidí rodina)
+a po přihlášení naběhne s obrazem kamery; údaje poskytovatele (název,
+telefon, dispečer, směna, záloha) se zadávají na jednom místě tlačítkem
+Upravit v záhlaví, ukládají se do sdíleného stavu a stejně je vidí všichni
+dispečeři, detail kamery i aplikace rodiny; jméno dispečera se zapisuje
+k převzetí alertů a k žádostem o obraz; tlačítko **? Nápověda** otevře
+panel s tématy a záložku **Asistent**: ten odpovídá z nápovědy
+(`public/proto/napoveda.js`) přímo v prohlížeči, a když je v `.env`
+`ASISTENT_WEBHOOK_URL` + `ASISTENT_WEBHOOK_KLIC` (scénář Make s AI, který
+dostane otázku a text nápovědy a vrátí `{ "odpoved": … }`), odpovídá AI
+přes `POST /api/proto/asistent`; bez webhooku nebo při jeho výpadku se
+vrátí k nápovědě)
 a **provoz** (flotila míst, provozní alarmy, diagnostika, průvodce novým
 místem). Obraz je skutečný, z vaší kamery, kreslený jednou a do každé
 dlaždice zvlášť v jejím režimu (`public/proto/zdroj.js`); drátěný model

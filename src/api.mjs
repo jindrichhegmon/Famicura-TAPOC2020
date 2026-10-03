@@ -34,6 +34,7 @@ import { kdo, cookie, cookieRodina, odhlaseni, hesloSedi } from './session.mjs';
 import { createUzivatele, textPozvanky, formatTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
 import { createProtoStav } from './proto-stav.mjs';
+import { createAsistent } from './asistent.mjs';
 import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
 import { normalizeIntervals, isDeviceId, MAX_INTERVALS } from './plan-pravidla.mjs';
@@ -81,10 +82,11 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, proto = null }) {
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, proto = null, asistent = null }) {
   uzivatele = uzivatele || createUzivatele(store);
   sms = sms || createSms();
   proto = proto || createProtoStav({ store, udalosti });
+  asistent = asistent || createAsistent();
   // Each camera carries what it can report itself, so the page offers only that.
   async function kamery() {
     const names = cameraNames();
@@ -262,6 +264,15 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const { akce, args } = await telo(req);
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
         return json({ ok: true, ...(await proto.proved(akce, args)) });
+      }
+
+      // Asistent dispečinku: AI přes webhook Make, když je nastavený; jinak odpovídá prohlížeč z nápovědy.
+      if (m === 'POST' && path === '/api/proto/asistent') {
+        if (rodina) return jenPoskytovatel();
+        if (!asistent.nastaveno) return json({ ok: true, nastaveno: false });
+        const { dotaz, kontext } = await telo(req);
+        const r = await asistent.zeptej({ dotaz, kontext: typeof kontext === 'string' ? kontext.slice(0, 20000) : '' });
+        return r.ok ? json({ ok: true, nastaveno: true, odpoved: r.odpoved }) : json({ ok: false, nastaveno: true, error: r.error }, 502);
       }
 
       if (m === 'GET' && path === '/api/events') {

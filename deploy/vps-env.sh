@@ -57,6 +57,17 @@ fi
 unset W K
 
 echo
+echo "Asistent v dispečinku přes webhook Make s AI (volitelné; bez něj odpovídá z nápovědy). Enter = nechat, jak je."
+read -r -p "ASISTENT_WEBHOOK_URL (https://hook.eu2.make.com/…): " W
+if [ -n "$W" ]; then
+  [[ "$W" =~ ^https://[A-Za-z0-9./_-]+$ ]] || { echo "Adresa webhooku musí začínat https:// a být bez mezer."; exit 1; }
+  printf '%s' "$W" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav ASISTENT_WEBHOOK_URL'"
+  read -rs -p "ASISTENT_WEBHOOK_KLIC (klíč, který scénář kontroluje): " K; echo
+  [ -n "$K" ] && printf '%s' "$K" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav ASISTENT_WEBHOOK_KLIC'"
+fi
+unset W K
+
+echo
 echo "Po:"
 $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs stav'"
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProtoStav } from '../src/proto-stav.mjs';
-import { seed, proved, AKCE, withinHours, jeNoc, jeNocPro, pristeV, efektivni, KLID_NAVZDY } from '../public/proto/sim-core.js';
+import { seed, proved, AKCE, withinHours, jeNoc, jeNocPro, pristeV, efektivni, KLID_NAVZDY, poskytovatel, poskytovatelPro } from '../public/proto/sim-core.js';
 
 function memStore() {
   const data = {};
@@ -133,4 +133,17 @@ test('jádro: den a noc podle časů rodiny, rychlé přepnutí do střídání,
   assert.equal(proved(s, 'klidDo', ['tapoc2020', 'vypnout'], poledne).vysledek, null);
   assert.equal(s.klid.tapoc2020, undefined);
   assert.throws(() => proved(s, 'klidDo', ['tapoc2020', 'nekdy']), (e) => e.status === 400);
+});
+
+test('jádro: údaje poskytovatele na jednom místě, s výchozími hodnotami pro starší stav', () => {
+  const s = seed(0);
+  assert.equal(poskytovatel(s).nazev, 'Pečovatelská služba Kladno');
+  const { vysledek } = proved(s, 'setPoskytovatel', [{ nazev: 'DS Slunečnice', telefon: '777 000 111', dispecer: 'Eva Malá', smena: 'noční', zaloha: '' }]);
+  assert.equal(vysledek.dispecer, 'Eva Malá');
+  assert.equal(poskytovatelPro(s, s.patients[0]), 'DS Slunečnice', 'skutečná kamera: sdílený poskytovatel');
+  assert.equal(poskytovatelPro(s, s.patients[1]), 'Pečovatelská služba Kladno', 'ukázkový pacient si nechá svého');
+  assert.throws(() => proved(s, 'setPoskytovatel', [{ nazev: '' }]), (e) => e.status === 400);
+  assert.throws(() => proved(s, 'setPoskytovatel', [{ dispecer: '   ' }]), (e) => e.status === 400);
+  delete s.poskytovatel;
+  assert.equal(poskytovatel(s).dispecer, 'Jana Nováková', 'stav uložený před touto verzí dostane výchozí údaje');
 });

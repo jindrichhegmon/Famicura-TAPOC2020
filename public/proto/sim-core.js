@@ -106,6 +106,13 @@ const FAKE = [
   ['p8', 'Paní Jarmila', 'Byt 2, Praha 6', 'Pečovatelská služba Kladno'],
 ];
 
+/* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
+ * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák' };
+export function poskytovatel(s) { return { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; }
+/** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
+export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
+
 export function seed(now = Date.now()) {
   const patients = [
     { id: 'tapoc2020', name: 'TAPO Test', place: 'Kancelář Famicura (skutečná kamera)', provider: 'Pečovatelská služba Kladno', real: true,
@@ -123,7 +130,7 @@ export function seed(now = Date.now()) {
   add(190, 'p5', 'inactivity', 'uzavřen', 'výjezd');
   add(260, 'p8', 'fall', 'uzavřen', 'záchranná služba');
   add(300, 'p7', 'offline', 'uzavřen', 'tunel obnoven');
-  return { patients, events, notifications: [], requests: [], grants: {}, klid: {}, watching: {}, night: false, seq: 1, seededAt: now };
+  return { patients, events, notifications: [], requests: [], grants: {}, klid: {}, watching: {}, night: false, seq: 1, seededAt: now, poskytovatel: { ...POSKYTOVATEL_VYCHOZI } };
 }
 
 /* ---------- akce ----------
@@ -286,6 +293,15 @@ const akce = {
   setWatching(s, now, patientId, who, on) { patientId = pid(patientId); if (bool(on)) s.watching[patientId] = { who: str(who, 80, 'who'), since: now }; else delete s.watching[patientId]; return {}; },
   setKlid(s, now, patientId, until) { patientId = pid(patientId); until = cas(until, 'until'); if (until) s.klid[patientId] = until; else delete s.klid[patientId]; return {}; },
   setNight(s, now, on) { s.night = bool(on); return {}; },
+  setPoskytovatel(s, now, p) {
+    if (!p || typeof p !== 'object') throw chyba('Chybí údaje poskytovatele.');
+    const n = { ...poskytovatel(s) };
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p) n[k] = str(p[k], 80, k).trim();
+    if (!n.nazev) throw chyba('Název poskytovatele nesmí být prázdný.');
+    if (!n.dispecer) throw chyba('Jméno dispečera nesmí být prázdné.');
+    s.poskytovatel = n;
+    return { vysledek: n };
+  },
   reset(s, now) { return { stav: seed(now) }; },
 
   /** Housekeeping every few seconds: expired grants and requests, escalation. */

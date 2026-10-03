@@ -26,19 +26,29 @@
 </div>
 <div class="desk">
   <div class="deskbar">
-    <div><h1>Famicura · Dispečink</h1><div class="small"><span id="hlavicka"></span> <button class="sm sec" id="hlUprav" title="Nastavit, co je v záhlaví: poskytovatel, dispečer, směna, záloha">Upravit</button></div>
+    <div><h1>Famicura · Dispečink</h1><div class="small"><span id="hlavicka"></span> <button class="sm sec" id="hlUprav" title="Údaje poskytovatele: název, telefon, dispečer, směna, záloha. Zadávají se tady a vidí je všichni dispečeři, detail kamery i rodina.">Upravit</button> <button class="sm sec" id="napovedaBtn" title="Nápověda a asistent">? Nápověda</button></div>
       <form class="hlform hide" id="hlForm">
-        <label>Poskytovatel<input type="text" id="hlPoskytovatel" maxlength="60" placeholder="Pečovatelská služba Kladno"></label>
-        <label>Dispečer(ka)<input type="text" id="hlDispecer" maxlength="60" placeholder="Jana Nováková" required></label>
+        <label>Poskytovatel (název služby)<input type="text" id="hlNazev" maxlength="80" placeholder="Pečovatelská služba Kladno" required></label>
+        <label>Telefon poskytovatele<input type="tel" id="hlTelefon" maxlength="40" placeholder="312 123 456"></label>
+        <label>Dispečer(ka)<input type="text" id="hlDispecer" maxlength="80" placeholder="Jana Nováková" required></label>
         <label>Směna<input type="text" id="hlSmena" maxlength="40" placeholder="denní směna"></label>
-        <label>Záloha<input type="text" id="hlZaloha" maxlength="60" placeholder="Petr Dvořák"></label>
+        <label>Záloha<input type="text" id="hlZaloha" maxlength="80" placeholder="Petr Dvořák"></label>
         <span class="row"><button class="sm" type="submit">Uložit</button><button class="sm sec" type="button" id="hlZrusit">Zrušit</button></span>
-        <span class="small muted">Platí pro tento počítač. Jméno dispečera se zapisuje k převzetí alertu a k žádostem, které vidí rodina.</span>
+        <span class="small muted">Ukládá se na server: stejné údaje vidí všichni dispečeři, detail kamery i aplikace rodiny. Jméno dispečera se zapisuje k převzetí alertu a k žádostem, které vidí rodina.</span>
       </form>
     </div>
     <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
   </div>
   <div id="critBanner"></div>
+  <aside class="napoveda hide" id="napoveda" aria-label="Nápověda a asistent">
+    <div class="naphead"><strong>Nápověda</strong><span class="seg naptabs"><button data-tab="temata" aria-pressed="true">Témata</button><button data-tab="chat" aria-pressed="false">Asistent</button></span><button class="sm sec" id="napZavrit">✕</button></div>
+    <div class="napbody" id="napTemata"></div>
+    <div class="napbody hide" id="napChat">
+      <div class="chatlog" id="chatLog"></div>
+      <form class="chatin" id="chatForm"><input type="text" id="chatIn" placeholder="Zeptejte se, třeba: jak požádat o plný obraz" maxlength="500" autocomplete="off"><button class="sm" type="submit">Odeslat</button></form>
+      <p class="small muted" id="chatPozn">Asistent odpovídá z nápovědy dispečinku.</p>
+    </div>
+  </aside>
   <div class="cols">
     <div>
       <div class="row"><span class="small muted grow">Dlaždice ukazují jen to, co rodina povolila. Klepnutím otevřete detail.</span>

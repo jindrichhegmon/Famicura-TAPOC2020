@@ -6,7 +6,7 @@
  * stav v tomhle prohlížeči: localStorage + BroadcastChannel mezi okny.
  * Data i akce jsou v sim-core.js, stejné pro prohlížeč i server.
  */
-import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE } from '/proto/sim-core.js';
+import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro } from '/proto/sim-core.js';
 export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE };
 
 const KEY = 'famicura.proto.v1';
@@ -88,6 +88,10 @@ function runLocal(nazev, args) {
 export const sim = {
   get state() { return state; },
   get naServeru() { return !!server; },
+  /** Údaje poskytovatele ze sdíleného stavu (dispečink je zadává na jednom místě). */
+  get poskytovatel() { return poskytovatel(state); },
+  poskytovatelPro(p) { return poskytovatelPro(state, p); },
+  setPoskytovatel(p) { return run('setPoskytovatel', [p]); },
   pripojit,
   /** f(state, info): info.nahrazeno = celý stav přišel odjinud (první načtení ze serveru), ne nová událost. */
   subscribe(f) { subs.add(f); f(state); return () => subs.delete(f); },

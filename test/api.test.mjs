@@ -47,7 +47,7 @@ function handler(over = {}) {
   const store = over.store || memStore();
   const uzivatele = createUzivatele(store);
   const sms = over.sms || { nastaveno: false, async posli() { return { ok: false, error: 'SMS není nastavená.' }; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms }), ...db, go2rtc, store, uzivatele };
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null }), ...db, go2rtc, store, uzivatele };
 }
 
 test('health nepotřebuje přihlášení a vrací verzi', async () => {
@@ -507,4 +507,18 @@ test('prototyp: stav na serveru vidí poskytovatel i rodina, bez přihlášení 
   assert.equal(bad.status, 400);
   const bad2 = await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'reset' } }));
   assert.equal(bad2.status, 400);
+});
+
+test('asistent dispečinku: bez webhooku server řekne, že odpovídá prohlížeč; s webhookem vrátí odpověď AI; rodina nemá přístup', async () => {
+  const { h, uzivatele } = handler();
+  const r1 = await (await h(req('POST', '/api/proto/asistent', { cookies: cookie(), body: { dotaz: 'jak' } }))).json();
+  assert.deepEqual(r1, { ok: true, nastaveno: false });
+  const { h: h2 } = handler({ asistent: { nastaveno: true, async zeptej({ dotaz }) { return { ok: true, odpoved: 'AI: ' + dotaz }; } } });
+  const r2 = await (await h2(req('POST', '/api/proto/asistent', { cookies: cookie(), body: { dotaz: 'jak', kontext: 'x' } }))).json();
+  assert.equal(r2.odpoved, 'AI: jak');
+  assert.equal((await h(req('POST', '/api/proto/asistent', { body: { dotaz: 'jak' } }))).status, 401);
+  const { token } = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const akt = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'tajne-heslo-1' } }));
+  const fam = akt.headers.get('set-cookie').split(';')[0];
+  assert.equal((await h(req('POST', '/api/proto/asistent', { cookies: fam, body: { dotaz: 'jak' } }))).status, 403);
 });

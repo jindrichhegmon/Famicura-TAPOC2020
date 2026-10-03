@@ -229,7 +229,8 @@ function render() {
   const s = sim.state;
   const p = sim.patient(patientId); if (!p) return;
   $('pname').textContent = p.name;
-  $('provider').textContent = `${p.provider} · nastavení platí pro dispečink i pečovatele v terénu`;
+  const posk = sim.poskytovatel;
+  $('provider').textContent = `${sim.poskytovatelPro(p)}${p.real && posk.telefon ? ' · ' + posk.telefon : ''} · nastavení platí pro dispečink i pečovatele v terénu`;
   $('cDen').value = p.consent.den; $('cNoc').value = p.consent.noc; $('cNouze').checked = p.consent.nouze;
   const { denOd, nocOd } = casy(p);
   if (document.activeElement !== $('cDenOd')) $('cDenOd').value = denOd;

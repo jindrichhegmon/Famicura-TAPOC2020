@@ -295,3 +295,20 @@ body.withAuth .apphead,body.withAuth .deskbar{top:56px}
 .zadostcard .hint{margin-top:10px;text-align:center}
 .zadostzavrit{display:block;width:100%;margin-top:8px;background:none;border:0;color:var(--blue);font-weight:600;font-size:.9rem;padding:10px;min-height:40px}
 .zadost.vyprselo .zadostcard{animation:none}.zadost.vyprselo .zadostic{animation:none;background:var(--soft)}
+
+/* nápověda a asistent dispečinku: panel vpravo */
+.napoveda{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.18);z-index:40;display:flex;flex-direction:column}
+.naphead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--navy);color:#fff}
+.naphead strong{flex:1}
+.naptabs{flex:0 0 auto;border-color:rgba(255,255,255,.4)}.naptabs button{min-height:30px;padding:4px 10px;font-size:.8rem;background:transparent;color:#fff}.naptabs button[aria-pressed=true]{background:#fff;color:var(--navy)}
+.napbody{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.naptema{border:1px solid var(--line);border-radius:12px;background:#fff}
+.naptema summary{cursor:pointer;padding:10px 12px;font-weight:600;list-style:none;display:flex;gap:8px;align-items:center}
+.naptema summary::before{content:'▸';color:var(--blue)}.naptema[open] summary::before{content:'▾'}
+.naptema p{margin:0;padding:0 12px 12px;font-size:.9rem;line-height:1.45}
+.chatlog{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:6px}
+.msg{max-width:88%;padding:8px 12px;border-radius:14px;font-size:.9rem;line-height:1.4;white-space:pre-wrap}
+.msg.ja{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.msg.bot{align-self:flex-start;background:var(--soft);color:var(--ink);border-bottom-left-radius:4px}
+.msg.bot .tema{display:block;font-size:.75rem;color:var(--muted);margin-bottom:2px}
+.chatin{display:flex;gap:8px}.chatin input{flex:1;min-height:40px;padding:6px 10px;border:1px solid var(--line);border-radius:12px;font-size:16px}
