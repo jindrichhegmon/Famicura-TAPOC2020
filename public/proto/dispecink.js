@@ -249,6 +249,7 @@ function renderTiles() {
   // the real camera first, always; the rest by how urgent they are
   list.sort((a, b) => (b.real ? 1 : 0) - (a.real ? 1 : 0) || order[statusOf(a)] - order[statusOf(b)]);
   const box = $('tiles');
+  box.dataset.pocet = String(Math.min(list.length, 5));   // velikost dlaždic podle počtu kamer (proto.css)
   // keep canvases: rebuild only when the set or order changed
   const key = list.map((p) => p.id).join(',');
   if (box.dataset.key !== key) {

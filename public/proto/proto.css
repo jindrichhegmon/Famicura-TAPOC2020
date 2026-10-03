@@ -77,7 +77,16 @@ th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;l
 .deskbar button.icon .ico{font-size:1.25rem}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start}
 @media (max-width:980px){.cols{grid-template-columns:1fr}}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+/* málo kamer = velké dlaždice: jedna přes 2/3 šířky, dvě vedle sebe, tři až čtyři větší než výchozí */
+.tiles[data-pocet="1"]{grid-template-columns:minmax(0,720px)}
+.tiles[data-pocet="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.tiles[data-pocet="3"],.tiles[data-pocet="4"]{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.tiles[data-pocet="1"] .tile .nm,.tiles[data-pocet="2"] .tile .nm{font-size:1.2rem}
+.tiles[data-pocet="1"] .tile .st,.tiles[data-pocet="2"] .tile .st{font-size:1rem}
+.tiles[data-pocet="1"] .tile .tag,.tiles[data-pocet="2"] .tile .tag{font-size:.95rem;padding:5px 12px}
+.tiles[data-pocet="1"] .tile .st-badge,.tiles[data-pocet="2"] .tile .st-badge{font-size:.85rem}
+.tiles .bezkamery{font-size:1.05rem;max-width:720px;grid-column:1/-1}
 .tile{background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px;cursor:pointer;transition:border-color .2s}
 .tile.sel{outline:3px solid var(--blue);outline-offset:1px}
 .tile.klid{border-color:var(--line)}
@@ -85,8 +94,8 @@ th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;l
 .tile.crit{border-color:#d33;animation:pulse 1.2s ease-in-out infinite}
 .tile.off{border-color:#7a8794;opacity:.85}
 .tile .stage{aspect-ratio:16/9;margin-bottom:6px}
-.tile .nm{font-weight:700;font-size:.9rem;display:flex;justify-content:space-between;gap:6px}
-.tile .st{font-size:.78rem;color:var(--muted);min-height:1.2em}
+.tile .nm{font-weight:700;font-size:1rem;display:flex;justify-content:space-between;gap:6px;align-items:center}
+.tile .st{font-size:.85rem;color:var(--muted);min-height:1.2em}
 .queue li{flex-direction:column;align-items:stretch;gap:6px}
 .queue .head{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .queue .esc{color:var(--bad);font-weight:700;font-size:.8rem}
