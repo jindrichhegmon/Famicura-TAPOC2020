@@ -298,6 +298,8 @@ function renderDetail(rebuild = false) {
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
         <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
         <div class="row" id="dbtn"></div>
+        <h3 style="margin-top:12px">Přidat poznámku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</span></h3>
+        <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
         <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění</span></h3><ul class="list" id="dhist"></ul>
       </section>
       <section class="dsec hide" data-sec="komunikace">
@@ -312,8 +314,8 @@ function renderDetail(rebuild = false) {
           <div class="row"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
           <p class="small bad hide" id="dkontaktyErr"></p>
         </form>
-        <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; zapisují se do logu kamery, rodina je nevidí</span></h3>
-        <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div><ul id="dnotes"></ul></div>
+        <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– přehled všech poznámek k této kameře, nejnovější nahoře; novou přidáte v Monitoringu</span></h3>
+        <div class="notes"><ul id="dnotes"></ul></div>
       </section>
       <section class="dsec hide" data-sec="nastaveni">
         <h3>Sledování, nahrávání a upozornění <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</span></h3>

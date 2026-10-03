@@ -207,8 +207,9 @@ simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
 obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
 zapnout k normálnímu i rozostřenému obrazu a na černém pozadí je vždy;
 notifikace, historie; karta **Přístup poskytovatele** říká, co
-poskytovatel vidí teď a proč, má rychlé přepnutí Ostrý / Rozmazaný /
-Drátěný model platné do další změny nebo do střídání den/noc, nastavení
+poskytovatel vidí teď a proč, má tlačítko Test obrazu (teprve po něm
+výběr Ostrý / Rozmazaný / Drátěný model; vlastní obraz rodiny na telefonu
+je vždy ostrý) platné do další změny nebo do střídání den/noc, nastavení
 podle denní doby včetně časů, kdy den a noc začínají, a nouzový přístup;
 **Klid** na 2 hodiny, do rána, do večera, do vypnutí; žádost poskytovatele
 o plný obraz přijde přes celou obrazovku, bliká a zní, dokud ji rodina

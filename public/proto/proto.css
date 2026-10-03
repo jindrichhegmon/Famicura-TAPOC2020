@@ -211,7 +211,8 @@ body.app .phone{max-width:460px;margin:0 auto;padding:0 12px 150px;background:#f
 .now.big{margin:6px 0 4px;font-size:1rem;padding:10px 12px;border-left:4px solid var(--blue)}.now.big strong{font-size:1.1rem;display:block}.now.big small{color:var(--muted)}
 .card h3.sub{margin:14px 0 2px;font-size:.78rem}
 .crow input[type=time]{min-height:38px;padding:4px 8px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
-.chip[aria-pressed=true]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.chip[aria-pressed=true],.chip.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+#rychleAktivni{align-items:center}#rychleAktivni .now{flex:1 1 100%;margin:0 0 4px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chips.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-bottom:4px}
 .chip{background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 12px;min-height:34px;font-size:.82rem;font-weight:600;white-space:nowrap}
