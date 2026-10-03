@@ -11,9 +11,31 @@
 <link rel="stylesheet" href="/proto/proto.css">
 </head>
 <body>
+<div class="gate hide" id="gate">
+  <div class="gatecard">
+    <img class="gatelogo" src="/proto/ikony/famicura-192.png" alt="" width="72" height="72">
+    <h1>Famicura · Dispečink</h1>
+    <p class="gatesub">Přihlaste se heslem Famicura (poskytovatel). Po přihlášení je obraz z kamery k dispozici.</p>
+    <form id="gLogin" class="gateform" autocomplete="on">
+      <label>Heslo Famicura<input type="password" id="gPw" name="password" autocomplete="current-password" required autofocus></label>
+      <p class="gateerr hide" id="gLoginErr"></p>
+      <button class="btn wide" type="submit">Přihlásit se</button>
+      <p class="hint">Stejné heslo jako do hlavní aplikace. Přihlášení platí 12 hodin pro dispečink, provoz i hlavní aplikaci v tomhle prohlížeči.</p>
+    </form>
+  </div>
+</div>
 <div class="desk">
   <div class="deskbar">
-    <div><h1>Famicura · Dispečink</h1><div class="small">Pečovatelská služba Kladno · Jana Nováková · denní směna · záloha: Petr Dvořák</div></div>
+    <div><h1>Famicura · Dispečink</h1><div class="small"><span id="hlavicka"></span> <button class="sm sec" id="hlUprav" title="Nastavit, co je v záhlaví: poskytovatel, dispečer, směna, záloha">Upravit</button></div>
+      <form class="hlform hide" id="hlForm">
+        <label>Poskytovatel<input type="text" id="hlPoskytovatel" maxlength="60" placeholder="Pečovatelská služba Kladno"></label>
+        <label>Dispečer(ka)<input type="text" id="hlDispecer" maxlength="60" placeholder="Jana Nováková" required></label>
+        <label>Směna<input type="text" id="hlSmena" maxlength="40" placeholder="denní směna"></label>
+        <label>Záloha<input type="text" id="hlZaloha" maxlength="60" placeholder="Petr Dvořák"></label>
+        <span class="row"><button class="sm" type="submit">Uložit</button><button class="sm sec" type="button" id="hlZrusit">Zrušit</button></span>
+        <span class="small muted">Platí pro tento počítač. Jméno dispečera se zapisuje k převzetí alertu a k žádostem, které vidí rodina.</span>
+      </form>
+    </div>
     <div class="stats"><span>pacientů <strong id="nPat">0</strong></span><span>nových alertů <strong id="nNew">0</strong></span><span>kritických <strong id="nCrit">0</strong></span><span id="srcNote" class="muted"></span></div>
   </div>
   <div id="critBanner"></div>

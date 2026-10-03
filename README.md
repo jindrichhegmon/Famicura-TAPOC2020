@@ -200,7 +200,7 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
-Na `/proto/` (po přihlášení v aplikaci, stejný prohlížeč) jsou tři
+Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
 obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
 zapnout k normálnímu i rozostřenému obrazu a na černém pozadí je vždy;
@@ -209,7 +209,12 @@ pacientů v režimu, který rodina povolila, fronta alertů s převzetím a
 uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup;
 přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery
 připojené k serveru, demo přidá fiktivní pacienty; volba se pamatuje
-v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne)
+v tom prohlížeči, `?zdroj=demo` nebo `?zdroj=real` ji přepne; bez
+přihlášení se dispečink přihlašuje heslem Famicura rovnou ve svém okně
+a po přihlášení naběhne s obrazem kamery; záhlaví (poskytovatel,
+dispečer, směna, záloha) si dispečink nastaví tlačítkem Upravit, platí
+pro ten počítač a jméno dispečera se zapisuje k převzetí alertů
+a k žádostem o obraz, které vidí rodina)
 a **provoz** (flotila míst, provozní alarmy, diagnostika, průvodce novým
 místem). Obraz je skutečný, z vaší kamery, kreslený jednou a do každé
 dlaždice zvlášť v jejím režimu (`public/proto/zdroj.js`); drátěný model

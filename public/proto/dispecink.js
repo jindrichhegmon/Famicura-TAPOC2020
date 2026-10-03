@@ -2,13 +2,58 @@ import { createSource } from '/proto/zdroj.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
-const ME = 'Jana Nováková';
+/* Záhlaví si dispečink nastaví sám (poskytovatel, dispečer, směna, záloha);
+ * platí pro tento počítač (localStorage). Jméno dispečera jde do převzetí
+ * alertů a do žádostí o obraz, které vidí rodina. */
+const HL_KEY = 'famicura.proto.dispecink';
+const HL_VYCHOZI = { poskytovatel: 'Pečovatelská služba Kladno', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák' };
+let hlavicka = { ...HL_VYCHOZI };
+try { hlavicka = { ...HL_VYCHOZI, ...JSON.parse(localStorage.getItem(HL_KEY) || '{}') }; } catch { /* výchozí */ }
+const ME = () => hlavicka.dispecer || HL_VYCHOZI.dispecer;
+function renderHlavicka() {
+  $('hlavicka').textContent = [hlavicka.poskytovatel, hlavicka.dispecer, hlavicka.smena, hlavicka.zaloha ? `záloha: ${hlavicka.zaloha}` : ''].filter(Boolean).join(' · ');
+}
+$('hlUprav').onclick = () => {
+  for (const k of Object.keys(HL_VYCHOZI)) $('hl' + k[0].toUpperCase() + k.slice(1)).value = hlavicka[k] || '';
+  $('hlForm').classList.toggle('hide'); $('hlDispecer').focus();
+};
+$('hlZrusit').onclick = () => $('hlForm').classList.add('hide');
+$('hlForm').onsubmit = (e) => {
+  e.preventDefault();
+  for (const k of Object.keys(HL_VYCHOZI)) hlavicka[k] = $('hl' + k[0].toUpperCase() + k.slice(1)).value.trim();
+  if (!hlavicka.dispecer) hlavicka.dispecer = HL_VYCHOZI.dispecer;
+  localStorage.setItem(HL_KEY, JSON.stringify(hlavicka));
+  $('hlForm').classList.add('hide'); renderHlavicka(); toast('Záhlaví uloženo.');
+};
+renderHlavicka();
 let selected = null;
 let overlay = false;                 // skeleton over a full or blurred picture in the detail
 let askOpen = false, emergOpen = false;   // inline forms in the detail
 const seen = new Set(sim.state.events.map((e) => e.id));
 const tileRegs = new Map();          // patientId → unregister
 let detailUnreg = null;
+
+/* Bez přihlášení se přihlašuje rovnou tady (heslo Famicura), ne oklikou přes
+ * hlavní aplikaci. Po přihlášení se stránka načte znovu: obraz, stav ze
+ * serveru i účty rodiny už jdou s cookie. */
+(async () => {
+  let status = 0;
+  try { status = (await fetch('/api/devices', { cache: 'no-store' })).status; } catch { return; }
+  if (status !== 401) return;
+  $('gate').classList.remove('hide');
+  setTimeout(() => $('gPw').focus(), 50);
+  $('gLogin').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('gLoginErr'); err.classList.add('hide');
+    const b = e.target.querySelector('button'); b.disabled = true;
+    try {
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: $('gPw').value }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { err.textContent = body.error || `Chyba (${r.status})`; err.classList.remove('hide'); b.disabled = false; return; }
+      location.reload();
+    } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); b.disabled = false; }
+  };
+})();
 
 const src = createSource({ deviceId: 'tapoc2020' });
 window.__zdroj = src;
@@ -111,9 +156,9 @@ function renderTiles() {
 }
 
 function bindQueueButtons(root) {
-  root.querySelectorAll('[data-take]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); sim.setAlert(b.dataset.take, { state: 'převzat', by: ME, takenAt: Date.now() }); }; });
-  root.querySelectorAll('[data-solve]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); sim.setAlert(b.dataset.solve, { state: 'řešen', by: ME }); }; });
-  root.querySelectorAll('[data-close]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); const sel = b.parentElement.querySelector('select'); sim.setAlert(b.dataset.close, { state: 'uzavřen', by: ME, result: sel ? sel.value : 'vyřešeno', closedAt: Date.now() }); }; });
+  root.querySelectorAll('[data-take]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); sim.setAlert(b.dataset.take, { state: 'převzat', by: ME(), takenAt: Date.now() }); }; });
+  root.querySelectorAll('[data-solve]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); sim.setAlert(b.dataset.solve, { state: 'řešen', by: ME() }); }; });
+  root.querySelectorAll('[data-close]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); const sel = b.parentElement.querySelector('select'); sim.setAlert(b.dataset.close, { state: 'uzavřen', by: ME(), result: sel ? sel.value : 'vyřešeno', closedAt: Date.now() }); }; });
   root.querySelectorAll('[data-open]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); selected = b.dataset.open; panel.select(selected); renderDetail(true); renderTiles(); $('detail').scrollIntoView({ behavior: 'smooth' }); }; });
   root.querySelectorAll('[data-call]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); toast(`Volám rodině: Petr Novák, 777 123 456 (simulace)`); }; });
 }
@@ -185,11 +230,11 @@ function renderDetail(rebuild = false) {
   if (changed) {
     d.querySelector('#askG')?.addEventListener('click', () => { askOpen = true; renderDetail(); });
     d.querySelector('#askCancel')?.addEventListener('click', () => { askOpen = false; renderDetail(); });
-    d.querySelector('#askSend')?.addEventListener('click', () => { const reason = d.querySelector('#askReason').value; askOpen = false; sim.requestFull(p.id, `Dispečerka ${ME}`, reason); });
+    d.querySelector('#askSend')?.addEventListener('click', () => { const reason = d.querySelector('#askReason').value; askOpen = false; sim.requestFull(p.id, `Dispečerka ${ME()}`, reason); });
     d.querySelector('#emerg')?.addEventListener('click', () => { emergOpen = true; renderDetail(); });
     d.querySelector('#emergNo')?.addEventListener('click', () => { emergOpen = false; renderDetail(); });
-    d.querySelector('#emergYes')?.addEventListener('click', () => { emergOpen = false; sim.emergencyAccess(p.id, `Dispečerka ${ME}`); });
-    d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME}`));
+    d.querySelector('#emergYes')?.addEventListener('click', () => { emergOpen = false; sim.emergencyAccess(p.id, `Dispečerka ${ME()}`); });
+    d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME()}`));
   }
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];
