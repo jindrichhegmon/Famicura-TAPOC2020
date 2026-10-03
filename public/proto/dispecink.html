@@ -60,8 +60,13 @@
         </div>
         <div class="sec">Zobrazení na tomto počítači</div>
         <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>
-        <div class="sec">SMS rodině (pozvánky, žádosti o obraz)</div>
-        <div class="fld"><label for="smsTestTel">Zkušební SMS na číslo</label><div class="row"><input type="tel" id="smsTestTel" maxlength="20" placeholder="777 123 456" autocomplete="tel" style="max-width:220px"><button class="btn" type="button" id="smsTestBtn">Poslat zkušební SMS</button></div><div class="help" id="smsStav">Zjišťuji, jestli je SMS na serveru nastavená…</div></div>
+        <div class="sec">SMS a e-mail ze serveru (pozvánky, žádosti o obraz, upozornění na události)</div>
+        <p class="gateerr hide" id="smsVarovani">Server má v SMS_WEBHOOK_URL stejnou adresu jako asistent: SMS i e-maily jdou do špatného scénáře Make a nedojdou. Správce spustí ./deploy/vps-env.sh a zadá adresu webhooku scénáře Famicura_Tapo_SMS_Pozvanka.</p>
+        <div class="f2">
+          <div class="fld"><label for="smsTestTel">Zkušební SMS na číslo</label><div class="row"><input type="tel" id="smsTestTel" maxlength="20" placeholder="777 123 456" autocomplete="tel" style="max-width:180px"><button class="btn" type="button" id="smsTestBtn">Poslat SMS</button></div></div>
+          <div class="fld"><label for="mailTestAdr">Zkušební e-mail na adresu</label><div class="row"><input type="email" id="mailTestAdr" maxlength="120" placeholder="jmeno@example.cz" autocomplete="email" style="max-width:220px"><button class="btn" type="button" id="mailTestBtn">Poslat e-mail</button></div></div>
+        </div>
+        <div class="help" id="smsStav" style="margin-top:-6px">Zjišťuji, jestli je SMS na serveru nastavená…</div>
         <p class="gateerr hide" id="hlErr"></p>
       </div>
       <footer><button class="btn left" type="button" id="hlZrusit">Zavřít bez uložení</button><button class="btn pri" type="submit">Uložit</button></footer>

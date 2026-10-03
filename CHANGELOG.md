@@ -5,6 +5,23 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 1.1 · 3. 10. 2026
+
+- Dispečink: detail kamery ve třech sekcích. **Monitoring** (obraz, režim,
+  žádost o plný obraz, nouzový přístup, historie), **Komunikace** (poskytovatel,
+  poznámka ke klientovi, uživatelé rodiny, kontakty pro upozornění, poznámky
+  dispečinku) a **Nastavení** (sledování, nahrávání a upozornění).
+- Kontakty kamery: až tři čísla na SMS a tři e-maily (`setKontakty`), změna
+  v historii kamery; rodina je vidí v kartě „Co poskytovatel hlídá“.
+- U každé události lze zatrhnout Nahrávat, SMS a E-mail. Server po události
+  (skutečné z kamery i simulované) pošle SMS a e-mail na kontakty
+  (`src/upozorneni.mjs`), výsledek je u události v historii (📱 2/2 ✉ 1/1,
+  chyba po najetí). Kritické události mají SMS i e-mail zatržené předem.
+- E-mail jde stejným webhookem Make jako SMS (`kanal: mail`, schránka
+  Centrum LB); v nastavení dispečinku je zkušební SMS i zkušební e-mail
+  a varování, když je `SMS_WEBHOOK_URL` stejná jako adresa asistenta
+  (server to hlásí i při startu).
+
 ## 1.0 · oprava 3. 10. 2026 (odpoledne)
 
 - SMS rodině (pozvánky, žádosti o plný obraz) jdou přes Twilio: scénář Make

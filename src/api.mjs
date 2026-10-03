@@ -35,6 +35,7 @@ import { createUzivatele, textPozvanky, textZadosti, formatTelefon, normalizeTel
 import { createSms } from './sms.mjs';
 import { createProtoStav } from './proto-stav.mjs';
 import { createAsistent } from './asistent.mjs';
+import { createUpozorneni } from './upozorneni.mjs';
 import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
 import { normalizeIntervals, isDeviceId, MAX_INTERVALS } from './plan-pravidla.mjs';
@@ -85,7 +86,7 @@ function verejnaAdresa(req) {
 export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, proto = null, asistent = null }) {
   uzivatele = uzivatele || createUzivatele(store);
   sms = sms || createSms();
-  proto = proto || createProtoStav({ store, udalosti });
+  proto = proto || createProtoStav({ store, udalosti, upozorni: createUpozorneni({ sms }) });
   asistent = asistent || createAsistent();
   // Each camera carries what it can report itself, so the page offers only that.
   async function kamery() {
@@ -284,13 +285,23 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // Zkušební SMS z nastavení dispečinku: ověří webhook Make a Twilio bez zakládání účtu rodině.
       if (path === '/api/sms/test') {
         if (rodina) return jenPoskytovatel();
-        if (m === 'GET') return json({ ok: true, nastaveno: sms.nastaveno });
+        if (m === 'GET') {
+          // Adresa jen zkráceně, aby šlo poznat, který scénář Make server volá (SMS ≠ asistent).
+          const u = process.env.SMS_WEBHOOK_URL || '', a = process.env.ASISTENT_WEBHOOK_URL || '';
+          const zkrat = (x) => (x.length > 14 ? x.slice(0, x.indexOf('/', 9) + 1) + '…' + x.slice(-6) : x);
+          return json({ ok: true, nastaveno: sms.nastaveno, adresa: u ? zkrat(u) : null, stejnaJakoAsistent: !!u && u === a });
+        }
         if (m !== 'POST') return json({ ok: false, error: 'GET nebo POST' }, 405);
-        const { telefon } = await telo(req);
+        const { telefon, email } = await telo(req);
+        if (!sms.nastaveno) return json({ ok: false, nastaveno: false, error: 'SMS není na serveru nastavená (SMS_WEBHOOK_URL, nastaví ./deploy/vps-env.sh).' }, 400);
+        if (email !== undefined) {
+          const e = String(email || '').trim().toLowerCase();
+          const r = await sms.posliMail({ email: e, predmet: 'Famicura Kamera: zkušební e-mail', text: 'Zkušební e-mail ze serveru Famicura Kamera. Pokud ho čtete, upozornění e-mailem (události kamery) fungují.', typ: 'FAMICURA_TEST', poznamka: 'Zkušební e-mail z nastavení dispečinku.' });
+          return r.ok ? json({ ok: true, nastaveno: true, email: e, sid: r.sid }) : json({ ok: false, nastaveno: true, email: e, error: r.error }, r.error.includes('platná adresa') ? 400 : 502);
+        }
         const t = normalizeTelefon(telefon);
         if (!t) return json({ ok: false, error: 'Zadejte český mobil (9 číslic).' }, 400);
-        if (!sms.nastaveno) return json({ ok: false, nastaveno: false, error: 'SMS není na serveru nastavená (SMS_WEBHOOK_URL, nastaví ./deploy/vps-env.sh).' }, 400);
-        const r = await sms.posli({ telefon: t, text: 'Famicura Kamera: zkusebni SMS ze serveru. Pokud ji ctete, SMS rodine (pozvanky, zadosti o obraz) funguji.', typ: 'FAMICURA_TEST', poznamka: 'Zkušební SMS z nastavení dispečinku.' });
+        const r = await sms.posli({ telefon: t, text: 'Famicura Kamera: zkusebni SMS ze serveru. Pokud ji ctete, SMS rodine (pozvanky, zadosti o obraz, upozorneni) funguji.', typ: 'FAMICURA_TEST', poznamka: 'Zkušební SMS z nastavení dispečinku.' });
         return r.ok ? json({ ok: true, nastaveno: true, telefon: t, sid: r.sid }) : json({ ok: false, nastaveno: true, telefon: t, error: r.error }, 502);
       }
 

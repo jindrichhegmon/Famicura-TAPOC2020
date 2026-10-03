@@ -547,7 +547,12 @@ test('zkušební SMS z nastavení: jen poskytovatel, normalizuje telefon, hlás�
   const { h, uzivatele } = handler({ sms });
   assert.equal((await h(req('GET', '/api/sms/test'))).status, 401);
   const st = await (await h(req('GET', '/api/sms/test', { cookies: cookie() }))).json();
-  assert.deepEqual(st, { ok: true, nastaveno: true });
+  assert.equal(st.ok, true); assert.equal(st.nastaveno, true); assert.equal(st.stejnaJakoAsistent, false);
+  // záměna adres při vps-env.sh: server to pozná a dispečink to ukáže
+  process.env.SMS_WEBHOOK_URL = 'https://hook.eu2.make.com/stejna-adresa-xyz'; process.env.ASISTENT_WEBHOOK_URL = process.env.SMS_WEBHOOK_URL;
+  const st2 = await (await h(req('GET', '/api/sms/test', { cookies: cookie() }))).json();
+  assert.equal(st2.stejnaJakoAsistent, true); assert.equal(st2.adresa, 'https://hook.eu2.make.com/…sa-xyz');
+  delete process.env.SMS_WEBHOOK_URL; delete process.env.ASISTENT_WEBHOOK_URL;
   const r = await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '+420 777 123 456' } }));
   assert.equal(r.status, 200);
   const b = await r.json();
@@ -556,6 +561,10 @@ test('zkušební SMS z nastavení: jen poskytovatel, normalizuje telefon, hlás�
   const ch = await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '777000000' } }));
   assert.equal(ch.status, 502); assert.match((await ch.json()).error, /Twilio/);
   assert.equal((await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '12' } }))).status, 400);
+  // zkušební e-mail stejnou cestou
+  sms.posliMail = async (x) => { sms.calls.push(x); return { ok: true, sid: 'AAMk1' }; };
+  const em = await (await h(req('POST', '/api/sms/test', { cookies: cookie(), body: { email: 'Rodina@Example.cz' } }))).json();
+  assert.equal(em.ok, true); assert.equal(em.email, 'rodina@example.cz'); assert.equal(sms.calls.at(-1).typ, 'FAMICURA_TEST'); assert.match(sms.calls.at(-1).predmet, /zkušební e-mail/);
   // rodina na to nesmí
   const a = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
   const akt = await h(req('POST', '/api/rodina/aktivace', { body: { token: a.token, heslo: 'tajne-heslo-1' } }));

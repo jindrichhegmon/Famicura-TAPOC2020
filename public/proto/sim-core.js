@@ -28,16 +28,55 @@ export const CONSENT = { none: 'žádný obraz (jen události)', skeleton: 'drá
 export const WATCH_KINDS = ['fall', 'longlie', 'sos', 'devfall', 'inactivity', 'linecross', 'tamper', 'missing', 'state', 'person', 'motion'];
 export function defaultWatch() {
   const w = {};
-  for (const k of WATCH_KINDS) w[k] = { on: true, from: '', to: '', rec: KINDS[k].level === 'crit' || k === 'linecross' };
-  w.linecross = { on: true, from: '07:00', to: '20:00', rec: true };
-  w.motion = { on: false, from: '', to: '', rec: false };
-  w.state = { on: false, from: '', to: '', rec: false };
+  // sms/mail: upozornění na kontakty kamery (p.kontakty); výchozí jen u kritických, a jen když jsou kontakty vyplněné
+  for (const k of WATCH_KINDS) w[k] = { on: true, from: '', to: '', rec: KINDS[k].level === 'crit' || k === 'linecross', sms: KINDS[k].level === 'crit', mail: KINDS[k].level === 'crit' };
+  w.linecross = { on: true, from: '07:00', to: '20:00', rec: true, sms: false, mail: false };
+  w.motion = { on: false, from: '', to: '', rec: false, sms: false, mail: false };
+  w.state = { on: false, from: '', to: '', rec: false, sms: false, mail: false };
   return w;
 }
 export function describeWatch(w) {
   const hodiny = (r) => (r.from ? ` ${r.from}–${r.to}` : '');
-  const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : ''));
+  const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : '') + (w[k].sms ? ' 📱' : '') + (w[k].mail ? ' ✉' : ''));
   return on.length ? on.join(', ') : 'nic';
+}
+
+/* ---------- kontakty kamery: až tři čísla na SMS a tři e-maily ----------
+ * Zadává poskytovatel v dispečinku (Komunikace). Když jsou vyplněné, jde při
+ * události, která má v Nastavení zatržené SMS nebo E-mail, upozornění ze
+ * serveru (src/upozorneni.mjs). Prázdné kontakty = nic neodchází. */
+export const KONTAKTY_MAX = 3;
+export const prazdneKontakty = () => ({ sms: [], mail: [] });
+export function normalizeTelefonCz(raw) {
+  let d = String(raw ?? '').replace(/\D/g, '');
+  if (d.startsWith('00420')) d = d.slice(5); else if (d.startsWith('420') && d.length === 12) d = d.slice(3);
+  return /^[1-9]\d{8}$/.test(d) ? d : null;
+}
+export const jeEmail = (v) => /^[^\s@]{1,64}@[^\s@]{1,100}\.[a-z]{2,24}$/i.test(String(v || ''));
+export function kontaktyPro(p) {
+  const k = p?.kontakty || {};
+  return { sms: Array.isArray(k.sms) ? k.sms.filter(Boolean) : [], mail: Array.isArray(k.mail) ? k.mail.filter(Boolean) : [] };
+}
+export function describeKontakty(p) {
+  const k = kontaktyPro(p);
+  const t = (n) => n.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+  const casti = [];
+  if (k.sms.length) casti.push('SMS: ' + k.sms.map(t).join(', '));
+  if (k.mail.length) casti.push('e-mail: ' + k.mail.join(', '));
+  return casti.join(' · ');
+}
+/** Komu a jak má jít upozornění na tuhle událost; null = nikomu. */
+export const upozorneniVychozi = (kind) => KINDS[kind]?.level === 'crit';
+export function upozorneniPro(s, ev) {
+  if (!ev) return null;
+  const p = najdi(s, ev.patientId); if (!p) return null;
+  const w = p.watch?.[ev.kind]; if (!w) return null;
+  const k = kontaktyPro(p);
+  // starší uložený stav příznaky nemá: kritické události upozorňují, ostatní ne (jako defaultWatch)
+  const vychozi = KINDS[ev.kind]?.level === 'crit';
+  const sms = (w.sms ?? vychozi) ? k.sms : [], mail = (w.mail ?? vychozi) ? k.mail : [];
+  if (!sms.length && !mail.length) return null;
+  return { sms, mail, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
 }
 
 /* Hodiny vždy pražské: server na VPS běží v UTC a „noc 22–6“ nebo „jen 7:00–20:00“
@@ -205,10 +244,28 @@ const akce = {
     const w = { ...p.watch[kind] };
     if ('on' in patch) w.on = bool(patch.on);
     if ('rec' in patch) w.rec = bool(patch.rec);
+    if ('sms' in patch) w.sms = bool(patch.sms);
+    if ('mail' in patch) w.mail = bool(patch.mail);
     if ('from' in patch) w.from = hodina(patch.from);
     if ('to' in patch) w.to = hodina(patch.to);
     p.watch[kind] = w;
     return {};
+  },
+  /** Kontakty pro upozornění: { sms: [tel…], mail: [adresa…] }, max 3 a 3; prázdné položky se vynechají, změna jde do logu kamery. */
+  setKontakty(s, now, patientId, kontakty, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    if (!kontakty || typeof kontakty !== 'object') throw chyba('Chybí kontakty.');
+    const seznam = (v, nazev) => { if (v == null) return []; if (!Array.isArray(v) || v.length > KONTAKTY_MAX) throw chyba(`Nejvýš ${KONTAKTY_MAX} položky: ${nazev}.`); return v.map((x) => str(x, 120, nazev).trim()).filter(Boolean); };
+    const sms = seznam(kontakty.sms, 'SMS').map((t) => { const n = normalizeTelefonCz(t); if (!n) throw chyba(`Telefon „${t}“ není český mobil (9 číslic).`); return n; });
+    const mail = seznam(kontakty.mail, 'e-mail').map((m) => { if (!jeEmail(m)) throw chyba(`E-mail „${m}“ není platná adresa.`); return m.toLowerCase(); });
+    const nove = { sms: [...new Set(sms)], mail: [...new Set(mail)] };
+    const stare = kontaktyPro(p);
+    if (JSON.stringify(stare) === JSON.stringify(nove)) return { zmena: false, vysledek: nove };
+    p.kontakty = nove;
+    const popis = describeKontakty(p);
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink', text: popis ? `Kontakty pro upozornění: ${popis}` : 'Kontakty pro upozornění smazány.', note: '' });
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: nove };
   },
   setConsent(s, now, patientId, consent) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };

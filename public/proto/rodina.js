@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch, casy, KLID_NAVZDY } from '/proto/sim.js';
+import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina dostane své kamery ze serveru
@@ -259,7 +259,8 @@ function render() {
   $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
   const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
   setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
-  $('watchInfo').textContent = describeWatch(p.watch || {});
+  const kontakty = describeKontakty(p);
+  $('watchInfo').textContent = describeWatch(p.watch || {}) + (kontakty ? ` · upozornění poskytovatele jdou na ${kontakty}` : '');
 
   // provider watching
   const g = s.grants[patientId], w = s.watching[patientId];

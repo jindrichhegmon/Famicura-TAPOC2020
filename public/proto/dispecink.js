@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -37,16 +37,29 @@ function otevriNastaveni() {
 }
 $('hlUprav').onclick = otevriNastaveni;
 // Zkušební SMS: stejný webhook Make a Twilio jako pozvánky a žádosti o obraz; výsledek se ukáže pod polem.
-let smsNastaveno = null;
+let smsNastaveno = null, smsAdresa = '', smsZamena = false;
 async function smsStavNacti() {
   if (smsNastaveno !== null) return;
-  try { const r = await fetch('/api/sms/test', { credentials: 'same-origin' }); const b = await r.json(); smsNastaveno = !!b.nastaveno; }
+  try { const r = await fetch('/api/sms/test', { credentials: 'same-origin' }); const b = await r.json(); smsNastaveno = !!b.nastaveno; smsAdresa = b.adresa || ''; smsZamena = !!b.stejnaJakoAsistent; }
   catch { smsNastaveno = null; }
   $('smsStav').textContent = smsNastaveno === null ? 'Stav SMS se nepodařilo zjistit.' : smsNastaveno
-    ? 'SMS ze serveru je nastavená (webhook Make → Twilio). Zkušební SMS ověří celou cestu až na telefon.'
+    ? `SMS a e-mail ze serveru jsou nastavené (webhook Make ${smsAdresa || ''} → Twilio / Centrum LB). Zkušební zpráva ověří celou cestu až na telefon nebo do schránky.`
     : 'SMS ze serveru není nastavená: správce spustí ./deploy/vps-env.sh a zadá adresu webhooku a klíč. Do té doby pozvánky posílejte z telefonu.';
-  $('smsTestBtn').disabled = !smsNastaveno;
+  $('smsVarovani').classList.toggle('hide', !smsZamena);
+  $('smsTestBtn').disabled = !smsNastaveno; $('mailTestBtn').disabled = !smsNastaveno;
 }
+$('mailTestBtn').onclick = async () => {
+  const email = $('mailTestAdr').value.trim();
+  if (!email) { $('smsStav').textContent = 'Zadejte e-mail, kam zkušební zprávu poslat.'; $('mailTestAdr').focus(); return; }
+  $('mailTestBtn').disabled = true; $('smsStav').textContent = 'Posílám e-mail…';
+  try {
+    const r = await fetch('/api/sms/test', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
+    const b = await r.json();
+    $('smsStav').textContent = b.ok ? `Zkušební e-mail odešel na ${b.email}. Měl by dojít do minuty (zkontrolujte i nevyžádanou poštu).` : `E-mail neodešel: ${b.error || 'chyba serveru'}`;
+    toast(b.ok ? 'Zkušební e-mail odeslán.' : `Zkušební e-mail neodešel: ${b.error || 'chyba'}`, b.ok ? undefined : 'crit');
+  } catch (ex) { $('smsStav').textContent = `E-mail neodešel: ${ex.message}`; }
+  $('mailTestBtn').disabled = false;
+};
 $('smsTestBtn').onclick = async () => {
   const tel = $('smsTestTel').value.trim();
   if (!tel) { $('smsStav').textContent = 'Zadejte číslo, kam zkušební SMS poslat.'; $('smsTestTel').focus(); return; }
@@ -115,6 +128,7 @@ import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
 let selected = null;
 let overlay = false;                 // skeleton over a full or blurred picture in the detail
 let askOpen = false, emergOpen = false;   // inline forms in the detail
+let dtab = 'monitoring';            // sekce detailu: monitoring | komunikace | nastaveni (zůstává při přepnutí kamery)
 const seen = new Set(sim.state.events.map((e) => e.id));
 const tileRegs = new Map();          // patientId → unregister
 let detailUnreg = null;
@@ -277,28 +291,79 @@ function renderDetail(rebuild = false) {
   d.classList.remove('hide');
   if (rebuild || !d.querySelector('canvas')) {
     detailUnreg?.(); 
+    const kon = kontaktyPro(p);
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
-      <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
-      <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
-      <div class="row" id="dbtn"></div>
-      <div class="kv" style="margin-top:10px"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
-        <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
-      <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
-      <div id="dusers"></div>
-      <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; zapisují se do logu kamery, rodina je nevidí</span></h3>
-      <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div><ul id="dnotes"></ul></div>
-      <h3 style="margin-top:12px">Sledování a nahrávání <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí</span></h3>
-      <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td></tr>`).join('')}</tbody></table>
-      <h3 style="margin-top:12px">Historie</h3><ul class="list" id="dhist"></ul>`;
+      <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
+      <section class="dsec" data-sec="monitoring">
+        <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
+        <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
+        <div class="row" id="dbtn"></div>
+        <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění</span></h3><ul class="list" id="dhist"></ul>
+      </section>
+      <section class="dsec hide" data-sec="komunikace">
+        <div class="kv"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
+          <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
+        <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
+        <div id="dusers"></div>
+        <h3 style="margin-top:12px">Kontakty pro upozornění <span class="small muted" style="text-transform:none;font-weight:400">– až tři čísla na SMS a tři e-maily; na které události jdou, se zatrhává v Nastavení</span></h3>
+        <form class="kontakty" id="dkontakty">
+          <div class="kgrid">${[0, 1, 2].map((i) => `<label>SMS ${i + 1}<input type="tel" class="ksms" maxlength="20" placeholder="777 123 456" value="${esc(kon.sms[i] || '')}"></label>`).join('')}</div>
+          <div class="kgrid">${[0, 1, 2].map((i) => `<label>E-mail ${i + 1}<input type="email" class="kmail" maxlength="120" placeholder="dcera@example.cz" value="${esc(kon.mail[i] || '')}"></label>`).join('')}</div>
+          <div class="row"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
+          <p class="small bad hide" id="dkontaktyErr"></p>
+        </form>
+        <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; zapisují se do logu kamery, rodina je nevidí</span></h3>
+        <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div><ul id="dnotes"></ul></div>
+      </section>
+      <section class="dsec hide" data-sec="nastaveni">
+        <h3>Sledování, nahrávání a upozornění <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</span></h3>
+        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS</th><th>E-mail</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td><td><input type="checkbox" class="sms"></td><td><input type="checkbox" class="mail"></td></tr>`).join('')}</tbody></table>
+        <p class="small muted" id="dwatchPozn"></p>
+      </section>`;
     detailUnreg = src.register(d.querySelector('#dcv'), () => detailMode(selected));
+    const tabs = d.querySelector('#dtabs');
+    const ukazTab = (t) => { dtab = t; tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t))); d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== t)); };
+    tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => ukazTab(b.dataset.t); });
+    ukazTab(dtab);
+    const naplnWatch = () => {
+      const pp = sim.patient(p.id) || p, kk = kontaktyPro(pp);
+      d.querySelectorAll('#dwatch tr').forEach((tr) => {
+        const k = tr.dataset.k, w = pp.watch?.[k] || { on: true, from: '', to: '', rec: false };
+        if (document.activeElement && tr.contains(document.activeElement)) return;
+        tr.querySelector('.on').checked = w.on; tr.querySelector('.from').value = w.from; tr.querySelector('.to').value = w.to; tr.querySelector('.rec').checked = w.rec;
+        const cs = tr.querySelector('.sms'), cm = tr.querySelector('.mail');
+        cs.checked = w.sms ?? upozorneniVychozi(k); cm.checked = w.mail ?? upozorneniVychozi(k);
+        cs.disabled = !kk.sms.length; cm.disabled = !kk.mail.length;
+        cs.title = kk.sms.length ? `SMS na ${kk.sms.length} ${kk.sms.length === 1 ? 'číslo' : 'čísla'}` : 'Nejdřív zadejte čísla v Komunikaci → Kontakty pro upozornění';
+        cm.title = kk.mail.length ? `E-mail na ${kk.mail.length} ${kk.mail.length === 1 ? 'adresu' : 'adresy'}` : 'Nejdřív zadejte e-maily v Komunikaci → Kontakty pro upozornění';
+      });
+      d.querySelector('#dwatchPozn').textContent = kk.sms.length || kk.mail.length
+        ? `Upozornění odejdou na: ${describeKontakty(pp)}. Zatržení platí pro události, které projdou sloupcem Hlídat a hodinami.`
+        : 'Kontakty pro upozornění nejsou zadané: sloupce SMS a E-mail se zapnou, jakmile je vyplníte v Komunikaci.';
+    };
+    naplnWatch();
     d.querySelectorAll('#dwatch tr').forEach((tr) => {
-      const k = tr.dataset.k, w = p.watch?.[k] || { on: true, from: '', to: '', rec: false };
-      tr.querySelector('.on').checked = w.on; tr.querySelector('.from').value = w.from; tr.querySelector('.to').value = w.to; tr.querySelector('.rec').checked = w.rec;
-      const push = () => sim.setWatch(p.id, k, { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, rec: tr.querySelector('.rec').checked });
+      const k = tr.dataset.k;
+      const push = () => sim.setWatch(p.id, k, { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, rec: tr.querySelector('.rec').checked, sms: tr.querySelector('.sms').checked, mail: tr.querySelector('.mail').checked });
       tr.querySelectorAll('input').forEach((i) => { i.onchange = push; });
     });
     d.querySelector('#closeD').onclick = () => { selected = null; renderDetail(); renderTiles(); };
     renderUzivatele(p);
+    const kf = d.querySelector('#dkontakty');
+    kf.onsubmit = async (e) => {
+      e.preventDefault();
+      const err = kf.querySelector('#dkontaktyErr'); err.classList.add('hide');
+      const sms = [...kf.querySelectorAll('.ksms')].map((i) => i.value.trim()).filter(Boolean);
+      const mail = [...kf.querySelectorAll('.kmail')].map((i) => i.value.trim()).filter(Boolean);
+      const spatne = sms.find((t) => !normalizeTelefonCz(t)), spatnyMail = mail.find((m) => !jeEmail(m));
+      if (spatne || spatnyMail) { err.textContent = spatne ? `„${spatne}“ není český mobil (9 číslic).` : `„${spatnyMail}“ není platná e-mailová adresa.`; err.classList.remove('hide'); return; }
+      try {
+        const r = await sim.setKontakty(p.id, { sms, mail }, ME());
+        if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo (zkontrolujte číslo a adresu).'; err.classList.remove('hide'); return; }
+        toast(sms.length || mail.length ? 'Kontakty uloženy. V Nastavení zatrhněte, na které události mají jít.' : 'Kontakty smazány.');
+        naplnWatch();
+      } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
+    };
     const ovl = d.querySelector('#ovl'); ovl.checked = overlay; ovl.onchange = () => { overlay = ovl.checked; };
     const tf = d.querySelector('#dtrvalaForm');
     d.querySelector('#dtrvalaEdit').onclick = () => { d.querySelector('#dtrvalaText').value = sim.patient(p.id)?.note || ''; tf.classList.remove('hide'); d.querySelector('#dtrvalaText').focus(); };
@@ -307,6 +372,7 @@ function renderDetail(rebuild = false) {
     const pridej = async () => { const ta = d.querySelector('#dnote'); const t = ta.value.trim(); if (!t) { ta.focus(); return; } ta.disabled = true; await sim.poznamka(p.id, t, ME()); ta.value = ''; ta.disabled = false; ta.focus(); toast('Poznámka zapsána.'); };
     d.querySelector('#dnoteAdd').onclick = pridej;
     d.querySelector('#dnote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); pridej(); } });
+    d.__naplnWatch = naplnWatch;
   }
   const s = sim.state;
   const mode = tileMode(p.id);
@@ -344,12 +410,17 @@ function renderDetail(rebuild = false) {
     d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME()}`));
   }
   d.querySelector('#dnoteKdo').textContent = `zapíše se jako ${ME()}, ${new Date().toLocaleDateString('cs-CZ')}`;
+  d.querySelector('#dkontaktyStav').textContent = describeKontakty(p) ? `Uloženo: ${describeKontakty(p)}` : 'Zatím žádné kontakty; bez nich SMS ani e-mail neodcházejí.';
+  if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();
   d.querySelector('#dtrvala').textContent = p.note || 'zatím žádná (tlačítko Upravit)';
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];
     const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
-    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}</span></li>`;
+    const u = e.upozorneni;
+    const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';
+    const chyba = u && (u.sms?.chyba || u.mail?.chyba);
+    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}${upoz ? ` · <span class="${chyba ? 'bad' : 'muted'}" title="${esc(chyba || 'odeslaná upozornění SMS / e-mail')}">${upoz}${chyba ? ' ⚠' : ''}</span>` : ''}</span></li>`;
   }).join(''));
 }
 

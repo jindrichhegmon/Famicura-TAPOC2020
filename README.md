@@ -200,7 +200,7 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
-Verze všech aplikací je na jednom místě (`public/verze.js`, teď **1.0**) a
+Verze všech aplikací je na jednom místě (`public/verze.js`, teď **1.1**) a
 ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
@@ -310,7 +310,19 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
    (`SMS_WEBHOOK_KLIC` musí být ten z filtru scénáře), chyba u modulu Twilio
    = číslo nebo kredit Twilia; v logu serveru (`pm2 logs famicura-tapo`)
    jsou řádky `[sms] …456: odesláno (…)` nebo důvod chyby (bez textu SMS).
-5. **Stejné přihlášení platí pro obraz a události** z hlavní aplikace: uživatel
+5. **Upozornění na události SMS a e-mailem.** V detailu kamery v dispečinku
+   (sekce Komunikace → Kontakty pro upozornění) jdou zadat až tři česká
+   mobilní čísla a tři e-maily; v sekci Nastavení se u každé události
+   zatrhne Nahrávat, SMS a E-mail (kritické mají SMS i e-mail předem).
+   Server po každé zapsané události (skutečné z kamery i simulované; stav
+   prototypu, `src/proto-stav.mjs`) pošle přes `src/upozorneni.mjs` SMS
+   (bez diakritiky, do 160 znaků: klient, událost, čas, telefon dispečinku)
+   a e-mail s podrobnostmi a odkazem na aplikaci rodiny (`PUBLIC_URL`).
+   E-mail jde stejným webhookem jako SMS s `kanal: "mail"` (scénář má router:
+   SMS → Twilio, e-mail → modul Microsoft 365 Email ze schránky Centrum LB);
+   výsledek se zapíše k události (`upozorneni`) a dispečink ho vidí v historii.
+   Nic neodchází u události vypnuté nebo mimo hodiny.
+6. **Stejné přihlášení platí pro obraz a události** z hlavní aplikace: uživatel
    rodiny smí `/api/devices`, `/api/stream*`, `/api/events` jen pro své kamery,
    nic z nastavení (`403`). Do hlavní aplikace (nastavení, diagnostika)
    se dál přihlašuje jen poskytovatel heslem Famicura; jeho cookie platí
@@ -340,11 +352,11 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 1.0) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 1.1) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
-`git tag -a v1.1 -m "Famicura Kamera 1.1" && git push origin v1.1`.
+`git tag -a v1.2 -m "Famicura Kamera 1.2" && git push origin v1.2`.
 Drobné opravy mezi verzemi číslo nemění.
 
 ## Prezentace a video

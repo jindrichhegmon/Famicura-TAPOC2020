@@ -91,6 +91,14 @@ th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;l
 .queue .head{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .queue .esc{color:var(--bad);font-weight:700;font-size:.8rem}
 .detail .stage{margin-bottom:10px}
+.detail .dtabs{margin:4px 0 12px}
+.detail .dtabs button{font-size:.9rem}
+.detail .dsec{animation:none}
+.kontakty{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.kontakty .kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kontakty label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted);font-weight:600}
+.kontakty input{min-height:34px;padding:4px 8px;border:1px solid #bcc8d1;border-radius:8px;font:inherit;font-size:.9rem}
+@media(max-width:600px){.kontakty .kgrid{grid-template-columns:1fr}}
 .modebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 
 /* provoz */

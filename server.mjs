@@ -53,6 +53,10 @@ udalosti.start().catch((e) => console.error('[famicura-tapo] události kamer:', 
 // pm2 stops with SIGINT: cancel the subscriptions, the camera keeps only a few.
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { udalosti.stop().finally(() => process.exit(0)); });
 
+// Častá záměna při vps-env.sh: adresa asistenta v SMS_WEBHOOK_URL → SMS mlčky nedojdou. Řekni to hned při startu.
+if (process.env.SMS_WEBHOOK_URL && process.env.SMS_WEBHOOK_URL === process.env.ASISTENT_WEBHOOK_URL) {
+  console.error('[famicura-tapo] POZOR: SMS_WEBHOOK_URL je stejná jako ASISTENT_WEBHOOK_URL – SMS jdou do scénáře asistenta a nedojdou. Opravte ./deploy/vps-env.sh (scénář Famicura_Tapo_SMS_Pozvanka).');
+}
 const handle = createHandler({ dbs, go2rtc: createGo2rtc(), store, udalosti });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.

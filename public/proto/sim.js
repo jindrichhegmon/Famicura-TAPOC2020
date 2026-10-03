@@ -6,8 +6,8 @@
  * stav v tomhle prohlížeči: localStorage + BroadcastChannel mezi okny.
  * Data i akce jsou v sim-core.js, stejné pro prohlížeč i server.
  */
-import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro } from '/proto/sim-core.js';
-export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE };
+import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim-core.js';
+export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail };
 
 const KEY = 'famicura.proto.v1';
 const CH = 'famicura-proto';
@@ -119,6 +119,7 @@ export const sim = {
   ackNotification(id) { return run('ackNotification', [id]); },
   ackAll(patientId) { return run('ackAll', [patientId]); },
   setWatch(patientId, kind, patch) { return run('setWatch', [patientId, kind, patch]); },
+  setKontakty(patientId, kontakty, by) { return run('setKontakty', [patientId, kontakty, by]); },
   setConsent(patientId, consent) { return run('setConsent', [patientId, consent]); },
   requestFull(patientId, from, reason) { return run('requestFull', [patientId, from, reason]); },
   answerRequest(reqId, answer, minutes = 15) { return run('answerRequest', [reqId, answer, minutes]); },

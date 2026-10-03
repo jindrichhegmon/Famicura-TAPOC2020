@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProtoStav } from '../src/proto-stav.mjs';
-import { seed, proved, AKCE, withinHours, jeNoc, jeNocPro, pristeV, efektivni, KLID_NAVZDY, poskytovatel, poskytovatelPro } from '../public/proto/sim-core.js';
+import { seed, proved, AKCE, withinHours, jeNoc, jeNocPro, pristeV, efektivni, KLID_NAVZDY, poskytovatel, poskytovatelPro, upozorneniPro, describeKontakty, describeWatch } from '../public/proto/sim-core.js';
+import { createUpozorneni, textUpozorneniSms } from '../src/upozorneni.mjs';
 
 function memStore() {
   const data = {};
@@ -177,4 +178,65 @@ test('jádro: trvalá poznámka ke klientovi se ukládá a změna jde do logu; b
   assert.equal(proved(s, 'setNote', ['tapoc2020', 'Klient chodí s hůlkou.', 'Eva Malá']).zmena, false);
   proved(s, 'setNote', ['tapoc2020', '', 'Eva Malá']);
   assert.equal(s.patients[0].note, ''); assert.match(s.events[0].text, /smazána/);
+});
+
+test('jádro: kontakty kamery (3 SMS, 3 e-maily) se ověří, zapíší do logu a řídí, komu jde upozornění', () => {
+  const s = seed(1000);
+  const { vysledek } = proved(s, 'setKontakty', ['tapoc2020', { sms: ['+420 602 520 069', ' 777 123 456 ', ''], mail: ['Dcera@Example.cz'] }, 'Eva Malá'], 2000);
+  assert.deepEqual(vysledek, { sms: ['602520069', '777123456'], mail: ['dcera@example.cz'] });
+  assert.equal(s.events[0].kind, 'poznamka'); assert.match(s.events[0].text, /^Kontakty pro upozornění: SMS: 602 520 069, 777 123 456 · e-mail: dcera@example.cz$/);
+  assert.equal(describeKontakty(s.patients[0]), 'SMS: 602 520 069, 777 123 456 · e-mail: dcera@example.cz');
+  // beze změny nic; víc než 3, cizí číslo nebo špatný e-mail je chyba 400
+  assert.equal(proved(s, 'setKontakty', ['tapoc2020', { sms: ['602520069', '777123456'], mail: ['dcera@example.cz'] }, 'x']).zmena, false);
+  for (const k of [{ sms: ['1', '2', '3', '4'] }, { sms: ['+49 170 1234567'] }, { mail: ['neni-adresa'] }, 'x']) assert.throws(() => proved(s, 'setKontakty', ['tapoc2020', k, 'x']), (e) => e.status === 400);
+  // kritická událost: SMS i e-mail (výchozí), varování nic, dokud se nezatrhne
+  const { vysledek: pad } = proved(s, 'emit', ['tapoc2020', 'fall'], 3000);
+  const u = upozorneniPro(s, pad);
+  assert.deepEqual([u.sms, u.mail, u.label], [['602520069', '777123456'], ['dcera@example.cz'], 'Možný pád']);
+  const { vysledek: kryt } = proved(s, 'emit', ['tapoc2020', 'tamper'], 4000);
+  assert.equal(upozorneniPro(s, kryt), null);
+  proved(s, 'setWatch', ['tapoc2020', 'tamper', { sms: true }]);
+  const { vysledek: kryt2 } = proved(s, 'emit', ['tapoc2020', 'tamper'], 5000);
+  assert.deepEqual([upozorneniPro(s, kryt2).sms, upozorneniPro(s, kryt2).mail], [['602520069', '777123456'], []]);
+  assert.match(describeWatch(s.patients[0].watch), /zakrytí nebo posunutí kamery 📱/);
+  assert.equal(upozorneniPro(s, null), null, 'zahozená událost (mimo hodiny) nikoho neupozorní');
+  // pacient bez kontaktů: nikomu
+  assert.equal(upozorneniPro(s, proved(s, 'emit', ['p2', 'fall'], 6000).vysledek), null);
+  // smazání kontaktů
+  proved(s, 'setKontakty', ['tapoc2020', { sms: [], mail: [] }, 'Eva Malá'], 7000);
+  assert.equal(s.events[0].text, 'Kontakty pro upozornění smazány.');
+});
+
+test('server: po události odejde SMS a e-mail na kontakty a výsledek se připíše k události', async () => {
+  const store = memStore();
+  const posl = [];
+  const sms = { nastaveno: true, async posli(x) { posl.push(x); return x.telefon === '777000000' ? { ok: false, error: 'Scénář SMS hlásí chybu: Twilio 21211' } : { ok: true, sid: 'SM1' }; },
+    async posliMail(x) { posl.push(x); return { ok: true, sid: 'AAMk1' }; } };
+  const upozorni = createUpozorneni({ sms, log: { log() {} }, odkaz: 'https://famicura.example/proto/rodina.html' });
+  const proto = createProtoStav({ store, now: () => 5000, upozorni, log: { error() {} } });
+  await proto.proved('setPoskytovatel', [{ nazev: 'Pečovatelská služba Kladno', telefon: '312 555 123' }]);
+  await proto.proved('setKontakty', ['tapoc2020', { sms: ['602520069', '777000000'], mail: ['dcera@example.cz'] }, 'Eva']);
+  const r = await proto.proved('emit', ['tapoc2020', 'fall', { real: true, text: 'Kamera hlásí: pád.' }]);
+  await proto.hotovo();
+  const st = await proto.stav();
+  const ev = st.state.events.find((e) => e.id === r.vysledek.id);
+  assert.deepEqual(ev.upozorneni, { sms: { prijemci: 2, odeslano: 1, chyba: 'Scénář SMS hlásí chybu: Twilio 21211' }, mail: { prijemci: 1, odeslano: 1, chyba: null } });
+  assert.equal(posl.length, 3);
+  assert.equal(posl[0].typ, 'FAMICURA_UDALOST');
+  assert.match(posl[0].text, /^Famicura: TAPO Test: mozny pad \(\d{2}:\d{2}\)\. Pecovatelska sluzba Kladno 312 555 123\.$/);
+  assert.ok(posl[0].text.length <= 160);
+  assert.equal(posl[2].email, 'dcera@example.cz'); assert.match(posl[2].predmet, /^Famicura Kamera: Možný pád – TAPO Test$/);
+  assert.match(posl[2].text, /Čas: \d{2}:\d{2}/); assert.match(posl[2].text, /Kamera: Kamera hlásí: pád\./); assert.match(posl[2].text, /famicura\.example\/proto\/rodina\.html/);
+  // informativní událost u pacienta bez zatržení: nic neodchází, k události se nic nepíše
+  const r2 = await proto.proved('emit', ['tapoc2020', 'person']);
+  await proto.hotovo();
+  assert.equal(posl.length, 3);
+  assert.equal((await proto.stav()).state.events.find((e) => e.id === r2.vysledek.id).upozorneni, undefined);
+  // bez webhooku: důvod u události
+  const proto2 = createProtoStav({ store: memStore(), now: () => 9000, upozorni: createUpozorneni({ sms: { nastaveno: false }, log: { log() {} } }) });
+  await proto2.proved('setKontakty', ['tapoc2020', { sms: ['602520069'] }, 'Eva']);
+  const r3 = await proto2.proved('emit', ['tapoc2020', 'sos']);
+  await proto2.hotovo();
+  assert.match((await proto2.stav()).state.events.find((e) => e.id === r3.vysledek.id).upozorneni.sms.chyba, /SMS_WEBHOOK_URL/);
+  assert.ok(textUpozorneniSms({ jmeno: 'Ž'.repeat(80), label: 'x'.repeat(80), cas: '12:00', poskytovatel: 'P', telefon: '' }).length <= 160);
 });

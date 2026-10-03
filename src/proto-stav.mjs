@@ -13,7 +13,7 @@ import { seed, proved, AKCE } from '../public/proto/sim-core.js';
 const MAPA = { 'cam-linecross': 'linecross', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion', 'cam-pet': 'motion', 'cam-vehicle': 'motion', 'cam-smart': 'motion' };
 const SOUBOR = 'proto-stav';
 
-export function createProtoStav({ store, udalosti = null, now = Date.now }) {
+export function createProtoStav({ store, udalosti = null, now = Date.now, upozorni = null, log = console }) {
   let data = null;                 // { v, state }
   let realSince = now();           // skutečné události až od startu serveru, staré se nepřehrávají
   let fronta = Promise.resolve();  // akce po jedné, aby se dvě zařízení nepřepsala
@@ -35,7 +35,8 @@ export function createProtoStav({ store, udalosti = null, now = Date.now }) {
         const kind = MAPA[ev.kind]; if (!kind) continue;
         try {
           proved(data.state, 'ensurePatient', [{ id: ev.kameraId, name: ev.kameraNazev }], now());
-          proved(data.state, 'emit', [ev.kameraId, kind, { real: true, text: ev.text }], now());
+          const out = proved(data.state, 'emit', [ev.kameraId, kind, { real: true, text: ev.text }], now());
+          upozorneni(out.vysledek);
           zmena = true;
         } catch { /* kamera s divným id: do simulace nepatří */ }
       }
@@ -45,6 +46,23 @@ export function createProtoStav({ store, udalosti = null, now = Date.now }) {
   }
 
   const serializovane = (fn) => { const p = fronta.then(fn); fronta = p.catch(() => {}); return p; };
+
+  /* Upozornění SMS / e-mailem na kontakty kamery: mimo frontu (webhook trvá
+   * i sekundy), výsledek se pak k události připíše další položkou fronty. */
+  const cekajici = new Set();
+  function upozorneni(ev) {
+    if (!upozorni || !ev || !ev.id) return;
+    const p = Promise.resolve().then(() => upozorni.posli(data.state, ev)).then((vysledek) => {
+      if (!vysledek) return;
+      return serializovane(async () => {
+        const e = data.state.events.find((x) => x.id === ev.id);
+        if (!e) return;
+        e.upozorneni = vysledek; data.v++;
+        await uloz();
+      });
+    }).catch((e) => { if (log && log.error) log.error('[upozorneni]', e.message); }).finally(() => cekajici.delete(p));
+    cekajici.add(p);
+  }
 
   return {
     /** Aktuální stav a verze; verze roste jen se změnou. */
@@ -61,9 +79,12 @@ export function createProtoStav({ store, udalosti = null, now = Date.now }) {
         data.state = out.state;
         if (out.zmena || akce === 'reset') data.v++;
         await uloz();
+        if (akce === 'emit') upozorneni(out.vysledek);
         return { v: data.v, state: data.state, vysledek: out.vysledek };
       });
     },
+    /** Počká na rozeslaná upozornění (testy a vypnutí serveru). */
+    async hotovo() { await Promise.all([...cekajici]); await fronta; },
     AKCE,
   };
 }
