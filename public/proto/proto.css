@@ -212,6 +212,8 @@ body.app .phone{max-width:460px;margin:0 auto;padding:0 12px 150px;background:#f
 .card h3.sub{margin:14px 0 2px;font-size:.78rem}
 .crow input[type=time]{min-height:38px;padding:4px 8px;border:1px solid var(--line);border-radius:10px;font-size:1rem}
 .chip[aria-pressed=true],.chip.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+.chip.wide{flex:1 1 100%;width:100%;white-space:normal;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 12px;font-size:1rem;line-height:1.25}
+.chip.wide small{font-weight:500;font-size:.78rem;opacity:.9}
 #rychleAktivni{align-items:center}#rychleAktivni .now{flex:1 1 100%;margin:0 0 4px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chips.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-bottom:4px}
