@@ -49,6 +49,45 @@ export function minutaDne(d = new Date()) {
   return (h % 24) * 60 + m;
 }
 export function jeNoc(d = new Date()) { const h = Math.floor(minutaDne(d) / 60); return h >= 22 || h < 6; }
+
+const casText = (ms) => new Date(ms).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+export { casText };
+
+/* Den a noc si rodina nastaví sama (výchozí den od 06:00, noc od 22:00). */
+export const DEN_OD = '06:00', NOC_OD = '22:00';
+const minuty = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+export function casy(p) { const c = p?.consent || {}; return { denOd: c.denOd || DEN_OD, nocOd: c.nocOd || NOC_OD }; }
+export function jeNocPro(p, d = new Date()) {
+  const { denOd, nocOd } = casy(p);
+  const m = minutaDne(d), n = minuty(nocOd), den = minuty(denOd);
+  return n > den ? (m >= n || m < den) : (m >= n && m < den);
+}
+/** Okamžik (ms), kdy je v Praze příště HH:MM (dnes, pokud ještě nebylo, jinak zítra). */
+export function pristeV(hhmm, now = Date.now()) {
+  const d = new Date(now);
+  const cil = minuty(hhmm), ted = minutaDne(d);
+  const zaMin = cil > ted ? cil - ted : cil - ted + 1440;
+  const t = new Date(now + zaMin * 60000);
+  return t.getTime() - (minutaDne(t) - cil) * 60000;   // dorovnání, kdyby se mezitím měnil letní čas
+}
+/** Příští střídání den/noc pro pacienta. */
+export function dalsiHranice(p, now = Date.now()) { const { denOd, nocOd } = casy(p); return Math.min(pristeV(denOd, now), pristeV(nocOd, now)); }
+export const KLID_NAVZDY = 4102444800000;   // „do vypnutí“: rok 2100
+export const RYCHLE = ['full', 'blur', 'skeleton'];
+
+/** Co poskytovatel vidí teď: povolení z žádosti > rychlé přepnutí rodiny > výpadek > nastavení podle denní doby. */
+export function efektivni(s, p, now = Date.now(), nocSimulovana = false) {
+  if (!p) return { mode: 'none', proc: 'neznámý pacient' };
+  const g = s.grants[p.id];
+  if (g && g.until > now) return { mode: g.mode, proc: grantText(g), do: g.until, zdroj: 'povoleni' };
+  const r = p.docasne;
+  if (r && r.until > now) return { mode: r.mode, proc: `${CONSENT[r.mode]} – rychlé přepnutí do ${casText(r.until)}`, do: r.until, zdroj: 'rychle' };
+  if (p.offline) return { mode: 'offline', proc: 'kamera nedostupná', zdroj: 'offline' };
+  const noc = nocSimulovana || jeNocPro(p, new Date(now));
+  const { denOd, nocOd } = casy(p);
+  const mode = p.consent[noc ? 'noc' : 'den'];
+  return { mode, proc: `${CONSENT[mode]} (${noc ? `noc do ${denOd}` : `den do ${nocOd}`}, nastavila rodina)`, zdroj: noc ? 'noc' : 'den' };
+}
 export function withinHours(r, d = new Date()) {
   if (!r.from || !r.to) return true;
   const m = minutaDne(d);
@@ -70,9 +109,9 @@ const FAKE = [
 export function seed(now = Date.now()) {
   const patients = [
     { id: 'tapoc2020', name: 'TAPO Test', place: 'Kancelář Famicura (skutečná kamera)', provider: 'Pečovatelská služba Kladno', real: true,
-      consent: { den: 'full', noc: 'full', nouze: true }, watch: defaultWatch(), night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
+      consent: { den: 'full', noc: 'full', nouze: true, denOd: DEN_OD, nocOd: NOC_OD }, watch: defaultWatch(), night: false, offline: false, note: 'Klient chodí s hůlkou, riziko pádu v noci.' },
     ...FAKE.map(([id, name, place, provider], i) => ({ id, name, place, provider, real: false,
-      consent: { den: ['skeleton', 'blur', 'none', 'full', 'skeleton', 'skeleton', 'blur'][i], noc: ['skeleton', 'skeleton', 'none', 'skeleton', 'none', 'skeleton', 'skeleton'][i], nouze: i % 3 !== 2 },
+      consent: { den: ['skeleton', 'blur', 'none', 'full', 'skeleton', 'skeleton', 'blur'][i], noc: ['skeleton', 'skeleton', 'none', 'skeleton', 'none', 'skeleton', 'skeleton'][i], nouze: i % 3 !== 2, denOd: DEN_OD, nocOd: NOC_OD },
       watch: defaultWatch(), night: false, offline: i === 5, note: '' })),
   ];
   const events = [];
@@ -100,7 +139,6 @@ const ID = /^[a-z0-9][a-z0-9_-]{0,39}$/i;
 const pid = (v) => { if (typeof v !== 'string' || !ID.test(v)) throw chyba('Neplatné ID pacienta.'); return v; };
 const nid = (s) => 'n' + (s.seq++) + Date.now().toString(36);
 const najdi = (s, id) => s.patients.find((p) => p.id === id);
-const casText = (ms) => new Date(ms).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
 
 const akce = {
   /** Kamera ze serveru, kterou simulace nezná: založí k ní pacienta (jméno = název kamery). */
@@ -109,7 +147,7 @@ const akce = {
     const id = pid(p.id);
     if (najdi(s, id)) return { zmena: false };
     s.patients.push({ id, name: str(p.name, 80, 'name') || id, place: 'skutečná kamera', provider: 'Poskytovatel', real: true,
-      consent: { den: 'full', noc: 'full', nouze: true }, watch: defaultWatch(), night: false, offline: false, note: '' });
+      consent: { den: 'full', noc: 'full', nouze: true, denOd: DEN_OD, nocOd: NOC_OD }, watch: defaultWatch(), night: false, offline: false, note: '' });
     return {};
   },
   emit(s, now, patientId, kind, extra = {}) {
@@ -171,13 +209,45 @@ const akce = {
     const c = { ...p.consent };
     for (const k of ['den', 'noc']) if (k in consent) { if (!(consent[k] in CONSENT)) throw chyba('Neznámý režim obrazu.'); c[k] = consent[k]; }
     if ('nouze' in consent) c.nouze = bool(consent.nouze);
+    for (const k of ['denOd', 'nocOd']) if (k in consent) { const h = hodina(consent[k]); if (!h) throw chyba('Zadejte čas HH:MM.'); c[k] = h; }
+    if (minuty(c.denOd || DEN_OD) === minuty(c.nocOd || NOC_OD)) throw chyba('Den a noc nemohou začínat ve stejnou chvíli.');
     p.consent = c;
+    const { denOd, nocOd } = casy(p);
     s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina',
-      text: `Rodina nastavila poskytovateli: den ${CONSENT[c.den]}, noc ${CONSENT[c.noc]}, nouzový přístup ${c.nouze ? 'povolen' : 'nepovolen'}.` });
+      text: `Rodina nastavila poskytovateli: den (od ${denOd}) ${CONSENT[c.den]}, noc (od ${nocOd}) ${CONSENT[c.noc]}, nouzový přístup ${c.nouze ? 'povolen' : 'nepovolen'}.` });
     return {};
   },
+  /** Rychlé přepnutí obrazu rodinou: platí do další změny nebo do střídání den/noc. null = zrušit. */
+  rychle(s, now, patientId, mode) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    if (mode === null || mode === undefined || mode === '') {
+      if (!p.docasne) return { zmena: false };
+      delete p.docasne;
+      s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina', text: 'Rodina zrušila rychlé přepnutí obrazu, platí nastavení podle denní doby.' });
+      return {};
+    }
+    if (!RYCHLE.includes(mode)) throw chyba('Neznámý režim obrazu.');
+    const until = dalsiHranice(p, now);
+    p.docasne = { mode, until };
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina', text: `Rodina přepnula obraz na ${CONSENT[mode]} do ${casText(until)} (střídání den/noc).` });
+    return { vysledek: p.docasne };
+  },
+  /** Klid: '120' = na 2 hodiny, 'rano' = do začátku dne, 'vecer' = do začátku noci, 'vypnuti' = do vypnutí, null = vypnout. */
+  klidDo(s, now, patientId, volba) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    const { denOd, nocOd } = casy(p);
+    let until = null;
+    if (volba === null || volba === undefined || volba === '' || volba === 'vypnout') until = null;
+    else if (/^\d{1,4}$/.test(String(volba))) until = now + Number(volba) * 60000;
+    else if (volba === 'rano') until = pristeV(denOd, now);
+    else if (volba === 'vecer') until = pristeV(nocOd, now);
+    else if (volba === 'vypnuti') until = KLID_NAVZDY;
+    else throw chyba('Neznámá volba klidu.');
+    if (until) s.klid[p.id] = until; else delete s.klid[p.id];
+    return { vysledek: until };
+  },
   requestFull(s, now, patientId, from, reason) {
-    const r = { id: nid(s), at: now, patientId: pid(patientId), from: str(from, 80, 'from') || 'Dispečink', reason: str(reason, 200, 'reason'), state: 'čeká', until: now + 120000 };
+    const r = { id: nid(s), at: now, patientId: pid(patientId), from: str(from, 80, 'from') || 'Dispečink', reason: str(reason, 200, 'reason'), state: 'čeká', until: now + 10 * 60000 };   // 10 min: rodina to na telefonu stihne
     s.requests.unshift(r);
     if (s.requests.length > 100) s.requests.length = 100;
     s.notifications.unshift({ id: nid(s), at: r.at, patientId: r.patientId, requestId: r.id, kind: 'request', level: 'warn', ack: false });
@@ -224,6 +294,8 @@ const akce = {
     for (const [id, g] of Object.entries(s.grants)) if (g.until <= now) { delete s.grants[id]; delete s.watching[id]; changed = true;
       s.events.unshift({ id: nid(s), at: now, patientId: id, kind: 'consent', state: 'uzavřen', by: 'systém', text: 'Povolení plného obrazu vypršelo, obraz se vrátil do nastaveného režimu.' }); }
     for (const r of s.requests) if (r.state === 'čeká' && r.until <= now) { r.state = 'vypršelo'; changed = true; }
+    for (const p of s.patients) if (p.docasne && p.docasne.until <= now) { delete p.docasne; changed = true;
+      s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'systém', text: 'Rychlé přepnutí obrazu skončilo střídáním den/noc, platí nastavení podle denní doby.' }); }
     for (const e of s.events) if (e.state === 'nový' && KINDS[e.kind]?.level === 'crit' && now - e.at > 120000 && !e.escalated) { e.escalated = true; changed = true; }
     return { zmena: changed };
   },

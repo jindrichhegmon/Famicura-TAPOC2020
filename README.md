@@ -204,7 +204,13 @@ Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
 obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
 zapnout k normálnímu i rozostřenému obrazu a na černém pozadí je vždy;
-notifikace, co smí vidět poskytovatel, žádosti o plný obraz, historie), **dispečink poskytovatele** (dlaždice
+notifikace, historie; karta **Přístup poskytovatele** říká, co
+poskytovatel vidí teď a proč, má rychlé přepnutí Ostrý / Rozmazaný /
+Drátěný model platné do další změny nebo do střídání den/noc, nastavení
+podle denní doby včetně časů, kdy den a noc začínají, a nouzový přístup;
+**Klid** na 2 hodiny, do rána, do večera, do vypnutí; žádost poskytovatele
+o plný obraz přijde přes celou obrazovku, bliká a zní, dokud ji rodina
+nepovolí, neodmítne nebo nezavře), **dispečink poskytovatele** (dlaždice
 pacientů v režimu, který rodina povolila, fronta alertů s převzetím a
 uzavřením, eskalace po 2 minutách, žádost o plný obraz, nouzový přístup;
 přepínač **Jen skutečné kamery / Demo**: skutečné jsou jen kamery

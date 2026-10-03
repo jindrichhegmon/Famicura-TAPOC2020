@@ -59,6 +59,21 @@
     <select id="patient" class="pill" aria-label="Pacient"></select>
   </header>
 
+  <div class="zadost hide" id="zadost" role="alertdialog" aria-live="assertive">
+    <div class="zadostcard">
+      <div class="zadostic">👁</div>
+      <h2 id="zadostT">Poskytovatel žádá o plný obraz</h2>
+      <p id="zadostKdo"></p>
+      <p class="zadostproc" id="zadostProc"></p>
+      <div class="zadostbtn">
+        <button class="btn wide" id="zadost15">Povolit na 15 minut</button>
+        <button class="btn wide sec2" id="zadostNavzdy">Povolit do odvolání</button>
+        <button class="btn wide bad" id="zadostNe">Odmítnout</button>
+      </div>
+      <p class="small" id="zadostPozn"></p>
+      <button class="sm sec" id="zadostZavrit">Zavřít, rozhodnu později</button>
+    </div>
+  </div>
   <section id="hero" class="hero-ok">
     <div class="hero-ic" id="heroIc">✓</div>
     <div class="grow">
@@ -94,26 +109,40 @@
   </section>
 
   <section class="card" id="soukromi">
-    <div class="cardhead"><span class="ic">🔒</span><h2>Co smí vidět poskytovatel</h2></div>
+    <div class="cardhead"><span class="ic">🔒</span><h2>Přístup poskytovatele</h2></div>
     <p class="hint" id="provider"></p>
+    <div class="now big" id="effective"></div>
+
+    <h3 class="sub">Rychlé přepnutí obrazu</h3>
+    <p class="hint" id="rychleHint">Platí do další změny nebo do střídání den/noc.</p>
+    <div class="modesel three" id="rychle">
+      <button data-r="full" aria-pressed="false"><span class="ic">🎥</span>Ostrý</button>
+      <button data-r="blur" aria-pressed="false"><span class="ic">🌫️</span>Rozmazaný</button>
+      <button data-r="skeleton" aria-pressed="false"><span class="ic">🩻</span>Drátěný model</button>
+    </div>
+    <div class="chips" style="margin-top:6px"><button class="chip hide" id="rychleZrusit">Zrušit rychlé přepnutí</button></div>
+
+    <h3 class="sub">Podle denní doby</h3>
     <div class="consent">
       <label class="crow"><span class="cl"><span class="ic">☀️</span>Ve dne</span>
         <select id="cDen"><option value="none">žádný obraz, jen události</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></label>
       <label class="crow"><span class="cl"><span class="ic">🌙</span>V noci</span>
         <select id="cNoc"><option value="none">žádný obraz, jen události</option><option value="skeleton">drátěný model</option><option value="blur">rozostření</option><option value="full">plný obraz</option></select></label>
+      <div class="crow times"><span class="cl"><span class="ic">🕕</span>Den začíná v</span><input type="time" id="cDenOd" step="300"><span class="cl"><span class="ic">🕙</span>noc v</span><input type="time" id="cNocOd" step="300"></div>
       <label class="crow sw"><span class="cl"><span class="ic">🚨</span>V nouzi plný obraz<small>při pádu nebo SOS na 10 minut bez čekání, dozvíte se to hned</small></span>
         <span class="switch"><input type="checkbox" id="cNouze"><i></i></span></label>
     </div>
-    <p class="now" id="effective"></p>
   </section>
 
   <section class="card" id="klid">
     <div class="cardhead"><span class="ic">🔕</span><h2>Klid</h2><span class="hint grow" id="klidState"></span></div>
     <p class="hint">Informativní zprávy a varování nechodí. Kritické (pád, SOS) vždy.</p>
     <div class="chips">
-      <button class="chip" data-klid="60">Na 1 hodinu</button>
-      <button class="chip" data-klid="morning">Do 7:00</button>
-      <button class="chip" data-klid="0">Vypnout</button>
+      <button class="chip" data-klid="120">Na 2 hodiny</button>
+      <button class="chip" data-klid="rano" id="klidRano">Do rána</button>
+      <button class="chip" data-klid="vecer" id="klidVecer">Do večera</button>
+      <button class="chip" data-klid="vypnuti">Do vypnutí</button>
+      <button class="chip" data-klid="vypnout">Vypnout</button>
     </div>
   </section>
 

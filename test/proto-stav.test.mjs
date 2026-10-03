@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProtoStav } from '../src/proto-stav.mjs';
-import { seed, proved, AKCE, withinHours, jeNoc } from '../public/proto/sim-core.js';
+import { seed, proved, AKCE, withinHours, jeNoc, jeNocPro, pristeV, efektivni, KLID_NAVZDY } from '../public/proto/sim-core.js';
 
 function memStore() {
   const data = {};
@@ -31,7 +31,7 @@ test('jádro: souhlas rodiny, žádost dispečinku a odpověď, vypršení v tic
   const s = seed(1000);
   proved(s, 'setConsent', ['tapoc2020', { den: 'blur' }], 2000);
   assert.equal(s.patients[0].consent.den, 'blur');
-  assert.match(s.events[0].text, /den rozostření/);
+  assert.match(s.events[0].text, /den \(od 06:00\) rozostření/);
   const { vysledek: r } = proved(s, 'requestFull', ['tapoc2020', 'Dispečerka Jana', 'ověření'], 3000);
   assert.equal(s.notifications[0].kind, 'request');
   proved(s, 'answerRequest', [r.id, 'minutes', 15], 4000);
@@ -99,4 +99,38 @@ test('server: skutečné události kamery skládá do stavu server, jen nové a 
   assert.ok(s.state.patients.some((x) => x.id === 'nova' && x.name === 'Nová kamera'), 'neznámá kamera dostane pacienta');
   const s2 = await p.stav();
   assert.equal(s2.v, s.v, 'podruhé se nic nepřidá');
+});
+
+test('jádro: den a noc podle časů rodiny, rychlé přepnutí do střídání, klid do rána / večera / vypnutí', () => {
+  const s = seed(0); const p = s.patients[0];
+  const poledne = Date.parse('2026-07-01T10:30:00Z');   // 12:30 v Praze
+  assert.equal(jeNocPro(p, new Date(poledne)), false);
+  proved(s, 'setConsent', ['tapoc2020', { den: 'blur', noc: 'none', nocOd: '21:00' }], poledne);
+  assert.equal(jeNocPro(p, new Date(Date.parse('2026-07-01T19:30:00Z'))), true, '21:30 v Praze je už noc');
+  assert.throws(() => proved(s, 'setConsent', ['tapoc2020', { denOd: '21:00' }]), (e) => e.status === 400, 'den a noc ve stejnou chvíli');
+  assert.throws(() => proved(s, 'setConsent', ['tapoc2020', { denOd: '7' }]), (e) => e.status === 400);
+  // rychlé přepnutí platí do 21:00 (střídání), pak ho tick zruší
+  const { vysledek: r } = proved(s, 'rychle', ['tapoc2020', 'skeleton'], poledne);
+  assert.equal(r.until, pristeV('21:00', poledne));
+  assert.equal(efektivni(s, p, poledne).mode, 'skeleton');
+  assert.equal(efektivni(s, p, poledne).zdroj, 'rychle');
+  assert.throws(() => proved(s, 'rychle', ['tapoc2020', 'none']), (e) => e.status === 400, 'rychle jen ostrý/rozmazaný/drátěný');
+  assert.equal(proved(s, 'tick', [], r.until + 1000).zmena, true);
+  assert.equal(p.docasne, undefined);
+  assert.equal(efektivni(s, p, r.until + 1000).mode, 'none', 'po 21:00 platí noční nastavení');
+  assert.match(s.events[0].text, /skončilo střídáním/);
+  // povolení z žádosti má přednost před rychlým přepnutím
+  proved(s, 'rychle', ['tapoc2020', 'blur'], poledne);
+  const { vysledek: q } = proved(s, 'requestFull', ['tapoc2020', 'Dispečink', 'test'], poledne);
+  assert.equal(q.until, poledne + 10 * 60000, 'žádost platí 10 minut');
+  proved(s, 'answerRequest', [q.id, 'minutes', 15], poledne);
+  assert.equal(efektivni(s, p, poledne).mode, 'full');
+  // klid
+  assert.equal(proved(s, 'klidDo', ['tapoc2020', '120'], poledne).vysledek, poledne + 120 * 60000);
+  assert.equal(proved(s, 'klidDo', ['tapoc2020', 'rano'], poledne).vysledek, pristeV('06:00', poledne));
+  assert.equal(proved(s, 'klidDo', ['tapoc2020', 'vecer'], poledne).vysledek, pristeV('21:00', poledne));
+  assert.equal(proved(s, 'klidDo', ['tapoc2020', 'vypnuti'], poledne).vysledek, KLID_NAVZDY);
+  assert.equal(proved(s, 'klidDo', ['tapoc2020', 'vypnout'], poledne).vysledek, null);
+  assert.equal(s.klid.tapoc2020, undefined);
+  assert.throws(() => proved(s, 'klidDo', ['tapoc2020', 'nekdy']), (e) => e.status === 400);
 });

@@ -6,8 +6,8 @@
  * stav v tomhle prohlížeči: localStorage + BroadcastChannel mezi okny.
  * Data i akce jsou v sim-core.js, stejné pro prohlížeč i server.
  */
-import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNoc, grantText } from '/proto/sim-core.js';
-export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch };
+import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE } from '/proto/sim-core.js';
+export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE };
 
 const KEY = 'famicura.proto.v1';
 const CH = 'famicura-proto';
@@ -99,25 +99,14 @@ export const sim = {
     if (server) { if (!state.patients.some((x) => x.id === p.id)) run('ensurePatient', [p]); }
     else commit();
   },
-  isNight() { return state.night || jeNoc(); },
+  /** Noc podle časů pacienta (rodina si je nastaví), nebo simulovaná noc z panelu. */
+  isNight(patientId) { return state.night || jeNocPro(this.patient(patientId)); },
 
-  /** The mode the provider gets right now: a running grant beats the consent; night has its own consent. */
-  effectiveMode(patientId) {
-    const p = this.patient(patientId); if (!p) return 'none';
-    const g = state.grants[patientId];
-    if (g && g.until > Date.now()) return g.mode;
-    if (p.offline) return 'offline';
-    return p.consent[this.isNight() ? 'noc' : 'den'];
-  },
+  /** Co poskytovatel vidí teď: povolení z žádosti > rychlé přepnutí > výpadek > nastavení podle denní doby. */
+  efektivni(patientId) { return efektivni(state, this.patient(patientId), Date.now(), state.night); },
+  effectiveMode(patientId) { return this.efektivni(patientId).mode; },
   /** Why the provider sees what it sees, in words. */
-  modeReason(patientId) {
-    const p = this.patient(patientId); if (!p) return '';
-    const g = state.grants[patientId];
-    if (g && g.until > Date.now()) return grantText(g);
-    if (p.offline) return 'kamera nedostupná';
-    const n = this.isNight();
-    return `${CONSENT[p.consent[n ? 'noc' : 'den']]} (${n ? 'noc' : 'den'}, nastavila rodina)`;
-  },
+  modeReason(patientId) { return this.efektivni(patientId).proc; },
 
   emit(patientId, kind, extra = {}) { return run('emit', [patientId, kind, extra]); },
   setAlert(eventId, patch) { return run('setAlert', [eventId, patch]); },
@@ -131,6 +120,8 @@ export const sim = {
   endGrant(patientId, by = 'rodina') { return run('endGrant', [patientId, by]); },
   setWatching(patientId, who, on) { return run('setWatching', [patientId, who, on]); },
   setKlid(patientId, until) { return run('setKlid', [patientId, until]); },
+  klidDo(patientId, volba) { return run('klidDo', [patientId, volba]); },
+  rychle(patientId, mode) { return run('rychle', [patientId, mode]); },
   setNight(on) { return run('setNight', [on]); },
   reset() { return run('reset', []); },
 

@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch } from '/proto/sim.js';
+import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina dostane své kamery ze serveru
@@ -174,12 +174,14 @@ renderModes();
 $('cDen').onchange = () => sim.setConsent(patientId, { den: $('cDen').value });
 $('cNoc').onchange = () => sim.setConsent(patientId, { noc: $('cNoc').value });
 $('cNouze').onchange = () => sim.setConsent(patientId, { nouze: $('cNouze').checked });
-document.querySelectorAll('[data-klid]').forEach((b) => { b.onclick = () => {
-  const v = b.dataset.klid;
-  if (v === '0') sim.setKlid(patientId, null);
-  else if (v === 'morning') { const d = new Date(); if (d.getHours() >= 7) d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0); sim.setKlid(patientId, d.getTime()); }
-  else sim.setKlid(patientId, Date.now() + Number(v) * 60000);
-}; });
+// časy střídání: uloží se po opuštění pole; stejný čas pro den i noc server odmítne
+const ulozCas = (k, el) => async () => { if (!el.value) { render(); return; } try { await sim.setConsent(patientId, { [k]: el.value }); } catch { /* run už ukázal chybu */ } render(); };
+$('cDenOd').onchange = ulozCas('denOd', $('cDenOd'));
+$('cNocOd').onchange = ulozCas('nocOd', $('cNocOd'));
+// rychlé přepnutí: platí do další změny nebo do střídání den/noc
+$('rychle').querySelectorAll('button').forEach((b) => { b.onclick = () => { const p = sim.patient(patientId); const aktivni = p?.docasne && p.docasne.until > Date.now() && p.docasne.mode === b.dataset.r; sim.rychle(patientId, aktivni ? null : b.dataset.r); }; });
+$('rychleZrusit').onclick = () => sim.rychle(patientId, null);
+document.querySelectorAll('[data-klid]').forEach((b) => { b.onclick = () => sim.klidDo(patientId, b.dataset.klid); });
 $('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('on', o === b); }); render(); }; });
 $('ackAll').onclick = () => sim.ackAll(patientId);
 $('rec').onclick = () => { sim.emit(patientId, 'state', { text: 'Ruční nahrávka 15 s (uložena do historie).' }); toast('Nahrávám 15 s…'); };
@@ -187,12 +189,57 @@ $('sound').onclick = () => { const ic = $('sound').querySelector('.ic'); ic.text
 
 function levelClass(l) { return l === 'crit' ? 'crit' : l === 'warn' ? 'warn' : l === 'tech' ? 'tech' : 'info'; }
 
+/* ---------- žádost o plný obraz přes celou obrazovku ----------
+ * Zůstane, dokud ji rodina nevyřídí (povolit/odmítnout) nebo nezavře;
+ * do té doby bliká a každých 8 s zazní tón (po prvním dotyku stránky,
+ * dřív prohlížeč zvuk nepustí) a telefon zavibruje. */
+const zadostZavrene = new Set();
+let zadostZobrazena = null, posledniTon = 0, audio = null, dotkl = false;
+function odemkniZvuk() { dotkl = true; try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch { /* bez zvuku */ } }
+['pointerdown', 'keydown', 'touchstart'].forEach((ev) => document.addEventListener(ev, odemkniZvuk, { once: true, passive: true }));
+function ton() {
+  posledniTon = Date.now();
+  if (dotkl && navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]);   // před prvním dotykem prohlížeč vibrace odmítá
+  try {
+    if (!audio || audio.state !== 'running') return;
+    [0, 0.35, 0.7].forEach((t, i) => { const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = i === 2 ? 1046 : 784; g.gain.value = 0.2; o.connect(g); g.connect(audio.destination); o.start(audio.currentTime + t); o.stop(audio.currentTime + t + 0.28); });
+  } catch { /* bez zvuku */ }
+}
+function renderZadost() {
+  const el = $('zadost');
+  const r = sim.state.requests.find((x) => x.patientId === patientId && !zadostZavrene.has(x.id) && (x.state === 'čeká' || (x.state === 'vypršelo' && zadostZobrazena === x.id)));
+  if (!r) { el.classList.add('hide'); zadostZobrazena = null; return; }
+  const ceka = r.state === 'čeká';
+  if (zadostZobrazena !== r.id) { zadostZobrazena = r.id; posledniTon = 0; }
+  el.classList.remove('hide'); el.classList.toggle('vyprselo', !ceka);
+  $('zadostT').textContent = ceka ? 'Poskytovatel žádá o plný obraz' : 'Žádost o plný obraz vypršela';
+  $('zadostKdo').innerHTML = `<strong>${esc(r.from)}</strong> · ${fmtT(r.at)}`;
+  $('zadostProc').textContent = `Důvod: ${r.reason || 'neuveden'}`;
+  $('zadostPozn').textContent = ceka ? `Bez odpovědi do ${fmtT(r.until)} zůstane ${CONSENT[sim.effectiveMode(patientId)] || 'nastavený režim'}.` : 'Poskytovatel může požádat znovu.';
+  ['zadost15', 'zadostNavzdy', 'zadostNe'].forEach((id) => $(id).classList.toggle('hide', !ceka));
+  if (ceka && Date.now() - posledniTon > 8000) ton();
+}
+$('zadost15').onclick = () => { if (zadostZobrazena) sim.answerRequest(zadostZobrazena, 'minutes', 15); };
+$('zadostNavzdy').onclick = () => { if (zadostZobrazena) sim.answerRequest(zadostZobrazena, 'forever'); };
+$('zadostNe').onclick = () => { if (zadostZobrazena) sim.answerRequest(zadostZobrazena, 'deny'); };
+$('zadostZavrit').onclick = () => { if (zadostZobrazena) zadostZavrene.add(zadostZobrazena); renderZadost(); };
+setInterval(renderZadost, 1000);
+
 function render() {
   const s = sim.state;
   const p = sim.patient(patientId); if (!p) return;
   $('pname').textContent = p.name;
   $('provider').textContent = `${p.provider} · nastavení platí pro dispečink i pečovatele v terénu`;
   $('cDen').value = p.consent.den; $('cNoc').value = p.consent.noc; $('cNouze').checked = p.consent.nouze;
+  const { denOd, nocOd } = casy(p);
+  if (document.activeElement !== $('cDenOd')) $('cDenOd').value = denOd;
+  if (document.activeElement !== $('cNocOd')) $('cNocOd').value = nocOd;
+  $('klidRano').textContent = `Do rána (${denOd})`; $('klidVecer').textContent = `Do večera (${nocOd})`;
+  const ef = sim.efektivni(patientId);
+  const docasne = p.docasne && p.docasne.until > Date.now() ? p.docasne : null;
+  $('rychle').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(!!docasne && docasne.mode === b.dataset.r)));
+  $('rychleZrusit').classList.toggle('hide', !docasne);
+  $('rychleHint').textContent = docasne ? `Platí do ${fmtT(docasne.until)} (střídání den/noc), nebo do další změny.` : `Platí do další změny nebo do střídání den/noc (${sim.isNight(patientId) ? 'ráno v ' + denOd : 'večer v ' + nocOd}).`;
   const open = s.events.filter((e) => e.patientId === patientId && e.state !== 'uzavřen' && KINDS[e.kind]);
   const worst = open.some((e) => KINDS[e.kind].level === 'crit') ? 'crit' : open.some((e) => KINDS[e.kind].level === 'warn') ? 'warn' : null;
   $('pstatus').textContent = p.offline ? 'kamera nedostupná' : worst === 'crit' ? 'kritická událost' : worst === 'warn' ? 'varování' : 'klid';
@@ -206,7 +253,8 @@ function render() {
   $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
   $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
   $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
-  $('effective').innerHTML = `Teď poskytovatel vidí: <strong>${esc(sim.modeReason(patientId))}</strong>`;
+  const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
+  setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
   $('watchInfo').textContent = describeWatch(p.watch || {});
 
   // provider watching
@@ -215,7 +263,9 @@ function render() {
 
   // klid
   const k = s.klid[patientId];
-  $('klidState').textContent = k && k > Date.now() ? `klid do ${fmtT(k)}` : 'klid vypnutý';
+  const klidAktivni = k && k > Date.now();
+  $('klidState').textContent = klidAktivni ? (k >= KLID_NAVZDY ? 'klid do vypnutí' : `klid do ${fmtT(k)}`) : 'klid vypnutý';
+  document.querySelectorAll('[data-klid]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.klid === 'vypnout' ? !klidAktivni : false)));
 
   // notifications (unacked)
   const notifs = s.notifications.filter((n) => n.patientId === patientId && !n.ack && n.kind !== 'request');
@@ -225,9 +275,10 @@ function render() {
   }).join('');
   if (setHtml($('notifs'), notifHtml)) $('notifs').querySelectorAll('[data-ack]').forEach((b) => { b.onclick = () => sim.ackNotification(b.dataset.ack); });
 
-  // requests for full picture
+  // requests for full picture (přes celou obrazovku + proužek v aplikaci)
+  renderZadost();
   const reqs = s.requests.filter((r) => r.patientId === patientId && r.state === 'čeká');
-  const reqHtml = reqs.map((r) => `<div class="banner warn"><span class="grow"><strong>${esc(r.from)}</strong> žádá o plný obraz · důvod: ${esc(r.reason)} · ${fmtT(r.at)}<br><span class="small muted">bez odpovědi do ${fmtT(r.until)} zůstane ${esc(CONSENT[sim.patient(patientId).consent[sim.isNight() ? 'noc' : 'den']])}</span></span>
+  const reqHtml = reqs.map((r) => `<div class="banner warn"><span class="grow"><strong>${esc(r.from)}</strong> žádá o plný obraz · důvod: ${esc(r.reason)} · ${fmtT(r.at)}<br><span class="small muted">bez odpovědi do ${fmtT(r.until)} zůstane ${esc(CONSENT[sim.patient(patientId).consent[sim.isNight(patientId) ? 'noc' : 'den']])}</span></span>
     <button class="sm" data-req="${r.id}" data-a="15">Povolit 15 min</button><button class="sm sec" data-req="${r.id}" data-a="forever">Do odvolání</button><button class="sm bad" data-req="${r.id}" data-a="deny">Odmítnout</button></div>`).join('');
   if (setHtml($('requests'), reqHtml)) $('requests').querySelectorAll('[data-req]').forEach((b) => { b.onclick = () => sim.answerRequest(b.dataset.req, b.dataset.a === 'deny' ? 'deny' : b.dataset.a === 'forever' ? 'forever' : 'minutes', 15); });
 
