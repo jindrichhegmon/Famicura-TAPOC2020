@@ -142,12 +142,21 @@ let detailUnreg = null;
 /* Server stránku pošle jen přihlášenému dispečerovi tenanta (jinak přihlašovací
  * stránku); tady se jen zjistí, kdo to je a jaké má kamery. Když mezitím
  * přihlášení vypršelo, brána nabídne nové načtení (server pak dá přihlášení). */
+// Dlaždice, fronta a detail se kreslí až se stavem poskytovatele ze serveru (ne z místní ukázky před načtením).
+let zobrazuj = false;
 const pripraveno = (async () => {
   try { const r = await fetch('/api/rodina/ja', { cache: 'no-store' }); if (r.ok) JA = await r.json(); } catch { /* server away */ }
   if (JA && (JA.role === 'dispecer' || (JA.role === 'admin' && JA.tenant))) {
+    // Data poskytovatele drží server; bez nich dispečink neběží (žádná místní ukázka s fiktivními pacienty).
+    if (!(await sim.pripojit())) {
+      $('gateSub').textContent = `Data poskytovatele se nepodařilo načíst ze serveru: ${sim.chybaServeru || 'server neodpovídá'}. Zkuste obnovit stránku; když to trvá, ozvěte se správci serveru (pm2 logs famicura-tapo).`;
+      $('gate').classList.remove('hide');
+      return false;
+    }
     document.body.classList.remove('pending');
     for (const k of JA.kamery || []) await sim.ensurePatient({ id: k.id, name: k.name });
-    renderHlavicka();
+    zobrazuj = true;
+    renderHlavicka(); renderTiles(); renderQueue(); renderDetail();
     return true;
   }
   if (JA && JA.role === 'rodina') $('gateSub').textContent = 'Jste přihlášen(a) jako rodina. Dispečink je jen pro dispečery poskytovatele.';
@@ -164,9 +173,12 @@ function zdrojPro(deviceId) {
   if (!z) { z = createSource({ deviceId }); zdroje.set(deviceId, z); z.connect(); }
   return z;
 }
-const prvniKamera = () => (JA?.kamery?.[0]?.id) || sim.state.patients.find((p) => p.real)?.id || 'tapoc2020';
+const prvniKamera = () => (JA?.kamery?.[0]?.id) || (sim.naServeru ? null : (sim.state.patients.find((p) => p.real)?.id || 'tapoc2020'));
+const bezKamery = () => `Tento poskytovatel zatím nemá přiřazenou žádnou kameru. Správce serveru ji přiřadí příkazem ./deploy/vps-kamera.sh tenant ID_KAMERY ${JA?.tenant?.id || 'ID_TENANTA'} "Místo".`;
 let srcHlavni = null;
-pripraveno.then(() => {
+pripraveno.then((ok) => {
+  if (!ok) return;
+  if (!prvniKamera()) { $('srcNote').textContent = 'obraz: žádná kamera přiřazená'; mountAuthBanner(null); return; }
   srcHlavni = zdrojPro(prvniKamera());
   window.__zdroj = srcHlavni;
   mountAuthBanner(srcHlavni);
@@ -196,7 +208,7 @@ const panel = mountPanel({ role: 'dispecink', patientIds: () => sim.state.patien
 // ?rezim=full|blur|skeleton|none opens the real camera in that mode (as if the
 // family had set it for day and night) and straight in the detail.
 const rezim = new URLSearchParams(location.search).get('rezim');
-if (rezim && ['full', 'blur', 'skeleton', 'none'].includes(rezim)) pripraveno.then(() => { const id = prvniKamera(); sim.setConsent(id, { den: rezim, noc: rezim }); selected = id; renderDetail(true); renderTiles(); });
+if (rezim && ['full', 'blur', 'skeleton', 'none'].includes(rezim)) pripraveno.then(() => { const id = prvniKamera(); if (!id) return; sim.setConsent(id, { den: rezim, noc: rezim }); selected = id; renderDetail(true); renderTiles(); });
 
 /** What the tile of this patient may draw. */
 function tileMode(pid) {
@@ -229,6 +241,7 @@ function beep() {
 }
 
 function renderTiles() {
+  if (!zobrazuj) return;
   const s = sim.state;
   const only = $('onlyOpen').checked;
   const list = s.patients.filter(visible).filter((p) => !only || openAlerts(p.id).length || p.offline);
@@ -242,6 +255,7 @@ function renderTiles() {
     box.dataset.key = key;
     for (const u of tileRegs.values()) u();
     tileRegs.clear();
+    if (!list.length && sim.naServeru && !s.patients.length) { box.innerHTML = `<p class="muted bezkamery">${esc(bezKamery())}</p>`; return; }
     box.innerHTML = list.map((p) => `<div class="tile" data-id="${p.id}"><div class="stage"><canvas></canvas><span class="tag"></span></div><div class="nm"><span>${esc(p.name)}</span><span class="badge st-badge"></span></div><div class="st"></div></div>`).join('');
     box.querySelectorAll('.tile').forEach((t) => {
       const pid = t.dataset.id;
@@ -277,6 +291,7 @@ function bindQueueButtons(root) {
 }
 
 function renderQueue() {
+  if (!zobrazuj) return;
   const s = sim.state;
   const items = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {}));
   const order = { crit: 0, warn: 1, tech: 2 };
@@ -295,6 +310,7 @@ function renderQueue() {
 }
 
 function renderDetail(rebuild = false) {
+  if (!zobrazuj) return;
   const d = $('detail');
   if (!selected) { d.classList.add('hide'); return; }
   const p = sim.patient(selected); if (!p) return;

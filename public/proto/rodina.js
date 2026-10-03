@@ -69,7 +69,7 @@ function setupPatients() {
 /** Přihlášený uživatel rodiny (nebo poskytovatel z hlavní aplikace). */
 function boot(ja) {
   hideGate();
-  sim.pripojit();   // po přihlášení: stav ze serveru, společný s dispečinkem
+  sim.pripojit().then((ok) => { if (!ok && sim.chybaServeru) toast(`Data poskytovatele se nepodařilo načíst ze serveru: ${sim.chybaServeru}`, 'crit'); });   // po přihlášení: stav ze serveru, společný s dispečinkem
   const posk = ja.tenant ? (ja.tenant.nazev || ja.tenant.id) : '';
   for (const k of ja.kamery || []) sim.ensurePatient({ id: k.id, name: k.name });
   FAMILY = (ja.kamery || []).map((k) => k.id);

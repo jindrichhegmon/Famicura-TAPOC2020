@@ -36,7 +36,7 @@ function bind(request, params) {
     else if (typeof v === 'number' && Number.isInteger(v)) request.input(k, sql.BigInt, v);
     else if (typeof v === 'number') request.input(k, sql.Float, v);
     else if (typeof v === 'boolean') request.input(k, sql.Bit, v);
-    else request.input(k, sql.NVarChar(sql.MAX), v === undefined ? null : v);
+    else { const s = v === undefined ? null : v; request.input(k, sql.NVarChar(s !== null && String(s).length > 4000 ? sql.MAX : 4000), s); }
   }
   return request;
 }

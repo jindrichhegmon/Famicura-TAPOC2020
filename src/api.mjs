@@ -104,8 +104,14 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
   async function kamery() {
     const names = cameraNames();
     const st = udalosti ? udalosti.stav() : {};
-    const tenanty = Object.fromEntries((await kameryTenanty()).map((k) => [k.id, normTenant(k.tenant)]));
-    return (await go2rtc.streams()).map((id) => ({ id, name: names[id] || id, tenant: tenanty[id] || '', events: st[id]?.events || [] }));
+    const zCameras = await kameryTenanty();
+    const tenanty = Object.fromEntries(zCameras.map((k) => [k.id, normTenant(k.tenant)]));
+    // Seznam kamer je z go2rtc (go2rtc.yaml se z cameras.json generuje); když go2rtc zrovna neběží,
+    // vezme se cameras.json, ať jde přihlášení a dispečink dál – bez obrazu to řekne až /api/stream.
+    let ids;
+    try { ids = await go2rtc.streams(); }
+    catch (e) { if (!zCameras.length) throw e; ids = zCameras.map((k) => k.id); }
+    return ids.map((id) => ({ id, name: names[id] || id, tenant: tenanty[id] || '', events: st[id]?.events || [] }));
   }
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
 

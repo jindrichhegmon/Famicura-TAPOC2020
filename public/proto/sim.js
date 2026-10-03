@@ -44,6 +44,7 @@ function adopt(b, info) {
   notify(info);
 }
 let pripojovani = null, pollTimer = null, polluji = false;
+let chybaServeru = '';             // proč se stav ze serveru nenačetl (jiná chyba než nepřihlášení)
 async function poll() {
   if (!server || polluji) return;
   polluji = true;
@@ -62,8 +63,9 @@ async function pripojit() {
       const b = await api('/api/proto/stav');
       server = { v: 0 }; adopt(b, { nahrazeno: true });
       if (!pollTimer) pollTimer = setInterval(poll, POLL_MS);
+      chybaServeru = '';
       return true;
-    } catch { return false; }
+    } catch (e) { chybaServeru = e.status === 401 || e.status === 403 ? '' : (e.message || 'server neodpovídá'); return false; }
     finally { pripojovani = null; }
   })();
   return pripojovani;
@@ -88,6 +90,8 @@ function runLocal(nazev, args) {
 export const sim = {
   get state() { return state; },
   get naServeru() { return !!server; },
+  /** Text chyby, když přihlášený uživatel stav ze serveru nedostal (např. databáze); prázdné = v pořádku nebo nepřihlášen. */
+  get chybaServeru() { return chybaServeru; },
   /** Údaje poskytovatele ze sdíleného stavu (dispečink je zadává na jednom místě). */
   get poskytovatel() { return poskytovatel(state); },
   poskytovatelPro(p) { return poskytovatelPro(state, p); },

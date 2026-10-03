@@ -117,7 +117,8 @@ export function createTabulky(db) {
   const kontext = (tenant) => {
     if (tenant === '*') return { sql: `EXEC sp_set_session_context @key = N'IDTENANT', @value = N'*';\n`, p: {} };
     const t = normTenant(tenant); if (!t) throw chyba('Neplatné ID tenanta.', 400);
-    return { sql: `EXEC sp_set_session_context @key = N'IDTENANT', @value = @tenant;\n`, p: { tenant: t } };
+    // Literál jako v portálu Plus: sp_set_session_context bere sql_variant a parametr nvarchar(max) odmítne; t je jen 4–16 písmen a číslic.
+    return { sql: `EXEC sp_set_session_context @key = N'IDTENANT', @value = N'${t}';\n`, p: {} };
   };
   const kde = (def, podminky, p, od = 0) => {
     const casti = []; let i = od;

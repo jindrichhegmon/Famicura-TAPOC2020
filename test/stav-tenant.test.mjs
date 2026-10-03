@@ -138,9 +138,9 @@ test('tabulky: DDL má tenanta s RLS u každé tabulky, brána skládá SQL jen 
   const volani = [];
   const tb = createTabulky({ async query(text, params) { volani.push({ text, params }); return [{ n: 0 }]; } });
   await tb.vyber(T, 'A_KAM_Udalost', { kde: { KameraID: 'tapoc2020', Druh: ['fall', 'sos'] }, razeni: [['Cas', 'DESC']], limit: 5 });
-  assert.match(volani[0].text, /^EXEC sp_set_session_context @key = N'IDTENANT', @value = @tenant;/);
+  assert.match(volani[0].text, new RegExp(`^EXEC sp_set_session_context @key = N'IDTENANT', @value = N'${T}';`), 'kontext tenanta jako literál (sql_variant nebere nvarchar(max) parametr)');
   assert.match(volani[0].text, /SELECT TOP \(5\) .* FROM dbo\.A_KAM_Udalost WHERE KameraID = @p0 AND Druh IN \(@p1, @p2\) ORDER BY Cas DESC;/);
-  assert.deepEqual(volani[0].params, { tenant: T, p0: 'tapoc2020', p1: 'fall', p2: 'sos' });
+  assert.deepEqual(volani[0].params, { p0: 'tapoc2020', p1: 'fall', p2: 'sos' });
   await tb.ulozit(T, 'A_KAM_Kamera', { KameraID: 'tapoc2020', Souhlas: { den: 'full' }, Offline: false });
   assert.match(volani[1].text, /UPDATE dbo\.A_KAM_Kamera SET Souhlas = @p0, Offline = @p1 WHERE KameraID = @p2/);
   assert.equal(volani[1].params.p0, '{"den":"full"}');
