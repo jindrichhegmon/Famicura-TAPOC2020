@@ -45,6 +45,18 @@ export function klice(text, regex) {
   return out;
 }
 
+/** Část URL spojení podle toho, jak náš klíč končí (PASSWORD, USER, SERVER, PORT, DATABASE). */
+export function zUrl(url, klic) {
+  let u; try { u = new URL(url); } catch { return ''; }
+  const d = (x) => { try { return decodeURIComponent(x); } catch { return x; } };
+  if (/PASSWORD$/.test(klic)) return d(u.password);
+  if (/USER$/.test(klic)) return d(u.username);
+  if (/SERVER$/.test(klic)) return u.hostname;
+  if (/PORT$/.test(klic)) return u.port;
+  if (/DATABASE$/.test(klic)) return d(u.pathname.replace(/^\//, ''));
+  return '';
+}
+
 /** Přepíše první výskyt klíče, nebo ho přidá na konec. Ostatní řádky nechá být. */
 export function nastavit(text, klic, val) {
   if (!/^[A-Z0-9_]+$/.test(klic)) throw new Error('Neplatný název klíče.');
@@ -107,8 +119,11 @@ async function main([akce, klic, zdroj]) {
     // KLIC CIZI_KLIC /cesta/.env: hodnota jiné aplikace pod naším názvem (heslo PeceDomaPlus, token jhn-apps).
     const [, , ciziKlic, cesta] = process.argv.slice(1);
     const nas = precti(SOUBOR);
-    const val = hodnota(precti(cesta), ciziKlic);
+    let val = hodnota(precti(cesta), ciziKlic);
     if (!val) throw new Error(`${ciziKlic} je v ${cesta} prázdné nebo tam není.`);
+    // Spojení zapsané jako URL (DB_X_URL=mssql://user:heslo@server:1433/db): vezme se jen ta část, kterou náš klíč potřebuje.
+    if (/^[a-z]+:\/\//i.test(val)) val = zUrl(val, klic);
+    if (!val) throw new Error(`Z ${ciziKlic} (URL) nejde vzít ${klic}.`);
     zapis(nastavit(nas, klic, val));
     console.log(`${klic}: převzato z ${cesta} (${ciziKlic}).`);
     return;

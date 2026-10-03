@@ -42,9 +42,18 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs generuj SESSION_KEY'"
 
 echo
 echo "Databáze PeceDomaPlus (tenanti a data poskytovatelů, login pecedomaplus_app): heslo z $JHN_ZDROJ, jinak ručně."
-KLIC_PDP=$($SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs najdi $JHN_ZDROJ \"PECEDOMAPLUS.*(PASSWORD|HESLO)|PDP_SQL_PASSWORD|PECEDOMA_DB_PASSWORD\"'" 2>/dev/null | head -1 || true)
-if [ -n "$KLIC_PDP" ] && $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako PDP_SQL_PASSWORD $KLIC_PDP $JHN_ZDROJ'"; then :; else
-  echo "Heslo k PeceDomaPlus se převzít nepodařilo – zadejte ho ručně (Enter = nechat, jak je)."
+# jhn-apps má spojení pojmenovaná DB_<NAZEV>_PASSWORD (nebo celé jako DB_<NAZEV>_URL); spojení PeceDomaPlus se jmenuje pecedomaplus.
+KLIC_PDP=$($SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs najdi $JHN_ZDROJ \"^DB_PECEDOMAPLUS_(PASSWORD|URL)\$|PECEDOMAPLUS.*(PASSWORD|HESLO)|PDP_SQL_PASSWORD\"'" 2>/dev/null | head -1 || true)
+if [ -n "$KLIC_PDP" ] && $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako PDP_SQL_PASSWORD $KLIC_PDP $JHN_ZDROJ'"; then
+  # server, uživatel a databáze jen když je jhn-apps má zapsané jinak než výchozí (jinak zůstane SQL_SERVER / pecedomaplus_app / PeceDomaPlus)
+  for K in SERVER PORT USER DATABASE; do
+    Z="${KLIC_PDP/PASSWORD/$K}"; [ "$Z" = "$KLIC_PDP" ] && Z="DB_PECEDOMAPLUS_$K"
+    $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi-jako PDP_SQL_$K $Z $JHN_ZDROJ'" 2>/dev/null || true
+  done
+else
+  echo "Heslo k PeceDomaPlus se v $JHN_ZDROJ nenašlo. Spojení, která tam jsou (jen názvy):"
+  $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs najdi $JHN_ZDROJ \"^DB_[A-Z0-9]+_(DATABASE|URL)\$\"'" 2>/dev/null | sed 's/^/   /' || echo "   (žádná)"
+  echo "Zadejte heslo ručně (stejné jako má portál Péče doma plus pro login pecedomaplus_app; Enter = nechat, jak je)."
   read -rs -p "PDP_SQL_PASSWORD: " H; echo
   [ -n "$H" ] && printf '%s' "$H" | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs nastav PDP_SQL_PASSWORD'"
   unset H
@@ -97,3 +106,8 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs stav'"
 
 # server.mjs čte .env jen při startu.
 $SSH "$VPS" "$JAKO 'cd $DIR && [ -f deploy/ecosystem.config.cjs ] && PORT=$PORT pm2 startOrRestart deploy/ecosystem.config.cjs --update-env >/dev/null && pm2 save >/dev/null && echo \"Aplikace restartována.\" || echo \"Aplikace ještě není nasazená – spusťte ./deploy/vps-deploy.sh\"'"
+sleep 4
+echo "Kontrola serveru (tenanti = databáze PeceDomaPlus, dispecer = přihlášení účtem Péče doma plus):"
+$SSH "$VPS" "curl -s http://127.0.0.1:$PORT/api/health" | tr ',' '\n' | grep -E '"(ok|tenanti|dispecer)"' | sed 's/^/   /'
+echo "Poslední hlášky serveru o databázi:"
+$SSH "$VPS" "$JAKO 'pm2 logs famicura-tapo --lines 60 --nostream 2>/dev/null | grep -i \"pdp\|PeceDomaPlus\|jhn-apps\" | tail -5'" | sed 's/^/   /'

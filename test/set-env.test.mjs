@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hodnota, nastavit, klice } from '../scripts/set-env.mjs';
+import { hodnota, nastavit, klice, zUrl } from '../scripts/set-env.mjs';
 
 const SABLONA = '# komentář\nSQL_USER=clb1_app\nSQL_PASSWORD=\nRING_HMAC_KEY=\nPORT=3111\n';
 
@@ -29,4 +29,14 @@ test('najdi: názvy vyplněných klíčů podle výrazu, bez hodnot a bez prázd
   assert.deepEqual(klice(t, 'PECEDOMAPLUS.*(PASSWORD|HESLO)|PDP_SQL_PASSWORD'), ['SQL_PECEDOMAPLUS_HESLO']);
   assert.deepEqual(klice(t, 'REPORTY_TOKEN'), ['FAMICURA_REPORTY_TOKEN']);
   assert.deepEqual(klice(t, 'NIC'), []);
+});
+
+test('prevezmi-jako z URL spojení: heslo, uživatel, server, databáze', () => {
+  const u = 'mssql://pecedomaplus_app:Tajn%C3%A9%40heslo@90.182.39.103:1433/PeceDomaPlus';
+  assert.equal(zUrl(u, 'PDP_SQL_PASSWORD'), 'Tajné@heslo');
+  assert.equal(zUrl(u, 'PDP_SQL_USER'), 'pecedomaplus_app');
+  assert.equal(zUrl(u, 'PDP_SQL_SERVER'), '90.182.39.103');
+  assert.equal(zUrl(u, 'PDP_SQL_PORT'), '1433');
+  assert.equal(zUrl(u, 'PDP_SQL_DATABASE'), 'PeceDomaPlus');
+  assert.equal(zUrl('nic', 'PDP_SQL_PASSWORD'), '');
 });
