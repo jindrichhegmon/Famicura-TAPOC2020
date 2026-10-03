@@ -1,0 +1,295 @@
+1
+00:00:00,600 --> 00:00:05,200
+Famicura Kamera je dohledový systém pro domácnost.
+
+2
+00:00:05,350 --> 00:00:09,950
+Jedna kamera u vašeho blízkého doma, aplikace pro rodinu na telefonu a dispečink poskytovatele péče.
+
+3
+00:00:10,100 --> 00:00:14,700
+V příštích minutách uvidíte, co se děje od instalace kamery:
+
+4
+00:00:14,850 --> 00:00:19,450
+co vidí rodina, co vidí dispečink, kdo co nastavuje a jak se žádá o plný obraz.
+
+5
+00:00:19,900 --> 00:00:25,550
+U klienta doma je kamera Tapo a malá brána Mango.
+
+6
+00:00:25,700 --> 00:00:31,350
+Zapojí se do zásuvky a k internetu, nic dalšího doma není. Rodina má aplikaci na telefonu:
+
+7
+00:00:31,500 --> 00:00:37,150
+vidí obraz a události a rozhoduje, co smí vidět poskytovatel.
+
+8
+00:00:37,300 --> 00:00:42,950
+Dispečink poskytovatele vidí dlaždice všech klientů, frontu alertů a řeší je.
+
+9
+00:00:43,100 --> 00:00:48,750
+Obraz jde šifrovaným tunelem na server Famicura v Česku. Nikdo jiný ho nevidí.
+
+10
+00:00:49,200 --> 00:00:53,883
+Instalace trvá půl hodiny.
+
+11
+00:00:54,033 --> 00:00:58,717
+Technik zapojí bránu Mango k internetu a kameru na její Wi-Fi, tunel k serveru se naváže sám.
+
+12
+00:00:58,867 --> 00:01:03,550
+Dispečink hned vidí novou dlaždici klienta.
+
+13
+00:01:03,700 --> 00:01:08,383
+Dispečer zadá jméno a telefon člena rodiny a odejde SMS s odkazem.
+
+14
+00:01:08,533 --> 00:01:13,217
+Rodina klepne na odkaz, zvolí si heslo a uloží aplikaci na plochu telefonu.
+
+15
+00:01:13,367 --> 00:01:18,050
+Od té chvíle se přihlašuje telefonem a heslem.
+
+16
+00:01:18,500 --> 00:01:25,600
+Na telefonu rodina vidí nahoře stav: vše v pořádku, varování, nebo kritická událost.
+
+17
+00:01:25,750 --> 00:01:32,850
+Pod ním živý obraz z kamery ve zvoleném zobrazení.
+
+18
+00:01:33,000 --> 00:01:40,100
+Nejdůležitější je věta „Teď poskytovatel vidí“: rodina vždy ví, co poskytovatel vidí a proč.
+
+19
+00:01:40,250 --> 00:01:47,350
+Dole je historie: každá událost, každý souhlas, kdo se kdy díval.
+
+20
+00:01:47,800 --> 00:01:53,317
+Rodina volí ze čtyř režimů. Plný obraz: poskytovatel vidí byt jako na kameře. Rozostření:
+
+21
+00:01:53,467 --> 00:01:58,983
+je vidět pohyb a situace, ne tváře. Drátěný model: jen kostra postavy, žádný obraz bytu.
+
+22
+00:01:59,133 --> 00:02:04,650
+Nebo žádný obraz, jen události.
+
+23
+00:02:04,800 --> 00:02:10,317
+Jiný režim může platit ve dne a jiný v noci, rodina si nastaví i časy.
+
+24
+00:02:10,467 --> 00:02:15,983
+Tři tlačítka umožní rychlé přepnutí do dalšího střídání den a noc.
+
+25
+00:02:16,133 --> 00:02:21,650
+A přepínač „V nouzi plný obraz“ dovolí dispečinku při pádu otevřít obraz hned.
+
+26
+00:02:22,100 --> 00:02:27,750
+Dispečink vidí dlaždice všech klientů, každou v režimu, který rodina povolila.
+
+27
+00:02:27,900 --> 00:02:33,550
+Vpravo je fronta alertů: pád, dlouhé ležení, SOS, překročení čáry.
+
+28
+00:02:33,700 --> 00:02:39,350
+Dispečer alert převezme, řeší a uzavře s výsledkem.
+
+29
+00:02:39,500 --> 00:02:45,150
+U každého klienta vidí, co rodina povolila a proč, a má tlačítko Požádat o plný obraz.
+
+30
+00:02:45,300 --> 00:02:50,950
+Nastavuje také, které události se hlídají a nahrávají.
+
+31
+00:02:51,400 --> 00:02:59,250
+Údaje poskytovatele se zadávají na jednom místě pod ozubeným kolečkem:
+
+32
+00:02:59,400 --> 00:03:07,250
+název služby, telefon, dispečer, směna, záloha, vedoucí. Vidí je všichni dispečeři i rodina.
+
+33
+00:03:07,400 --> 00:03:15,250
+Pod otazníkem je nápověda s obrázky obrazovek a asistent, který odpoví na otázku dispečera.
+
+34
+00:03:15,700 --> 00:03:22,800
+Tohle je jádro celého systému. Rodina rozhoduje o obrazu:
+
+35
+00:03:22,950 --> 00:03:30,050
+režimy, časy, rychlé přepnutí, klid, nouzový přístup. Poskytovatel rozhoduje o dohledu:
+
+36
+00:03:30,200 --> 00:03:37,300
+hlídané události, nahrávání, účty rodiny. Plný obraz na žádost je společná věc:
+
+37
+00:03:37,450 --> 00:03:44,550
+dispečink žádá, rodina povoluje. Nikdo nemůže obejít druhého.
+
+38
+00:03:45,000 --> 00:03:50,650
+Většinu dní se nic neděje, a to je dobře.
+
+39
+00:03:50,800 --> 00:03:56,450
+Ráno kamera hlásí osobu a pohyb, jsou to informativní události, nikoho nebudí.
+
+40
+00:03:56,600 --> 00:04:02,250
+Odpoledne dcera otevře aplikaci: vše v pořádku, obraz v rozostření, jak sama nastavila.
+
+41
+00:04:02,400 --> 00:04:08,050
+Ve dvacet dva hodin automaticky přepne noční nastavení na drátěný model.
+
+42
+00:04:08,200 --> 00:04:13,850
+Dispečink v klidný den vidí jen zelené dlaždice.
+
+43
+00:04:14,300 --> 00:04:19,817
+Ve dvě hodiny čtrnáct minut v noci kamera hlásí možný pád.
+
+44
+00:04:19,967 --> 00:04:25,483
+V dispečinku se rozsvítí červený pruh a zazní zvuk.
+
+45
+00:04:25,633 --> 00:04:31,150
+Dispečerka alert převezme, rodina u něj od té chvíle vidí její jméno.
+
+46
+00:04:31,300 --> 00:04:36,817
+Rodině přijde notifikace s vibrací, i když má zapnutý klid, kritické události projdou vždy.
+
+47
+00:04:36,967 --> 00:04:42,483
+Dispečerka vidí jen drátěný model: postava leží na zemi. Potřebuje plný obraz. Má dvě cesty:
+
+48
+00:04:42,633 --> 00:04:48,150
+požádat rodinu, nebo nouzový přístup.
+
+49
+00:04:48,600 --> 00:04:54,950
+Krok jedna: dispečink v detailu klienta klepne na Požádat rodinu o plný obraz a vybere důvod.
+
+50
+00:04:55,100 --> 00:05:01,450
+Krok dva:
+
+51
+00:05:01,600 --> 00:05:07,950
+rodině na telefonu vyskočí žádost přes celou obrazovku, bliká, zní a vibruje, dokud ji nevyřídí.
+
+52
+00:05:08,100 --> 00:05:14,450
+Krok tři: rodina povolí na patnáct minut, do odvolání, nebo odmítne. Krok čtyři:
+
+53
+00:05:14,600 --> 00:05:20,950
+dispečink vidí plný obraz, rodina vidí, kdo se dívá a do kdy, a může to kdykoli ukončit.
+
+54
+00:05:21,100 --> 00:05:27,450
+Celé kolo trvá pod minutu a všechno je v historii na obou stranách.
+
+55
+00:05:27,900 --> 00:05:33,550
+Když jde o minuty, nečeká se na odpověď. Nouzový přístup otevře plný obraz na deset minut.
+
+56
+00:05:33,700 --> 00:05:39,350
+Jde to jen při otevřeném kritickém alertu a jen když ho rodina předem povolila.
+
+57
+00:05:39,500 --> 00:05:45,150
+Rodina dostane okamžitě zprávu, kdo a proč obraz otevřel, a vše zůstává v historii.
+
+58
+00:05:45,300 --> 00:05:50,950
+Rodině doporučujeme nouzový přístup zapnout:
+
+59
+00:05:51,100 --> 00:05:56,750
+je to rozdíl mezi zavoláním záchranky hned a za deset minut.
+
+60
+00:05:57,200 --> 00:06:04,300
+Rodina si řídí, co ji ruší: klid na dvě hodiny, do rána, do večera nebo do vypnutí.
+
+61
+00:06:04,450 --> 00:06:11,550
+Kritické události projdou vždy. Obraz jde šifrovaným tunelem, z internetu kamera dostupná není.
+
+62
+00:06:11,700 --> 00:06:18,800
+Dispečink a provoz jsou jen po přihlášení poskytovatele.
+
+63
+00:06:18,950 --> 00:06:26,050
+Každá událost, souhlas i nouzový přístup je zapsaný s časem a jménem. Nic se neděje potichu.
+
+64
+00:06:26,500 --> 00:06:34,350
+Když u klienta vypadne internet, dlaždice ukáže Kamera nedostupná a po návratu spojení se tunel obnoví sám.
+
+65
+00:06:34,500 --> 00:06:42,350
+Diagnostika řekne, kde je problém. Zapomenuté heslo rodiny vyřeší dispečer novou pozvánkou.
+
+66
+00:06:42,500 --> 00:06:50,350
+A když se klient stěhuje, kamera i brána jedou s ním beze změny nastavení.
+
+67
+00:06:50,800 --> 00:06:56,983
+Vyzkoušejte si to sami.
+
+68
+00:06:57,133 --> 00:07:03,317
+První QR kód otevře aplikaci rodiny jako ukázku bez přihlášení, bezpečně i na cizím telefonu.
+
+69
+00:07:03,467 --> 00:07:09,650
+Druhý vede na rozcestník prototypu pro dispečink a provoz, heslo dostanete při předvedení.
+
+70
+00:07:10,100 --> 00:07:15,750
+Pět vět, které stačí říct rodině.
+
+71
+00:07:15,900 --> 00:07:21,550
+Váš blízký má doma dohled, který hlásí pád, nehybnost nebo nouzové tlačítko.
+
+72
+00:07:21,700 --> 00:07:27,350
+Vy rozhodujete, co poskytovatel vidí. Když potřebuje vidět víc, musí vás požádat.
+
+73
+00:07:27,500 --> 00:07:33,150
+V nouzi může otevřít obraz hned, ale jen pokud jste to předem povolili.
+
+74
+00:07:33,300 --> 00:07:38,950
+A všechno je v historii, nic se neděje bez vašeho vědomí. Famicura Kamera.

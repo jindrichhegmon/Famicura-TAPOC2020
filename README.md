@@ -312,6 +312,14 @@ iPhone poslal do Safari) a ta se po přihlášení vrátí zpět
 skriptem v Pillow (srdce s křivkou tepu v modré Famicury); zdroj je
 v historii gitu u tohoto commitu.
 
+## Prezentace a video
+
+`docs/prezentace/` drží prodejní prezentaci (`Famicura-Kamera-pribeh-po-instalaci.pptx`,
+16 slidů s obrázky obrazovek a QR kódy), scénář namluvení po slidech
+(`scenar-videa.md`, i s postupem, jak z toho udělat video v PowerPointu,
+Keynote nebo s umělým hlasem) a titulky `titulky.srt` ve stejném časování.
+Video samotné se do gitu neukládá.
+
 ## Nastavení krok za krokem
 
 Všechny příkazy spouštějte na Macu ve složce projektu, pokud není
