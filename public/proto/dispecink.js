@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 /* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
 let JA = null;
 const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS'];
+const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
@@ -44,8 +44,10 @@ async function nactiNahravky(pid) {
   const el = document.querySelector('#detail #dnahravky'); if (!el) return;
   const pocet = sim.state.events.filter((e) => e.patientId === pid && e.nahravka).length;
   const c = nahravkyCache.get(pid);
-  if (c && c.pocet === pocet && Date.now() - c.cas < 60000) { if (el.innerHTML !== c.html) el.innerHTML = c.html; return; }
-  nahravkyCache.set(pid, { cas: Date.now(), pocet, html: c?.html || el.innerHTML });
+  // seznam se přepíše jen při nové verzi (ne při každém překreslení – běžící přehrávač by zmizel)
+  const ukaz = (html, ver) => { if (el.dataset.ver === String(ver)) return; el.innerHTML = html; el.dataset.ver = String(ver); prehravaniOvladani(el, pid); };
+  if (c && c.pocet === pocet && Date.now() - c.cas < 60000) { ukaz(c.html, c.ver); return; }
+  nahravkyCache.set(pid, { cas: Date.now(), pocet, html: c?.html || el.innerHTML, ver: c?.ver || 0 });
   let html;
   try {
     const r = await fetch('/api/nahravky?kamera=' + encodeURIComponent(pid) + '&limit=20', { credentials: 'same-origin' });
@@ -54,11 +56,31 @@ async function nactiNahravky(pid) {
     html = j.nahravky.map((n) => {
       const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
       const vel = n.velikost ? ` · ${(n.velikost / 1048576).toFixed(1)} MB` : '';
-      return `<li><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`}</span></li>`;
+      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}" title="přehrát v aplikaci (přehrání jde do auditu)">▶ přehrát</a> · <span class="muted">na serveru</span>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`;
+      return `<li data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${kde}${n.chyba ? '' : ` · <a href="#" class="muted" data-smazat="${esc(n.id)}" title="smazat nahrávku">smazat</a>`}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka. Nahrává se po události se zatrženým Nahrávat (sekce Nastavení) nebo tlačítkem Nahrát teď.</li>';
   } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
-  nahravkyCache.set(pid, { cas: Date.now(), pocet, html });
-  const el2 = document.querySelector('#detail #dnahravky'); if (el2 && selected === pid) el2.innerHTML = html;
+  const ver = Date.now();
+  nahravkyCache.set(pid, { cas: Date.now(), pocet, html, ver });
+  const el2 = document.querySelector('#detail #dnahravky'); if (el2 && selected === pid) ukaz(html, ver);
+}
+/* Přehrání nahrávky ze serveru přímo v seznamu (video pod řádkem) a smazání. */
+function prehravaniOvladani(el, pid) {
+  el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = (ev) => {
+    ev.preventDefault();
+    const li = a.closest('li'); const stare = li.querySelector('video');
+    if (stare) { stare.pause(); stare.remove(); return; }
+    el.querySelectorAll('video').forEach((v) => { v.pause(); v.remove(); });
+    const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.playsInline = true; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
+    v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo prohlížeč formát neumí).', 'crit');
+    li.append(v);
+  }; });
+  el.querySelectorAll('[data-smazat]').forEach((a) => { a.onclick = async (ev) => {
+    ev.preventDefault();
+    if (!confirm('Smazat tuhle nahrávku? Zůstane jen záznam, že existovala.')) return;
+    try { const r = await fetch(`/api/nahravky/${encodeURIComponent(a.dataset.smazat)}`, { method: 'DELETE', credentials: 'same-origin' }); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'nepodařilo se'); toast('Nahrávka smazána.'); nahravkyCache.delete(pid); nactiNahravky(pid); }
+    catch (e) { toast(`Smazání se nepodařilo: ${e.message}`, 'crit'); }
+  }; });
 }
 
 /* Nahrávky na Google Disku: účet, který má poskytovatel připojený v Péče doma plus (Export dat); adresář zakládá dispečink. */
@@ -67,7 +89,9 @@ function diskUkaz(b) {
   diskInfo = b;
   const el = $('diskStav'), btn = $('diskSlozkaBtn'), odkaz = $('diskSlozkaOdkaz'), odpojit = $('diskOdpojitBtn');
   btn.disabled = true; btn.classList.remove('hide'); btn.textContent = 'Založit adresář na Google Disku'; odkaz.classList.add('hide'); odpojit.classList.add('hide');
-  if (!b || b.nastaveno === false) { el.textContent = 'Nahrávky na Google Disk nejsou na serveru nastavené: správce spustí ./deploy/vps-env.sh (klíč FAMICURA_KAMERA_KLIC) a v portálu Péče doma plus nasadí aplikaci pecedomaplus-kamera-disk.'; return; }
+  const u = b?.uloziste || {};
+  $('diskUloziste').textContent = u.server ? `Úložiště na serveru je připravené (šifrované soubory, mazání po ${b.dny || 30} dnech). Zvolené úložiště: ${b.volba === 'disk' ? 'Google Disk' : 'server'}.` : 'Úložiště na serveru není nastavené (správce: ./deploy/vps-env.sh vygeneruje NAHRAVKY_KLIC).';
+  if (!b || b.nastaveno === false || !u.disk) { el.textContent = 'Nahrávky na Google Disk nejsou na serveru nastavené: správce spustí ./deploy/vps-env.sh (klíč FAMICURA_KAMERA_KLIC) a v portálu Péče doma plus nasadí aplikaci pecedomaplus-kamera-disk.' + (u.server ? ' Nahrávky se ukládají na server.' : ''); return; }
   if (b.chyba) { el.textContent = `Stav Google Disku se nepodařilo zjistit: ${b.chyba}`; return; }
   if (!b.google || !b.google.pripojen) { el.textContent = 'Poskytovatel nemá v Péče doma plus připojený Google účet. Připojte ho v portálu Péče doma plus → Export dat → Připojit Google účet (stejný účet pak slouží i nahrávkám kamer).'; return; }
   if (!b.slozka) { el.textContent = `Google účet ${b.google.email} je připojený (z Péče doma plus). Nahrávky zatím nemají kam: založte adresář.`; btn.disabled = false; return; }
@@ -145,7 +169,7 @@ $('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.pre
 $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  const p = {}; for (const k of HL_POLE) p[k] = (k === 'eskalaceMin' || k === 'nahravkaS') ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  const p = {}; for (const k of HL_POLE) p[k] = (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(hlPole(k).value) : hlPole(k).value.trim();
   try {
     const r = await sim.setPoskytovatel(p);
     if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }

@@ -47,6 +47,8 @@ const { createSms } = await import('./src/sms.mjs');
 const { createUpozorneni } = await import('./src/upozorneni.mjs');
 const { createDisk } = await import('./src/disk.mjs');
 const { createNahravky } = await import('./src/nahravky.mjs');
+const { createUloziste } = await import('./src/uloziste.mjs');
+const zaznamy = await import('./src/zaznamy.mjs');
 const store = createStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 // The camera's own detections: the server subscribes to each camera in
@@ -76,7 +78,12 @@ const go2rtc = createGo2rtc();
 // Nahrávky na Google Disk poskytovatele (účet z Péče doma plus přes jhn-apps); bez klíče jen hlásí, že nejsou nastavené.
 const disk = createDisk();
 if (!disk.nastaveno) console.error('[famicura-tapo] Nahrávky na Google Disk nejsou nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC) – spusťte ./deploy/vps-env.sh.');
-const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, tabulky: pdp.tabulky, kamery: kameryTenanty }) : null;
+// Úložiště nahrávek na serveru: šifrované soubory v DATA_DIR/nahravky (klíč NAHRAVKY_KLIC).
+const uloziste = createUloziste({ dir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'nahravky') });
+if (!uloziste.nastaveno) console.error('[famicura-tapo] Úložiště nahrávek na serveru není nastavené (NAHRAVKY_KLIC) – spusťte ./deploy/vps-env.sh.');
+const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row) }) : null;
+// Automatické mazání nahrávek na serveru po době uchování (⚙ dispečinku): každou hodinu, poprvé po startu.
+if (nahravky) { const promaz = () => nahravky.promaz().catch((e) => console.error('[famicura-tapo] mazání nahrávek:', e.message)); setTimeout(promaz, 60 * 1000); setInterval(promaz, 60 * 60 * 1000); }
 const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }), nahravky });
 const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
 const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky });

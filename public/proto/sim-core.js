@@ -147,7 +147,7 @@ const FAKE = [
 
 /* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
  * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
-export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15 };
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkyUloziste: 'server', nahravkyDny: 30 };
 export function poskytovatel(s) { const p = { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; p.eskalaceMin = Number(p.eskalaceMin) || POSKYTOVATEL_VYCHOZI.eskalaceMin; return p; }
 /** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
 export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
@@ -372,7 +372,9 @@ const akce = {
   setPoskytovatel(s, now, p) {
     if (!p || typeof p !== 'object') throw chyba('Chybí údaje poskytovatele.');
     const n = { ...poskytovatel(s) };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && k !== 'eskalaceMin' && k !== 'nahravkaS') n[k] = str(p[k], 80, k).trim();
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && !['eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny'].includes(k)) n[k] = str(p[k], 80, k).trim();
+    if ('nahravkyUloziste' in p) { if (!['server', 'disk'].includes(p.nahravkyUloziste)) throw chyba('Úložiště nahrávek: server, nebo disk (Google Disk).'); n.nahravkyUloziste = p.nahravkyUloziste; }
+    if ('nahravkyDny' in p) { const m = Number(p.nahravkyDny); if (!Number.isInteger(m) || m < 1 || m > 365) throw chyba('Mazání nahrávek: 1 až 365 dnů.'); n.nahravkyDny = m; }
     if ('eskalaceMin' in p) { const m = Number(p.eskalaceMin); if (!Number.isInteger(m) || m < 1 || m > 60) throw chyba('Eskalace: 1 až 60 minut.'); n.eskalaceMin = m; }
     if ('nahravkaS' in p) { const m = Number(p.nahravkaS); if (!Number.isInteger(m) || m < 5 || m > 60) throw chyba('Délka nahrávky: 5 až 60 sekund.'); n.nahravkaS = m; }
     if (!n.nazev) throw chyba('Název poskytovatele nesmí být prázdný.');

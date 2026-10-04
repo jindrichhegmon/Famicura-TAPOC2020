@@ -18,7 +18,10 @@
  *   GET  /api/nahravky/stav     Google účet z Péče doma plus a adresář nahrávek tenanta
  *   POST /api/nahravky/slozka   { nazev? } založí adresář na Disku tenanta (jen když žádný není zapojený)
  *   POST /api/nahravky/odpojit  odpojí zapojený adresář (na Disku zůstává), pak jde založit nový
- *   GET  /api/nahravky?kamera=&limit=   seznam nahrávek (tabulka A_KAM_Nahravka)
+ *   GET  /api/nahravky?kamera=&limit=   seznam nahrávek (tabulka A_KAM_Nahravka); rodina jen své kamery
+ *   GET  /api/nahravky/:id/soubor   přehrání nahrávky ze serveru (Range), každé přehrání do auditu A_KAM_Prehrani; z Disku přesměruje
+ *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
+ *   DELETE /api/nahravky/:id        smazání (poskytovatel)
  *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery a uloží na Disk
  *   POST /api/nahravky?kamera=&cas=&delkaS=&zdroj=&text=   tělo = soubor (video/mp4 | video/webm) z hlavní aplikace
  *
@@ -134,7 +137,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     const m = req.method.toUpperCase();
 
     try {
-      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && disk && disk.nastaveno) });
+      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false } });
 
       // Tenant pro přihlašovací stránku: jen název, aby uživatel viděl, že je u správného poskytovatele.
       if (m === 'GET' && path === '/api/tenant') {
@@ -352,19 +355,67 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
 
       // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.
       if (path === '/api/nahravky' || path.startsWith('/api/nahravky/')) {
-        if (rodina) return jenPoskytovatel();
-        const nejsou = () => json({ ok: false, nastaveno: false, error: 'Nahrávky na Google Disk nejsou na serveru nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC – ./deploy/vps-env.sh).' }, 503);
+        const nejsou = () => json({ ok: false, nastaveno: false, error: 'Nahrávky nejsou na serveru nastavené (NAHRAVKY_KLIC pro úložiště na serveru, nebo JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC pro Google Disk – ./deploy/vps-env.sh).' }, 503);
         // Správce bez tenanta (hlavní aplikace): tenant podle kamery z cameras.json.
         const tenantKamery = async (id) => { const c = (await kamery()).find((k) => k.id === id); return c ? c.tenant : ''; };
+        const mojeKamery = async () => rodina ? rodina.kamery : null;   // rodina: jen své kamery
+        // Přehrání: kdokoli, kdo kameru smí vidět (rodina jen své); ze serveru s auditem, z Disku přesměrováním.
+        const mSoubor = path.match(/^\/api\/nahravky\/([A-Za-z0-9_-]{4,40})\/(soubor|audit)$/);
+        if (m === 'GET' && mSoubor) {
+          if (!nahravky) return nejsou();
+          const t = tenant;
+          if (!t) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
+          const n = await nahravky.podleId(t, mSoubor[1]);
+          if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
+          if (mSoubor[2] === 'audit') { if (rodina) return jenPoskytovatel(); return json({ ok: true, nahravka: n, prehrani: await nahravky.prehraniSeznam(t, n.id) }); }
+          const adresa = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim();
+          const kdoText = rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce';
+          if (n.uloziste === 'disk' && n.url) {
+            await nahravky.prehrani(t, { nahravkaId: n.id, kameraId: n.kameraId, kdo: kdoText, role: ja.role, adresa });
+            return new Response(null, { status: 302, headers: { Location: n.url, 'Cache-Control': 'no-store' } });
+          }
+          const { data, mime, nazev } = await nahravky.soubor(t, n);
+          // audit jen jednou na přehrání: prohlížeč si při přehrávání říká o části (Range) opakovaně
+          const range = req.headers.get('range');
+          if (!range || /^bytes=0-/.test(range)) await nahravky.prehrani(t, { nahravkaId: n.id, kameraId: n.kameraId, kdo: kdoText, role: ja.role, adresa });
+          const hl = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-store', 'Content-Disposition': `inline; filename="${nazev.replace(/[^A-Za-z0-9._-]/g, '_')}"` };
+          const mr = range && range.match(/^bytes=(\d*)-(\d*)$/);
+          if (mr && (mr[1] || mr[2])) {
+            let od = mr[1] ? Number(mr[1]) : Math.max(0, data.length - Number(mr[2]));
+            let kon = mr[1] && mr[2] ? Math.min(Number(mr[2]), data.length - 1) : data.length - 1;
+            if (od >= data.length || od > kon) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${data.length}` } });
+            return new Response(data.subarray(od, kon + 1), { status: 206, headers: { ...hl, 'Content-Range': `bytes ${od}-${kon}/${data.length}`, 'Content-Length': String(kon - od + 1) } });
+          }
+          return new Response(data, { status: 200, headers: { ...hl, 'Content-Length': String(data.length) } });
+        }
+        if (m === 'GET' && path === '/api/nahravky') {
+          if (!nahravky) return nejsou();
+          const k = url.searchParams.get('kamera') || '';
+          if (k && !(await smiKameruId(k))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+          const t = tenant || (k ? await tenantKamery(k) : '');
+          if (!t) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
+          return json({ ok: true, nahravky: await nahravky.seznam(t, { kameraId: k, kamery: await mojeKamery(), limit: Number(url.searchParams.get('limit')) || 50 }) });
+        }
+        if (rodina) return jenPoskytovatel();
         if (m === 'GET' && path === '/api/nahravky/stav') {
-          if (!nahravky || !disk || !disk.nastaveno) return json({ ok: true, nastaveno: false, error: 'Nahrávky na Google Disk nejsou na serveru nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC – ./deploy/vps-env.sh).' });
+          if (!nahravky) return json({ ok: true, nastaveno: false, uloziste: { server: false, disk: false }, error: 'Nahrávky nejsou na serveru nastavené (NAHRAVKY_KLIC, nebo JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC – ./deploy/vps-env.sh).' });
           const t = tenant || await tenantKamery(url.searchParams.get('kamera') || '');
-          if (!t) return json({ ok: true, nastaveno: true, tenant: null });
-          try { const s = await disk.stav(t); return json({ ok: true, nastaveno: true, tenant: t, google: s.google, slozka: s.slozka, delkaS: (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel?.nahravkaS || 15 }); }
-          catch (e) { return json({ ok: true, nastaveno: true, tenant: t, google: null, slozka: null, chyba: e.message }); }
+          if (!t) return json({ ok: true, nastaveno: nahravky.nastaveno, uloziste: nahravky.uloziste, tenant: null });
+          const posk = (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel || {};
+          const out = { ok: true, nastaveno: nahravky.nastaveno, uloziste: nahravky.uloziste, tenant: t, volba: posk.nahravkyUloziste || 'server', dny: posk.nahravkyDny || 30, delkaS: posk.nahravkaS || 15, google: null, slozka: null };
+          if (disk && disk.nastaveno) { try { const s = await disk.stav(t); out.google = s.google; out.slozka = s.slozka; } catch (e) { out.chyba = e.message; } }
+          return json(out);
         }
         if (!nahravky) return nejsou();
         const bezDisku = !disk || !disk.nastaveno;
+        const mId = path.match(/^\/api\/nahravky\/([A-Za-z0-9_-]{4,40})$/);
+        if (m === 'DELETE' && mId) {
+          const t = tenant; if (!t) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
+          const n = await nahravky.podleId(t, mId[1]);
+          if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
+          await nahravky.smaz(t, n);
+          return json({ ok: true });
+        }
         if (m === 'POST' && path === '/api/nahravky/slozka') {
           if (bezDisku) return nejsou();
           const { nazev } = await telo(req);
@@ -376,15 +427,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           const s = await disk.odpojSlozku((await stavTenanta()).tenant);
           return json({ ok: true, google: s.google, slozka: s.slozka, zprava: s.zprava || '' });
         }
-        if (m === 'GET' && path === '/api/nahravky') {
-          const k = url.searchParams.get('kamera') || '';
-          if (k && !(await smiKameruId(k))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
-          const t = tenant || (k ? await tenantKamery(k) : '');
-          if (!t) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
-          return json({ ok: true, nahravky: await nahravky.seznam(t, { kameraId: k, limit: Number(url.searchParams.get('limit')) || 50 }) });
-        }
         if (m === 'POST' && path === '/api/nahravky/rucni') {
-          if (bezDisku) return nejsou();
           const { kamera, delkaS } = await telo(req);
           if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
           const st = await stavTenanta();
@@ -392,13 +435,12 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           const p = s.state.patients.find((x) => x.id === kamera);
           const smi = nahravky.smiNahravat(s.state, p, 'state');
           if (!smi.ok) return json({ ok: false, error: `Nahrávka se nepořídí: ${smi.duvod}.` }, 403);
-          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, zdroj: 'rucni', kdo: ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
+          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, uloziste: s.state.poskytovatel?.nahravkyUloziste, zdroj: 'rucni', kdo: ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
           if (n.preskoceno) return json({ ok: false, error: n.duvod }, 409);
           if (n.chyba) return json({ ok: false, nahravka: n, error: n.chyba }, 502);
           return json({ ok: true, nahravka: n });
         }
         if (m === 'POST' && path === '/api/nahravky') {
-          if (bezDisku) return nejsou();
           const k = url.searchParams.get('kamera') || '';
           if (!isDeviceId(k) || !(await smiKameruId(k))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
           const t = tenant || await tenantKamery(k);
@@ -407,7 +449,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (!/^video\/(mp4|webm)$/.test(mime)) return json({ ok: false, error: 'Tělo musí být video/mp4 nebo video/webm.' }, 415);
           const data = Buffer.from(await req.arrayBuffer());
           if (data.length < 1024) return json({ ok: false, error: 'Prázdná nahrávka.' }, 400);
-          const n = await nahravky.uloz(t, { kameraId: k, data, mime, cas: Number(url.searchParams.get('cas')) || undefined, delkaS: Number(url.searchParams.get('delkaS')) || null,
+          const volba = (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel?.nahravkyUloziste || 'server';
+          const n = await nahravky.uloz(t, { kameraId: k, data, mime, cas: Number(url.searchParams.get('cas')) || undefined, delkaS: Number(url.searchParams.get('delkaS')) || null, uloziste: volba,
             zdroj: ['rucni', 'plan', 'udalost'].includes(url.searchParams.get('zdroj')) ? url.searchParams.get('zdroj') : 'rucni', kdo: ja.jmeno || 'Správce', text: (url.searchParams.get('text') || '').slice(0, 300) });
           return n.chyba ? json({ ok: false, nahravka: n, error: n.chyba }, 502) : json({ ok: true, nahravka: n });
         }

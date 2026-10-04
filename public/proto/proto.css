@@ -88,6 +88,7 @@ th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;l
 .tiles[data-pocet="1"] .tile .tag,.tiles[data-pocet="2"] .tile .tag{font-size:.95rem;padding:5px 12px}
 .tiles[data-pocet="1"] .tile .st-badge,.tiles[data-pocet="2"] .tile .st-badge{font-size:.85rem}
 .tiles .bezkamery{font-size:1.05rem;max-width:720px;grid-column:1/-1}
+video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border-radius:10px;background:#000}
 .tile{background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px;cursor:pointer;transition:border-color .2s}
 .tile.sel{outline:3px solid var(--blue);outline-offset:1px}
 .tile.klid{border-color:var(--line)}

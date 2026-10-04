@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createNahravky, smiNahravat, DELKA_VYCHOZI } from '../src/nahravky.mjs';
 import { createDisk } from '../src/disk.mjs';
+import { createUloziste, zasifruj, desifruj, klicZTextu } from '../src/uloziste.mjs';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createStavTenantu } from '../src/stav-tenant.mjs';
 import { createMockTabulky } from './mock-tabulky.mjs';
 import { seed, proved } from '../public/proto/sim-core.js';
@@ -119,4 +123,36 @@ test('disk: token z jhn-apps (s klíčem), resumable upload na Google Disk, toke
   const bez = createDisk({ url: 'https://jhn', token: '', klic: '', fetchImpl, log: ticho });
   assert.equal(bez.nastaveno, false);
   await assert.rejects(() => bez.stav(T), /nejsou na serveru nastavené/);
+});
+
+test('uloziste: AES-256-GCM, soubor na disku není čitelný bez klíče, klíč z base64url i hex, cizí tenant/id odmítne', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'fkn-'));
+  const klic = klicZTextu(Buffer.alloc(32, 3).toString('base64url'));
+  assert.equal(klic.length, 32); assert.equal(klicZTextu('ab'.repeat(32)).length, 32); assert.equal(klicZTextu('kratke'), null); assert.equal(klicZTextu(''), null);
+  const u = createUloziste({ dir, klic });
+  assert.equal(u.nastaveno, true);
+  const data = Buffer.from('tajna nahravka '.repeat(100));
+  const v = await u.uloz(T, 'n123abc', data);
+  assert.equal(v.soubor, T + '/n123abc.enc'); assert.equal(v.velikost, data.length);
+  const raw = readFileSync(path.join(dir, T, 'n123abc.enc'));
+  assert.equal(raw.includes('tajna nahravka'), false, 'na disku je šifrovaný');
+  assert.equal(raw.subarray(0, 4).toString(), 'FKN1');
+  assert.equal((await u.cti(T, 'n123abc')).equals(data), true);
+  assert.throws(() => desifruj(Buffer.alloc(32, 4), raw), /Unsupported state|unable to authenticate|auth/i, 'jiný klíč nedešifruje');
+  assert.equal(zasifruj(klic, data).equals(zasifruj(klic, data)), false, 'každé uložení má jiný iv');
+  await assert.rejects(() => u.cti(T, 'neni'), /už není/);
+  await assert.rejects(() => u.uloz('../x', 'n1', data), /tenant/);
+  await assert.rejects(() => u.uloz(T, '../../etc', data), /id nahrávky/);
+  assert.equal(await u.smaz(T, 'n123abc'), true); assert.equal(await u.smaz(T, 'n123abc'), false);
+  const bez = createUloziste({ dir, klic: null });
+  assert.equal(bez.nastaveno, false); await assert.rejects(() => bez.uloz(T, 'n1', data), /NAHRAVKY_KLIC/);
+});
+
+test('cíl nahrávky: volba poskytovatele, náhrada podle toho, co je nastavené', () => {
+  const tb = createMockTabulky();
+  const jen = (server, disk) => createNahravky({ go2rtc: fakeGo2rtc(), disk: disk ? fakeDisk() : null, uloziste: server ? { nastaveno: true } : null, tabulky: tb, kamery, log: ticho });
+  assert.equal(jen(true, true).cil('server'), 'server'); assert.equal(jen(true, true).cil('disk'), 'disk');
+  assert.equal(jen(true, false).cil('disk'), 'server', 'bez Disku se ukládá na server'); assert.equal(jen(false, true).cil('server'), 'disk', 'bez klíče serveru na Disk');
+  assert.throws(() => jen(false, false).cil('server'), /nemají kam/);
+  assert.deepEqual(jen(true, false).uloziste, { server: true, disk: false });
 });

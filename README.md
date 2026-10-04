@@ -85,6 +85,35 @@ Safari (Mac i iPhone) do složky zapisovat neumí; místo toho je tam
 zatržítko **Každou hotovou nahrávku rovnou stáhnout**, po němž jde každá
 nahrávka sama do složky Stažené soubory prohlížeče.
 
+### Úložiště nahrávek na serveru (od 2.2, doporučené)
+
+⚙ Nastavení → **Úložiště nahrávek**: *Na serveru* (výchozí) nebo *Google
+Disk poskytovatele* (níže). Na serveru:
+
+- **Soubory** v `DATA_DIR/nahravky/<tenant>/<id>.enc`, šifrované AES-256-GCM
+  klíčem `NAHRAVKY_KLIC` (`src/uloziste.mjs`; 32 B base64url, generuje
+  `vps-env.sh`, při ztrátě klíče jsou staré nahrávky nečitelné). Nahrávka
+  z prohlížeče (hlavní aplikace, `POST /api/nahravky`) zůstává v režimu,
+  ve kterém byla pořízena: rozostřená zůstane rozostřená. Nahrávka ze
+  serveru po události (go2rtc) je plný obraz, proto platí pravidlo
+  soukromí níže.
+- **Přehrávání jen v aplikaci** (`GET /api/nahravky/:id/soubor`, s Range
+  pro posouvání): dispečink a správce tenanta, rodina jen u svých kamer
+  (karta Nahrávky v aplikaci rodiny, 🎞 u události v historii). Každé
+  přehrání (celé nebo od začátku) se zapíše do auditu `A_KAM_Prehrani`
+  (kdo, role, čas, adresa); dispečink ho vidí přes
+  `GET /api/nahravky/:id/audit`. Nahrávka na Google Disku se otevře
+  přesměrováním (také s auditem).
+- **Mazání**: automaticky po době uchování (⚙ *Uchovat nahrávky*, 1–365
+  dnů, výchozí 30), kontrola každou hodinu (`nahravky.promaz()`), soubor
+  zmizí a řádek dostane `SmazanoCas`; ručně `DELETE /api/nahravky/:id`
+  (dispečink). Nahrávky na Google Disku server nemaže.
+- **Evidence v CLB1**: každá uložená nahrávka jde i do
+  `FamicuraRingNahravky` (Soubor = název, Složka = `server:<tenant>` nebo
+  `Google Disk <účet>`, Zdroj = rucni / plan / udalost).
+- Bez `NAHRAVKY_KLIC` se ukládá na Google Disk (je-li nastavený) a naopak;
+  bez obojího server nahrávku nepořídí a řekne to.
+
 ### Nahrávky na Google Disku poskytovatele (od 2.1)
 
 Stejný princip jako Export dat v Péče doma plus: poskytovatel má Google
@@ -232,7 +261,7 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
-Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.1**) a
+Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.2**) a
 ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
@@ -439,11 +468,11 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.1) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.2) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
-`git tag -a v2.2 -m "Famicura Kamera 2.2" && git push origin v2.2`.
+`git tag -a v2.3 -m "Famicura Kamera 2.3" && git push origin v2.3`.
 Drobné opravy mezi verzemi číslo nemění.
 
 ## Prezentace a video

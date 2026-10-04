@@ -41,6 +41,8 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs prevezmi SQL_PASSWORD $S
 }
 
 $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs generuj SESSION_KEY'"
+# Nahrávky uložené na serveru jsou šifrované tímhle klíčem (jen na serveru; při ztrátě klíče jsou staré nahrávky nečitelné).
+$SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs generuj NAHRAVKY_KLIC'"
 
 echo
 echo "Databáze PeceDomaPlus (tenanti a data poskytovatelů, login pecedomaplus_app): heslo z $JHN_ZDROJ, jinak ručně."
@@ -113,6 +115,6 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs stav'"
 $SSH "$VPS" "$JAKO 'cd $DIR && [ -f deploy/ecosystem.config.cjs ] && PORT=$PORT pm2 startOrRestart deploy/ecosystem.config.cjs --update-env >/dev/null && pm2 save >/dev/null && echo \"Aplikace restartována.\" || echo \"Aplikace ještě není nasazená – spusťte ./deploy/vps-deploy.sh\"'"
 sleep 4
 echo "Kontrola serveru (tenanti = databáze PeceDomaPlus, dispecer = přihlášení účtem Péče doma plus):"
-$SSH "$VPS" "curl -s http://127.0.0.1:$PORT/api/health" | tr ',' '\n' | grep -E '"(ok|tenanti|dispecer|nahravky)"' | sed 's/^/   /'
+$SSH "$VPS" "curl -s http://127.0.0.1:$PORT/api/health" | tr ',' '\n' | grep -E '"(ok|tenanti|dispecer|nahravky|uloziste)"' | sed 's/^/   /'
 echo "Poslední hlášky serveru o databázi:"
 $SSH "$VPS" "$JAKO 'pm2 logs famicura-tapo --lines 60 --nostream 2>/dev/null | grep -i \"pdp\|PeceDomaPlus\|jhn-apps\" | tail -5'" | sed 's/^/   /'

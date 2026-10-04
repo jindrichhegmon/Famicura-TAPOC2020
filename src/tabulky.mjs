@@ -47,8 +47,14 @@ export const SCHEMA = {
   A_KAM_Nahravka: {
     klic: ['Id'],
     sloupce: { Id: ['c', 40], KameraID: ['c', 40], Cas: ['i'], DelkaS: ['i'], Velikost: ['i'], UdalostId: ['c', 40], Druh: ['c', 20], Zdroj: ['c', 20],
-      Nazev: ['s', 200], SouborID: ['s', 120], Url: ['s', 400], Email: ['s', 120], Kdo: ['s', 80], Chyba: ['s', 300] },
+      Nazev: ['s', 200], SouborID: ['s', 120], Url: ['s', 400], Email: ['s', 120], Kdo: ['s', 80], Chyba: ['s', 300],
+      Uloziste: ['c', 10], Soubor: ['s', 200], Mime: ['c', 40], SmazanoCas: ['i'] },
     indexy: [['Cas'], ['KameraID', 'Cas']],
+  },
+  A_KAM_Prehrani: {
+    klic: ['Id'],
+    sloupce: { Id: ['c', 40], NahravkaId: ['c', 40], KameraID: ['c', 40], Cas: ['i'], Kdo: ['s', 80], Role: ['c', 12], Adresa: ['s', 60] },
+    indexy: [['Cas'], ['NahravkaId']],
   },
   A_KAM_UzivatelRodiny: {
     klic: ['Id'],
@@ -73,6 +79,8 @@ ${sl},
   Zapsano datetime2 NOT NULL DEFAULT SYSDATETIME(),
   CONSTRAINT PK_${tab} PRIMARY KEY CLUSTERED (IDTENANT, ${def.klic.join(', ')})
 );`);
+    // sloupce doplněné později (tabulka už na serveru je): přidat, když chybí
+    for (const [n, t] of Object.entries(def.sloupce)) if (!def.klic.includes(n)) out.push(`IF COL_LENGTH(N'dbo.${tab}', N'${n}') IS NULL ALTER TABLE dbo.${tab} ADD ${n} ${typSql(t)} NULL;`);
     for (const ix of def.indexy || []) {
       const nazev = `IX_${tab}_${ix.join('_')}`;
       out.push(`IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'${nazev}' AND object_id = OBJECT_ID(N'dbo.${tab}'))

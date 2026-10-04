@@ -5,6 +5,29 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.2 · 4. 10. 2026 · úložiště nahrávek na serveru, přehrávání v aplikaci
+
+- **Druhá volba úložiště: na serveru (doporučeno).** ⚙ Nastavení → Úložiště
+  nahrávek: *Na serveru* nebo *Google Disk poskytovatele*. Na serveru jsou
+  soubory v `data/nahravky/<tenant>/` šifrované AES-256-GCM klíčem
+  `NAHRAVKY_KLIC` (`src/uloziste.mjs`; `vps-env.sh` ho vygeneruje). Nahrávka
+  z prohlížeče zůstává v režimu, ve kterém byla pořízena (rozostřená zůstane
+  rozostřená); server ji jen uloží.
+- **Přehrávání jen v aplikaci s kontrolou přístupu**
+  (`GET /api/nahravky/:id/soubor`, Range pro posouvání): dispečink
+  poskytovatele a rodina jen u svých kamer (karta Nahrávky v aplikaci rodiny,
+  odkaz 🎞 u události v historii). **Každé přehrání je v auditu**
+  (`A_KAM_Prehrani`: kdo, role, čas, adresa; dispečink
+  `GET /api/nahravky/:id/audit`).
+- **Automatické mazání** po době uchování (⚙ Uchovat nahrávky, výchozí 30
+  dnů; nahrávky na Google Disku se nemažou), kontrola každou hodinu; řádek
+  zůstává v evidenci se značkou smazání. Dispečink může nahrávku smazat ručně.
+- **Evidence v CLB1**: každou uloženou nahrávku (ze serveru i z prohlížeče)
+  server zapíše do `FamicuraRingNahravky` (Soubor = název, Složka =
+  `server:<tenant>` nebo `Google Disk <účet>`).
+- Tabulka `A_KAM_Nahravka` má nové sloupce (Uloziste, Soubor, Mime,
+  SmazanoCas); DDL doplní chybějící sloupce i do tabulek, které už existují.
+
 ## 2.1 · 4. 10. 2026 · nahrávky na Google Disku poskytovatele
 
 - **Nahrávky kamer se ukládají na Google Disk poskytovatele** stejným
