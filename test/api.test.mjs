@@ -691,6 +691,12 @@ test('úložiště na serveru: nahrávka z prohlížeče zůstane šifrovaně na
   const u = await uzivatele.vytvor({ jmeno: 'Petr Novák', telefon: '777123456', kamery: ['tapoc2020'] });
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
   const rc = cookieRodina(T, rod.id).split(';')[0];
+  // stažení celého souboru: příloha s názvem nahrávky, v auditu jako stažení; rodina nesmí
+  r = await h(new Request('http://localhost/api/nahravky/' + n1.id + '/soubor?stahnout=1', { headers: { cookie: cookie() } }));
+  assert.equal(r.status, 200); assert.match(r.headers.get('content-disposition'), /^attachment; filename="[A-Za-z0-9._-]+\.(mp4|webm)"$/); assert.equal((await r.arrayBuffer()).byteLength, 5000, 'celý soubor z prohlížeče');
+  assert.equal((await h(new Request('http://localhost/api/nahravky/' + n1.id + '/soubor?stahnout=1', { headers: { cookie: rc } }))).status, 403, 'rodina nestahuje');
+  const auS = await (await h(req('GET', '/api/nahravky/' + n1.id + '/audit', { cookies: cookie() }))).json();
+  assert.equal(auS.prehrani.filter((p) => /\(stažení\)$/.test(p.kdo)).length, 1, 'stažení v auditu');
   r = await h(new Request('http://localhost/api/nahravky/' + n1.id + '/soubor', { headers: { cookie: rc } }));
   assert.equal(r.status, 200);
   assert.equal((await h(req('GET', '/api/nahravky/' + n1.id + '/audit', { cookies: rc }))).status, 403);

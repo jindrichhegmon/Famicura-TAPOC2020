@@ -30,6 +30,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   řádky `[nahravky]`). Skutečná událost z kamery se nahrává, i když je kamera
   v dispečinku označená jako nedostupná (právě ji sama nahlásila). Tlačítko
   Nahrát teď hlásí, kam se uložilo (server / Google Disk).
+- **Stažení nahrávky ze serveru** (dispečink → Nahrávky → ⬇ stáhnout):
+  soubor `.mp4` se uloží do počítače pod názvem nahrávky (kamera, datum, čas,
+  druh události); server ho dešifruje jen pro přihlášeného dispečera a stažení
+  zapíše do auditu jako „stažení“ (`GET /api/nahravky/:id/soubor?stahnout=1`).
+  Rodina nahrávky jen přehrává.
 
 ## 2.4 · 4. 10. 2026 · všechny detekce kamery Tapo v nastavení
 

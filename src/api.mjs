@@ -19,7 +19,8 @@
  *   POST /api/nahravky/slozka   { nazev? } založí adresář na Disku tenanta (jen když žádný není zapojený)
  *   POST /api/nahravky/odpojit  odpojí zapojený adresář (na Disku zůstává), pak jde založit nový
  *   GET  /api/nahravky?kamera=&limit=   seznam nahrávek (tabulka A_KAM_Nahravka); rodina jen své kamery
- *   GET  /api/nahravky/:id/soubor   přehrání nahrávky ze serveru (Range), každé přehrání do auditu A_KAM_Prehrani; z Disku přesměruje
+ *   GET  /api/nahravky/:id/soubor   přehrání nahrávky ze serveru (Range), každé přehrání do auditu A_KAM_Prehrani; z Disku přesměruje;
+ *                                   ?stahnout=1 = stažení celého souboru (poskytovatel), v auditu jako „stažení“
  *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
  *   DELETE /api/nahravky/:id        smazání (poskytovatel)
  *   POST /api/ptz               { kamera, smer: left|right|up|down|home|stop } otočení kamery (ONVIF PTZ; rodina jen svou)
@@ -405,10 +406,17 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
             return new Response(null, { status: 302, headers: { Location: n.url, 'Cache-Control': 'no-store' } });
           }
           const { data, mime, nazev } = await nahravky.soubor(t, n);
+          const souborNazev = nazev.replace(/[^A-Za-z0-9._-]/g, '_');
+          // stažení celého souboru (poskytovatel): do auditu jako „stažení“, prohlížeč ho uloží pod názvem nahrávky
+          if (url.searchParams.get('stahnout') === '1') {
+            if (rodina) return jenPoskytovatel();
+            await nahravky.prehrani(t, { nahravkaId: n.id, kameraId: n.kameraId, kdo: `${kdoText} (stažení)`, role: ja.role, adresa });
+            return new Response(data, { status: 200, headers: { 'Content-Type': mime, 'Cache-Control': 'private, no-store', 'Content-Disposition': `attachment; filename="${souborNazev}"`, 'Content-Length': String(data.length) } });
+          }
           // audit jen jednou na přehrání: prohlížeč si při přehrávání říká o části (Range) opakovaně
           const range = req.headers.get('range');
           if (!range || /^bytes=0-/.test(range)) await nahravky.prehrani(t, { nahravkaId: n.id, kameraId: n.kameraId, kdo: kdoText, role: ja.role, adresa });
-          const hl = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-store', 'Content-Disposition': `inline; filename="${nazev.replace(/[^A-Za-z0-9._-]/g, '_')}"` };
+          const hl = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-store', 'Content-Disposition': `inline; filename="${souborNazev}"` };
           const mr = range && range.match(/^bytes=(\d*)-(\d*)$/);
           if (mr && (mr[1] || mr[2])) {
             let od = mr[1] ? Number(mr[1]) : Math.max(0, data.length - Number(mr[2]));

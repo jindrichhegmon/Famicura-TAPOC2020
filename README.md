@@ -97,6 +97,10 @@ Safari (Mac i iPhone) do složky zapisovat neumí; místo toho je tam
 zatržítko **Každou hotovou nahrávku rovnou stáhnout**, po němž jde každá
 nahrávka sama do složky Stažené soubory prohlížeče.
 
+Nahrávku ze serveru dispečink také stáhne (⬇ stáhnout, `?stahnout=1`):
+server soubor dešifruje a pošle jako přílohu pod názvem nahrávky; stažení
+je v auditu (`A_KAM_Prehrani`, Kdo „… (stažení)“). Rodina jen přehrává.
+
 ### Log událostí za období a export do Excelu (od 2.5)
 
 V detailu kamery (Monitoring → Historie) jde zvolit období *od–do* (dny
