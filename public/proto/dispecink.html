@@ -30,6 +30,7 @@
     </div>
   </div>
   <div id="critBanner"></div>
+  <div class="banner warn hide" id="diskVarovani" role="status"><span class="grow"></span><button class="sm sec" type="button" id="diskVarovaniNast">⚙ Nastavení</button></div>
   <div class="cm ovl hide" id="nastaveni" role="dialog" aria-labelledby="nastaveniT">
     <form class="modal" id="hlForm">
       <header><div><h3 id="nastaveniT">Nastavení poskytovatele a dispečinku</h3><div class="sub">Všechno, co se zobrazuje v záhlaví, v detailu kamery, v kartě Směna a v aplikaci rodiny. Ukládá se na server pro všechny dispečery.</div></div><button class="x" type="button" id="nastaveniZavrit" aria-label="Zavřít">✕</button></header>
@@ -57,6 +58,7 @@
           <div class="fld"><label for="hlNahravkyUloziste">Úložiště nahrávek</label><select id="hlNahravkyUloziste"><option value="server">Na serveru (doporučeno)</option><option value="disk">Google Disk poskytovatele</option></select><div class="help">na serveru: šifrované, přehrání jen v aplikaci s auditem, mazání po době uchování; Google Disk: účet z Péče doma plus</div></div>
           <div class="fld"><label for="hlNahravkyDisk">Google Disk</label><label class="small" style="display:flex;gap:8px;align-items:center;min-height:38px"><input type="checkbox" id="hlNahravkyDisk"> ukládat kopii každé nahrávky i na Google Disk poskytovatele</label><div class="help">vypnuto = na Google Disk se nic neposílá, i když je adresář zapojený; zapnuto = nahrávka je na serveru i na Disku</div></div>
           <div class="fld"><label for="hlNahravkyDny">Uchovat nahrávky (dnů)</label><input type="number" id="hlNahravkyDny" min="1" max="365" step="1" required><div class="help">nahrávky na serveru se po této době samy smažou (např. 30 dnů podle právníka); na Google Disku zůstávají</div></div>
+          <div class="fld"><label for="hlNahravkyGB">Limit místa nahrávek (GB)</label><input type="number" id="hlNahravkyGB" min="0" max="500" step="0.5" required><div class="help">nad tento objem se nejstarší nahrávky poskytovatele mažou dřív než po době uchování; 0 = bez limitu</div></div>
         </div>
         <div class="sec">Zobrazení na tomto počítači</div>
         <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>

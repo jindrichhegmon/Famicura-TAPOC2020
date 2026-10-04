@@ -159,7 +159,7 @@ const FAKE = [
 
 /* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
  * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
-export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false };
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2 };
 export function poskytovatel(s) { const p = { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; p.eskalaceMin = Number(p.eskalaceMin) || POSKYTOVATEL_VYCHOZI.eskalaceMin; return p; }
 /** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
 export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
@@ -384,7 +384,8 @@ const akce = {
   setPoskytovatel(s, now, p) {
     if (!p || typeof p !== 'object') throw chyba('Chybí údaje poskytovatele.');
     const n = { ...poskytovatel(s) };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && !['eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk'].includes(k)) n[k] = str(p[k], 80, k).trim();
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && !['eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'].includes(k)) n[k] = str(p[k], 80, k).trim();
+    if ('nahravkyGB' in p) { const m = Number(p.nahravkyGB); if (!Number.isFinite(m) || m < 0 || m > 500) throw chyba('Limit místa nahrávek: 0 (bez limitu) až 500 GB.'); n.nahravkyGB = Math.round(m * 10) / 10; }
     if ('nahravkyDisk' in p) n.nahravkyDisk = p.nahravkyDisk === true || p.nahravkyDisk === 'true' || p.nahravkyDisk === 1;
     if ('nahravkyUloziste' in p) { if (!['server', 'disk'].includes(p.nahravkyUloziste)) throw chyba('Úložiště nahrávek: server, nebo disk (Google Disk).'); n.nahravkyUloziste = p.nahravkyUloziste; }
     if ('nahravkyDny' in p) { const m = Number(p.nahravkyDny); if (!Number.isInteger(m) || m < 1 || m > 365) throw chyba('Mazání nahrávek: 1 až 365 dnů.'); n.nahravkyDny = m; }

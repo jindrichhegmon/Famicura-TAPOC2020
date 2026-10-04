@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 /* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
 let JA = null;
 const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk'];
+const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
@@ -104,7 +104,9 @@ function diskUkaz(b) {
   $('diskUloziste').textContent = u.server ? `Úložiště na serveru je připravené (šifrované soubory, mazání po ${b.dny || 30} dnech). Zvolené úložiště: ${b.volba === 'disk' ? 'Google Disk' : 'server'}; kopie na Google Disk ${b.kopieDisk ? 'zapnutá' : 'vypnutá'}.` : 'Úložiště na serveru není nastavené (správce: ./deploy/vps-env.sh vygeneruje NAHRAVKY_KLIC).';
   const mb = (x) => x == null ? '?' : x >= 1073741824 ? (x / 1073741824).toFixed(1).replace('.', ',') + ' GB' : (x / 1048576).toFixed(1).replace('.', ',') + ' MB';
   const mi = b?.misto;
-  $('diskMisto').textContent = mi ? `Nahrávky tohoto poskytovatele zabírají na serveru ${mb(mi.bajty)} (${mi.soubory} ${mi.soubory === 1 ? 'soubor' : mi.soubory >= 2 && mi.soubory <= 4 ? 'soubory' : 'souborů'})${mi.celkem ? `; volné místo na serveru ${mb(mi.volne)} z ${mb(mi.celkem)}` : ''}.` : '';
+  $('diskMisto').textContent = mi ? `Nahrávky tohoto poskytovatele zabírají na serveru ${mb(mi.bajty)} (${mi.soubory} ${mi.soubory === 1 ? 'soubor' : mi.soubory >= 2 && mi.soubory <= 4 ? 'soubory' : 'souborů'})${mi.limitGB ? ` z limitu ${mb(mi.limitGB * 1073741824)}` : ', bez limitu'}${mi.celkem ? `; volné místo na serveru ${mb(mi.volne)} z ${mb(mi.celkem)}` : ''}${mi.minVolneGB ? ` (pojistka serveru: pod ${mb(mi.minVolneGB * 1073741824)} volného se mažou nejstarší nahrávky)` : ''}.${mi.varovani ? ' ' + mi.varovani : ''}` : '';
+  $('diskMisto').classList.toggle('bad', !!mi?.varovani);
+  diskVarovaniUkaz(mi?.varovani || '');
   if (!b || b.nastaveno === false || !u.disk) { el.textContent = 'Nahrávky na Google Disk nejsou na serveru nastavené: správce spustí ./deploy/vps-env.sh (klíč FAMICURA_KAMERA_KLIC) a v portálu Péče doma plus nasadí aplikaci pecedomaplus-kamera-disk.' + (u.server ? ' Nahrávky se ukládají na server.' : ''); return; }
   if (!b.kopieDisk && b.volba !== 'disk') { el.textContent = 'Google Disk je vypnutý (zaškrtávátko „Google Disk“ výše): nahrávky zůstávají jen na serveru' + (b.slozka ? `, adresář „${b.slozka.nazev}“ zůstává zapojený` : '') + '.'; btn.classList.add('hide'); if (b.slozka) { odkaz.href = b.slozka.url; odkaz.classList.remove('hide'); } return; }
   if (b.chyba) { el.textContent = `Stav Google Disku se nepodařilo zjistit: ${b.chyba}`; return; }
@@ -112,6 +114,17 @@ function diskUkaz(b) {
   if (!b.slozka) { el.textContent = `Google účet ${b.google.email} je připojený (z Péče doma plus). Nahrávky zatím nemají kam: založte adresář.`; btn.disabled = false; return; }
   el.textContent = `Nahrávky se ukládají na Google Disk ${b.google.email}, adresář „${b.slozka.nazev}“. Nahrává server po události se zatrženým Nahrávat (plný obraz, nebo kritická událost s nouzovým přístupem) a tlačítkem Nahrát teď v detailu kamery. Jiný adresář: nejdřív tenhle odpojte (na Disku zůstane i s nahrávkami), pak založte nový.`;
   btn.classList.add('hide'); odpojit.classList.remove('hide'); odkaz.href = b.slozka.url; odkaz.classList.remove('hide');
+}
+/* Proužek nahoře, když je na serveru málo místa nebo poskytovatel u limitu: server to hlásí v /api/nahravky/stav (misto.varovani). */
+function diskVarovaniUkaz(text) {
+  const el = $('diskVarovani'); if (!el) return;
+  el.querySelector('.grow').textContent = text ? `Nahrávky: ${text}` : '';
+  el.classList.toggle('hide', !text);
+}
+$('diskVarovaniNast').onclick = () => $('hlUprav').click();
+async function diskVarovaniZkontroluj() {
+  if (!sim.naServeru) return;
+  try { const r = await fetch('/api/nahravky/stav', { credentials: 'same-origin' }); const b = await r.json(); diskVarovaniUkaz(b?.misto?.varovani || ''); } catch { /* příště */ }
 }
 async function diskStavNacti() {
   $('diskStav').textContent = 'Zjišťuji…';
@@ -184,7 +197,7 @@ $('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.pre
 $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  const p = {}; for (const k of HL_POLE) p[k] = k === 'nahravkyDisk' ? hlPole(k).checked : (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  const p = {}; for (const k of HL_POLE) p[k] = k === 'nahravkyDisk' ? hlPole(k).checked : (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny' || k === 'nahravkyGB') ? Number(hlPole(k).value) : hlPole(k).value.trim();
   try {
     const r = await sim.setPoskytovatel(p);
     if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }
@@ -699,3 +712,5 @@ sim.subscribe((s, info) => {
   renderHlavicka(); renderTiles(); renderQueue(); renderDetail();
 });
 setInterval(() => { renderTiles(); renderQueue(); renderDetail(); }, 5000);
+// Varování o místě na serveru: hned po načtení a pak každých 5 minut (pripraveno je definované výše, proto až tady na konci).
+pripraveno.then((ok) => { if (ok) { diskVarovaniZkontroluj(); setInterval(diskVarovaniZkontroluj, 5 * 60 * 1000); } });

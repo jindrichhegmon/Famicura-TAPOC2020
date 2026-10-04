@@ -5,6 +5,22 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.6 · 4. 10. 2026 · hlídání místa na serveru (pojistka disku, limit poskytovatele, varování)
+
+- **Pojistka proti plnému disku**: když je na disku VPS volno méně než
+  `NAHRAVKY_MIN_VOLNE_GB` (výchozí 5 GB, `.env`), server při hodinovém
+  mazání smaže nejstarší nahrávky napříč poskytovateli bez ohledu na dobu
+  uchování, dokud není volno zpět nad hranicí; do logu jde řádek `POZOR`.
+  Plný disk by jinak zastavil aplikaci.
+- **Limit místa na poskytovatele** (⚙ Nastavení → Limit místa nahrávek,
+  GB; výchozí 2, 0 = bez limitu): nad limit se mažou nejstarší nahrávky
+  toho poskytovatele. Řádek v ⚙ „Nahrávky na serveru“ ukazuje obsazení z
+  limitu, volné místo a pojistku serveru.
+- **Varování v dispečinku**: oranžový proužek nahoře (s tlačítkem ⚙), když
+  je na serveru málo místa, poskytovatel je přes 90 % limitu, nebo ho
+  překročil; stránka se ptá každých 5 minut (`misto.varovani` v
+  `GET /api/nahravky/stav`).
+
 ## 2.5 · 4. 10. 2026 · log za období s exportem do Excelu, detail v blocích, nahrávka po události
 
 - **Log událostí za zvolené období a stažení do Excelu** (detail kamery →

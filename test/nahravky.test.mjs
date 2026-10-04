@@ -178,3 +178,39 @@ test('kopie na Google Disk vedle serveru: řádek má soubor na serveru i odkaz 
   const m = await n.misto(T);
   assert.equal(m.soubory, 3); assert.equal(m.bajty, 3 * (2048 + 32)); assert.ok(m.celkem === null || m.celkem > 0);
 });
+
+test('místo na serveru: limit poskytovatele a pojistka disku mažou nejstarší nahrávky; varování v misto()', async () => {
+  const tb = createMockTabulky();
+  const T2 = '02570459DSIDEQAJ';
+  const kamery2 = async () => [{ id: 'tapoc2020', name: 'Byt Novákovi', tenant: T }, { id: 'kam2', name: 'Centrum', tenant: T2 }];
+  const smazane = [];
+  const uloziste = { nastaveno: true, dir: '/tmp', async uloz(t, id, data) { return { soubor: id + '.enc', velikost: data.length }; }, async nacti() { return Buffer.alloc(0); }, async smaz(t, id) { smazane.push(t + ':' + id); } };
+  let disk = { volne: 50 * 1073741824, celkem: 100 * 1073741824 };
+  let t = Date.UTC(2026, 9, 4, 10, 0, 0);
+  const n = createNahravky({ go2rtc: fakeGo2rtc(), uloziste, tabulky: tb, kamery: kamery2, now: () => t, log: ticho, minVolneGB: 5, mistoDisku: async () => disk });
+  // 6 nahrávek po 200 kB u T (1,2 MB), 2 u T2; limit T = 0,0005 GB ≈ 0,5 MB → zůstanou 2 nejnovější
+  for (let i = 0; i < 6; i++) { await n.porid(T, { kameraId: 'tapoc2020', delkaS: 5, zdroj: 'rucni' }); t += 60000; }
+  for (let i = 0; i < 2; i++) { await n.porid(T2, { kameraId: 'kam2', delkaS: 5, zdroj: 'rucni' }); t += 60000; }
+  assert.equal((await n.misto(T)).varovani, null, 'výchozí limit 2 GB: bez varování');
+  await tb.ulozit(T, 'A_KAM_Nastaveni', { Klic: 'poskytovatel.nahravkyGB', Hodnota: '0.0005' });
+  const m1 = await n.misto(T);
+  assert.equal(m1.limitGB, 0.0005); assert.match(m1.varovani, /překročily limit/);
+  assert.equal(await n.promaz(), 4, 'nad limit: 4 nejstarší pryč');
+  assert.equal((await n.seznam(T)).length, 2); assert.equal((await n.seznam(T2)).length, 2, 'druhý tenant beze změny');
+  assert.ok(smazane.every((x) => x.startsWith(T + ':')));
+  // limit 0 = bez limitu
+  await tb.ulozit(T, 'A_KAM_Nastaveni', { Klic: 'poskytovatel.nahravkyGB', Hodnota: '0' });
+  assert.equal(await n.promaz(), 0); assert.equal((await n.misto(T)).varovani, null);
+  // pojistka disku: volno 4 GB < 5 GB → mažou se nejstarší napříč tenanty, dokud volno nestoupne nad 5 GB (každá přidá 200 kB → všechny 4)
+  disk = { volne: 4 * 1073741824, celkem: 100 * 1073741824 };
+  const m2 = await n.misto(T2); assert.match(m2.varovani, /málo místa/); assert.equal(m2.minVolneGB, 5);
+  assert.equal(await n.promaz(), 4, 'pojistka smaže vše, co je, když to nestačí');
+  assert.equal((await n.seznam(T)).length, 0); assert.equal((await n.seznam(T2)).length, 0);
+  // když mazání jedné nahrávky stačí, další zůstane
+  disk = { volne: 5 * 1073741824 - 100 * 1024, celkem: 100 * 1073741824 };
+  await n.porid(T, { kameraId: 'tapoc2020', delkaS: 5, zdroj: 'rucni' }); t += 60000; await n.porid(T2, { kameraId: 'kam2', delkaS: 5, zdroj: 'rucni' });
+  assert.equal(await n.promaz(), 1); assert.equal((await n.seznam(T)).length, 0, 'nejstarší (T) pryč'); assert.equal((await n.seznam(T2)).length, 1);
+  // nastavení: validace limitu
+  const s = seed(t); assert.throws(() => proved(s, 'setPoskytovatel', [{ nahravkyGB: 600 }], t), /0 \(bez limitu\) až 500/);
+  assert.equal(proved(s, 'setPoskytovatel', [{ nahravkyGB: '1.5' }], t).state.poskytovatel.nahravkyGB, 1.5);
+});

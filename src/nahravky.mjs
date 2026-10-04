@@ -21,6 +21,9 @@ import { KINDS, efektivni } from '../public/proto/sim-core.js';
 
 export const DELKA_VYCHOZI = 15, DELKA_MIN = 5, DELKA_MAX = 60;
 export const DNY_VYCHOZI = 30;
+export const GB_VYCHOZI = 2;            // limit místa na poskytovatele (0 = bez limitu)
+export const MIN_VOLNE_GB_VYCHOZI = 5;  // pojistka: pod tolik volného místa na disku VPS se mažou nejstarší nahrávky napříč poskytovateli
+const GB = 1073741824;
 const MAX_BYTES = 64 * 1024 * 1024;
 const TZ = 'Europe/Prague';
 
@@ -44,7 +47,19 @@ export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna =
   return { ok: false, duvod: `rodina povolila jen „${m === 'none' ? 'žádný obraz' : m === 'blur' ? 'rozostření' : 'drátěný model'}“ – plný obraz se neukládá` };
 }
 
-export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console } = {}) {
+export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console,
+                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null } = {}) {
+  /** Volné a celkové místo na disku s nahrávkami → { volne, celkem } (null bez údaje). `mistoDisku` jde podstrčit v testech. */
+  async function diskInfo() {
+    if (mistoDisku) return mistoDisku();
+    if (!uloziste || !uloziste.dir) return { volne: null, celkem: null };
+    try {
+      const { statfs, mkdir } = await import('node:fs/promises');
+      const st = await statfs(uloziste.dir).catch(async () => { await mkdir(uloziste.dir, { recursive: true }); return statfs(uloziste.dir); });
+      return { volne: Number(st.bavail) * Number(st.bsize), celkem: Number(st.blocks) * Number(st.bsize) };
+    } catch { return { volne: null, celkem: null }; }
+  }
+  const minVolne = Math.max(0, Number(minVolneGB) || 0) * GB;
   const bezi = new Map();   // tenant:kameraId → Promise (jedna nahrávka na kameru najednou)
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
   const serverOk = () => !!(uloziste && uloziste.nastaveno);
@@ -162,6 +177,14 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
     return zRadku(radek);
   }
 
+  /** Limit místa poskytovatele v GB (poskytovatel.nahravkyGB; 0 = bez limitu). */
+  async function gbTenanta(tenant) {
+    const r = await tabulky.vyber(tenant, 'A_KAM_Nastaveni', { kde: { Klic: 'poskytovatel.nahravkyGB' }, limit: 1 });
+    if (!r.length || r[0].Hodnota === null || r[0].Hodnota === '') return GB_VYCHOZI;
+    const n = Number(r[0].Hodnota);
+    return Number.isFinite(n) && n >= 0 && n <= 500 ? n : GB_VYCHOZI;
+  }
+
   async function dnyTenanta(tenant) {
     const r = await tabulky.vyber(tenant, 'A_KAM_Nastaveni', { kde: { Klic: 'poskytovatel.nahravkyDny' }, limit: 1 });
     const n = Number(r[0]?.Hodnota);
@@ -175,11 +198,13 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
     /** Kolik nahrávky tenanta zabírají na serveru a kolik místa VPS má → { soubory, bajty, volne, celkem }. */
     async misto(tenant) {
       const r = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde: { Uloziste: 'server', SmazanoCas: null }, limit: 10000 });
-      const out = { soubory: r.length, bajty: r.reduce((a, x) => a + (Number(x.Velikost) || 0) + 32, 0), volne: null, celkem: null };
-      if (uloziste && uloziste.dir) {
-        try { const { statfs } = await import('node:fs/promises'); const st = await statfs(uloziste.dir).catch(async () => { const { mkdir } = await import('node:fs/promises'); await mkdir(uloziste.dir, { recursive: true }); return statfs(uloziste.dir); }); out.volne = Number(st.bavail) * Number(st.bsize); out.celkem = Number(st.blocks) * Number(st.bsize); }
-        catch { /* bez údaje o disku */ }
-      }
+      const d = await diskInfo();
+      const limitGB = await gbTenanta(tenant).catch(() => GB_VYCHOZI);
+      const out = { soubory: r.length, bajty: r.reduce((a, x) => a + (Number(x.Velikost) || 0) + 32, 0), volne: d.volne, celkem: d.celkem, limitGB, minVolneGB: minVolne / GB, varovani: null };
+      const fmt = (x) => x >= GB ? (x / GB).toFixed(1).replace('.', ',') + ' GB' : (x / 1048576).toFixed(0) + ' MB';
+      if (out.volne !== null && out.volne < minVolne) out.varovani = `Na serveru je málo místa (volné ${fmt(out.volne)}, pojistka ${fmt(minVolne)}): nejstarší nahrávky se mažou dřív než po době uchování. Správce serveru by měl uvolnit disk.`;
+      else if (limitGB > 0 && out.bajty >= limitGB * GB) out.varovani = `Nahrávky poskytovatele překročily limit ${fmt(limitGB * GB)}: nejstarší se mažou dřív než po době uchování. Zvyšte limit v Nastavení, nebo zkraťte dobu uchování.`;
+      else if (limitGB > 0 && out.bajty >= 0.9 * limitGB * GB) out.varovani = `Nahrávky poskytovatele zabírají ${fmt(out.bajty)} z limitu ${fmt(limitGB * GB)} (přes 90 %); po překročení se nejstarší mažou dřív než po době uchování.`;
       return out;
     },
     /** Nahrávky tenanta (nejnovější první): jedné kamery, nebo jen daných kamer (rodina). */
@@ -215,19 +240,51 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
       await tabulky.uprav(tenant, 'A_KAM_Nahravka', { Id: n.id }, { SmazanoCas: now() });
       return true;
     },
-    /** Automatické mazání: nahrávky na serveru starší než nahravkyDny tenanta. Vrací počet smazaných. */
+    /**
+     * Automatické mazání (každou hodinu, server.mjs), tři kroky:
+     *  1. doba uchování: nahrávky starší než nahravkyDny tenanta;
+     *  2. limit poskytovatele (nahravkyGB): nad limit se mažou nejstarší nahrávky toho tenanta;
+     *  3. pojistka disku: když je na disku VPS volno méně než NAHRAVKY_MIN_VOLNE_GB, mažou se nejstarší
+     *     nahrávky napříč poskytovateli, dokud není volno zpět nad hranicí (plný disk by zastavil server).
+     * Vrací počet smazaných; podrobnosti do logu serveru.
+     */
     async promaz() {
       if (!serverOk()) return 0;
       const vse = await tabulky.vyber('*', 'A_KAM_Nahravka', { kde: { Uloziste: 'server', SmazanoCas: null }, razeni: [['Cas', 'ASC']], limit: 5000 });
-      const dny = new Map(); let smazano = 0;
+      const dny = new Map(), gb = new Map(); let smazano = 0;
+      const velikost = (r) => (Number(r.Velikost) || 0) + 32;
+      const smazRadek = async (r, proc) => {
+        try { await this.smaz(r.IDTENANT, zRadku(r)); smazano++; r.__smazano = true; return true; }
+        catch (e) { log.error('[nahravky] mazání', r.IDTENANT, r.Id, `(${proc}):`, e.message); return false; }
+      };
+      // 1. doba uchování
+      let poDobe = 0;
       for (const r of vse) {
-        const tenant = r.IDTENANT;
-        if (!dny.has(tenant)) dny.set(tenant, await dnyTenanta(tenant).catch(() => DNY_VYCHOZI));
-        if (Number(r.Cas) > now() - dny.get(tenant) * 86400000) continue;
-        try { await this.smaz(tenant, zRadku(r)); smazano++; }
-        catch (e) { log.error('[nahravky] mazání', tenant, r.Id, e.message); }
+        const t = r.IDTENANT;
+        if (!dny.has(t)) dny.set(t, await dnyTenanta(t).catch(() => DNY_VYCHOZI));
+        if (Number(r.Cas) > now() - dny.get(t) * 86400000) continue;
+        if (await smazRadek(r, 'doba uchování')) poDobe++;
       }
-      if (smazano) log.log(`[nahravky] automaticky smazáno ${smazano} nahrávek po uplynutí doby uchování`);
+      if (poDobe) log.log(`[nahravky] automaticky smazáno ${poDobe} nahrávek po uplynutí doby uchování`);
+      // 2. limit poskytovatele (nejstarší první – vse je seřazené vzestupně podle času)
+      const soucty = new Map();
+      for (const r of vse) if (!r.__smazano) soucty.set(r.IDTENANT, (soucty.get(r.IDTENANT) || 0) + velikost(r));
+      for (const [t, suma] of soucty) {
+        if (!gb.has(t)) gb.set(t, await gbTenanta(t).catch(() => GB_VYCHOZI));
+        const limit = gb.get(t) * GB; if (!limit || suma <= limit) continue;
+        let zbyva = suma, n = 0;
+        for (const r of vse) { if (zbyva <= limit) break; if (r.__smazano || r.IDTENANT !== t) continue; if (await smazRadek(r, `limit ${gb.get(t)} GB`)) { zbyva -= velikost(r); n++; } }
+        log.log(`[nahravky] ${t}: nad limit ${gb.get(t)} GB (${(suma / GB).toFixed(2)} GB) – smazáno ${n} nejstarších nahrávek`);
+      }
+      // 3. pojistka disku napříč poskytovateli
+      if (minVolne > 0) {
+        const d = await diskInfo();
+        if (d.volne !== null && d.volne < minVolne) {
+          let volne = d.volne, n = 0;
+          for (const r of vse) { if (volne >= minVolne) break; if (r.__smazano) continue; if (await smazRadek(r, 'málo místa na disku')) { volne += velikost(r); n++; } }
+          log.error(`[nahravky] POZOR: na disku je málo místa (volné ${(d.volne / GB).toFixed(2)} GB, pojistka ${(minVolne / GB).toFixed(1)} GB) – smazáno ${n} nejstarších nahrávek napříč poskytovateli${volne < minVolne ? '; nahrávek k mazání už není, uvolněte disk' : ''}`);
+        }
+      }
       return smazano;
     },
     async hotovo() { await Promise.allSettled([...bezi.values()]); },

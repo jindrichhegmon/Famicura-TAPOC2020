@@ -79,7 +79,7 @@ const go2rtc = createGo2rtc();
 // Nahrávky na Google Disk poskytovatele (účet z Péče doma plus přes jhn-apps); bez klíče jen hlásí, že nejsou nastavené.
 const disk = createDisk();
 if (!disk.nastaveno) console.error('[famicura-tapo] Nahrávky na Google Disk nejsou nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC) – spusťte ./deploy/vps-env.sh.');
-// Úložiště nahrávek na serveru: šifrované soubory v DATA_DIR/nahravky (klíč NAHRAVKY_KLIC).
+// Úložiště nahrávek na serveru: šifrované soubory v DATA_DIR/nahravky (klíč NAHRAVKY_KLIC). Pojistka disku: NAHRAVKY_MIN_VOLNE_GB (výchozí 5).
 const uloziste = createUloziste({ dir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'nahravky') });
 if (!uloziste.nastaveno) console.error('[famicura-tapo] Úložiště nahrávek na serveru není nastavené (NAHRAVKY_KLIC) – spusťte ./deploy/vps-env.sh.');
 const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row) }) : null;

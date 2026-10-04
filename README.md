@@ -101,6 +101,19 @@ Nahrávku ze serveru dispečink také stáhne (⬇ stáhnout, `?stahnout=1`):
 server soubor dešifruje a pošle jako přílohu pod názvem nahrávky; stažení
 je v auditu (`A_KAM_Prehrani`, Kdo „… (stažení)“). Rodina jen přehrává.
 
+### Hlídání místa na serveru (od 2.6)
+
+Mazání běží každou hodinu ve třech krocích (`nahravky.promaz`): nahrávky
+starší než doba uchování poskytovatele (⚙, výchozí 30 dnů); nad limit
+místa poskytovatele (⚙ Limit místa nahrávek, výchozí 2 GB, 0 = bez
+limitu) nejstarší nahrávky toho poskytovatele; a pojistka disku: když je na
+disku VPS volno méně než `NAHRAVKY_MIN_VOLNE_GB` (`.env`, výchozí 5 GB),
+nejstarší nahrávky napříč poskytovateli, dokud není volno zpět nad
+hranicí (log `[nahravky] POZOR`). Dispečink ukazuje oranžový proužek, když
+je místa málo nebo je poskytovatel u limitu; ⚙ Nastavení ukazuje obsazení
+z limitu a volné místo. Dlouhodobý archiv řeší kopie na Google Disk
+(⚙ Google Disk), která se ze serveru nemaže.
+
 ### Log událostí za období a export do Excelu (od 2.5)
 
 V detailu kamery (Monitoring → Historie) jde zvolit období *od–do* (dny
@@ -516,7 +529,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.5) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.6) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

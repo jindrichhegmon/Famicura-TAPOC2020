@@ -79,7 +79,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     const t = now();
     const nastaveni = Object.fromEntries((await tabulky.vyber(tenant, 'A_KAM_Nastaveni')).map((r) => [r.Klic, r.Hodnota]));
     const poskytovatel = { ...POSKYTOVATEL_VYCHOZI, nazev: nazev || POSKYTOVATEL_VYCHOZI.nazev, telefon: '', email: '', dispecer: 'Dispečink', smena: '', zaloha: '', zalohaTelefon: '', vedouci: '', vedouciTelefon: '' };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (nastaveni['poskytovatel.' + k] !== undefined && nastaveni['poskytovatel.' + k] !== null) poskytovatel[k] = (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(nastaveni['poskytovatel.' + k]) || POSKYTOVATEL_VYCHOZI[k] : k === 'nahravkyDisk' ? String(nastaveni['poskytovatel.' + k]) === 'true' : nastaveni['poskytovatel.' + k];
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (nastaveni['poskytovatel.' + k] !== undefined && nastaveni['poskytovatel.' + k] !== null) poskytovatel[k] = (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(nastaveni['poskytovatel.' + k]) || POSKYTOVATEL_VYCHOZI[k] : k === 'nahravkyGB' ? (Number.isFinite(Number(nastaveni['poskytovatel.' + k])) ? Number(nastaveni['poskytovatel.' + k]) : POSKYTOVATEL_VYCHOZI[k]) : k === 'nahravkyDisk' ? String(nastaveni['poskytovatel.' + k]) === 'true' : nastaveni['poskytovatel.' + k];
     const kam = (await tabulky.vyber(tenant, 'A_KAM_Kamera', { razeni: [['Nazev', 'ASC']] })).filter((r) => r.Aktivni !== false);
     const patients = kam.map((r) => pacientZRadku(r, poskytovatel.nazev));
     const klid = {}; for (const r of kam) if (r.KlidDo && r.KlidDo > t) klid[r.KameraID] = r.KlidDo;
