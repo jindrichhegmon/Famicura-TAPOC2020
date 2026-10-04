@@ -53,12 +53,14 @@
           <div class="fld"><label for="hlVedouci">Vedoucí (eskalace)</label><input type="text" id="hlVedouci" maxlength="80"></div>
           <div class="fld"><label for="hlVedouciTelefon">Telefon vedoucího</label><input type="tel" id="hlVedouciTelefon" maxlength="40"></div>
           <div class="fld"><label for="hlEskalaceMin">Eskalace po (minut)</label><input type="number" id="hlEskalaceMin" min="1" max="60" step="1" required><div class="help">nepřevzatý kritický alert se po této době označí jako eskalovaný</div></div>
+          <div class="fld"><label for="hlNahravkaS">Nahrávka po události (sekund)</label><input type="number" id="hlNahravkaS" min="5" max="60" step="1" required><div class="help">server po události se zatrženým Nahrávat uloží tolik sekund obrazu na Google Disk (5–60)</div></div>
         </div>
         <div class="sec">Zobrazení na tomto počítači</div>
         <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>
         <div class="sec">SMS a e-mail ze serveru (pozvánky, žádosti o obraz, upozornění na události)</div>
         <p class="gateerr hide" id="smsVarovani">Server má v SMS_WEBHOOK_URL stejnou adresu jako asistent: SMS i e-maily jdou do špatného scénáře Make a nedojdou. Správce spustí ./deploy/vps-env.sh a zadá adresu webhooku scénáře Famicura_Tapo_SMS_Pozvanka.</p>
         <div class="f2">
+          <div class="fld" style="grid-column:1/-1"><label>Nahrávky na Google Disku</label><div class="help" id="diskStav">Zjišťuji…</div><div class="row" style="margin-top:6px"><button class="btn" type="button" id="diskSlozkaBtn" disabled>Založit adresář na Google Disku</button><a class="small hide" id="diskSlozkaOdkaz" target="_blank" rel="noopener">Otevřít adresář</a></div></div>
           <div class="fld"><label for="smsTestTel">Zkušební SMS na číslo</label><div class="row"><input type="tel" id="smsTestTel" maxlength="20" placeholder="777 123 456" autocomplete="tel" style="max-width:180px"><button class="btn" type="button" id="smsTestBtn">Poslat SMS</button></div></div>
           <div class="fld"><label for="mailTestAdr">Zkušební e-mail na adresu</label><div class="row"><input type="email" id="mailTestAdr" maxlength="120" placeholder="jmeno@example.cz" autocomplete="email" style="max-width:220px"><button class="btn" type="button" id="mailTestBtn">Poslat e-mail</button></div></div>
         </div>

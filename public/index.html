@@ -951,6 +951,37 @@ function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
       velikostB: blob.size, soubor: rec.name, slozka: folder, zdroj
     });
   });
+  // Poskytovatel kamery s adresářem na Google Disku: server tam nahrávku uloží taky (src/nahravky.mjs).
+  uploadToDisk(rec, { zdroj, udalost }).catch(() => {});
+}
+
+/* ---------- nahrávky na Google Disk poskytovatele (účet z Péče doma plus) ---------- */
+const diskStavCache = new Map();   // kameraId → { cas, b }
+async function diskStav(kameraId) {
+  const c = diskStavCache.get(kameraId);
+  if (c && Date.now() - c.cas < 5 * 60 * 1000) return c.b;
+  let b = null;
+  try { const r = await fetch('/api/nahravky/stav?kamera=' + encodeURIComponent(kameraId), { credentials: 'same-origin' }); if (r.ok) b = await r.json(); } catch { b = null; }
+  diskStavCache.set(kameraId, { cas: Date.now(), b });
+  return b;
+}
+async function uploadToDisk(rec, { zdroj, udalost }) {
+  const id = rec.device?.id; if (!id) return;
+  const b = await diskStav(id);
+  if (!b || !b.nastaveno || !b.slozka) return;
+  const q = new URLSearchParams({ kamera: id, cas: String(rec.from.getTime()), delkaS: String(Math.round((rec.to - rec.from) / 1000)), zdroj: zdroj === 'plan' ? 'plan' : udalost ? 'udalost' : 'rucni',
+    text: udalost ? `Událost: ${udalost.text || udalost.kind}` : zdroj === 'plan' ? 'Nahrávka podle plánu.' : 'Ruční nahrávka z hlavní aplikace.' });
+  const mime = /webm/.test(rec.blob.type) ? 'video/webm' : 'video/mp4';
+  rec.savedEl.textContent = (rec.saved ? `uloženo do ${rec.saved} · ` : '') + 'nahrávám na Google Disk…';
+  try {
+    const r = await fetch('/api/nahravky?' + q, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': mime }, body: rec.blob });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    rec.disk = j.nahravka;
+    rec.savedEl.innerHTML = (rec.saved ? `uloženo do ${esc(rec.saved)} · ` : '') + `<a href="${esc(j.nahravka.url)}" target="_blank" rel="noopener">na Google Disku poskytovatele</a>`;
+  } catch (e) {
+    rec.savedEl.textContent = (rec.saved ? `uloženo do ${rec.saved} · ` : '') + `Google Disk: ${e.message}`;
+  }
 }
 
 async function shareRecording(rec) {

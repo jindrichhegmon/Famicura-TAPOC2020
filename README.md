@@ -85,6 +85,38 @@ Safari (Mac i iPhone) do složky zapisovat neumí; místo toho je tam
 zatržítko **Každou hotovou nahrávku rovnou stáhnout**, po němž jde každá
 nahrávka sama do složky Stažené soubory prohlížeče.
 
+### Nahrávky na Google Disku poskytovatele (od 2.1)
+
+Stejný princip jako Export dat v Péče doma plus: poskytovatel má Google
+účet připojený jednou v portálu Plus (Export dat → Připojit Google účet)
+a v Google se nic dalšího nenastavuje. Aplikace `pecedomaplus-kamera-disk`
+na jhn-apps (repozitář WEB-PeceDomaPlus) zná jeho token z Exportu dat,
+drží adresář „Famicura Kamera – <poskytovatel>“ (`KAMERA_SLOZKA_*`
+v `A_MSPPP_Nastaveni`) a tomuhle serveru dá na hodinu access token jen
+pro nahrání (rozsah `drive.file`). Server se jí hlásí hlavičkou
+`x-app-token` (`JHN_APPS_TOKEN`) a klíčem `FAMICURA_KAMERA_KLIC` – stejná
+hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
+(`deploy/sdilej-klic-jhn.sh`, jhn-apps se restartuje).
+
+- **Adresář** zakládá dispečink: ⚙ Nastavení → Nahrávky na Google Disku
+  (`GET /api/nahravky/stav`, `POST /api/nahravky/slozka`).
+- **Nahrává server** (`src/nahravky.mjs`): po události se zatrženým
+  Nahrávat (sekce Nastavení v detailu kamery) vezme z go2rtc
+  `stream.mp4?duration=N` (⚙ → Nahrávka po události, 5–60 s, výchozí 15;
+  jen obraz H.264 beze změny) a nahraje ho na Disk (`src/disk.mjs`,
+  resumable upload). Řádek je v `A_KAM_Nahravka` tenanta (čas, délka,
+  velikost, událost, odkaz, chyba), odkaz 🎞 u události v historii
+  a v seznamu Nahrávky v detailu (`GET /api/nahravky?kamera=`); tlačítko
+  **Nahrát teď** (`POST /api/nahravky/rucni`). Jedna nahrávka na kameru
+  najednou; obraz před událostí server nemá.
+- **Soukromí:** `smiNahravat` – jen při plném obrazu povoleném rodinou,
+  nebo kritická událost (pád, SOS…) s povoleným nouzovým přístupem;
+  jinak se nahrávka nepořídí a u události je důvod.
+- **Hlavní aplikace** pošle každou hotovou nahrávku (ruční, plán,
+  událost z analýzy) na `POST /api/nahravky?kamera=…` (tělo video/webm
+  nebo mp4, až 64 MB) a server ji uloží na Disk poskytovatele kamery;
+  odkaz je u nahrávky v seznamu. Složka v prohlížeči a CLB1 fungují dál.
+
 ### Nahrávka po události
 
 U každé události (z analýzy i z kamery) je zatržítko **nahrávat**: když
@@ -200,7 +232,7 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
-Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.0**) a
+Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.1**) a
 ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
@@ -282,7 +314,7 @@ např. `22202480FAMICURA` = FamiCura s.r.o.). Do Softru se nepíše nic.
   (události a alerty včetně převzetí, uzavření, eskalace a výsledku
   upozornění), `A_KAM_Zadost` (žádosti o plný obraz), `A_KAM_Povoleni`
   (platná povolení a kdo se dívá), `A_KAM_Nastaveni` (údaje poskytovatele,
-  notifikace) a `A_KAM_UzivatelRodiny` (účty rodiny: scrypt hash hesla,
+  notifikace), `A_KAM_Nahravka` (nahrávky na Google Disku) a `A_KAM_UzivatelRodiny` (účty rodiny: scrypt hash hesla,
   SHA-256 pozvánky, kamery). Každá má `IDTENANT char(16)` s výchozí
   hodnotou `SESSION_CONTEXT('IDTENANT')`, primární klíč začíná tenantem a
   tabulka je ve stejné politice Row-Level Security (`sec.TenantPolicy`,
@@ -407,11 +439,11 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.0) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.1) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
-`git tag -a v2.1 -m "Famicura Kamera 2.1" && git push origin v2.1`.
+`git tag -a v2.2 -m "Famicura Kamera 2.2" && git push origin v2.2`.
 Drobné opravy mezi verzemi číslo nemění.
 
 ## Prezentace a video

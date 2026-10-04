@@ -10,7 +10,7 @@
 import { createStavTenantu } from './stav-tenant.mjs';
 import { normTenant } from './tabulky.mjs';
 
-export function createNajemci({ pdp, kamery = async () => [], udalosti = null, upozorni = null, now = Date.now, log = console }) {
+export function createNajemci({ pdp, kamery = async () => [], udalosti = null, upozorni = null, nahravky = null, now = Date.now, log = console }) {
   const stavy = new Map();
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
   const kameryTenanta = async (id) => (await kamery()).filter((k) => normTenant(k.tenant) === id);
@@ -31,7 +31,7 @@ export function createNajemci({ pdp, kamery = async () => [], udalosti = null, u
       let s = stavy.get(info.id);
       if (!s) {
         await pdp.zajistiTabulky();
-        s = createStavTenantu({ tenant: info.id, tabulky: pdp.tabulky, kamery: () => kameryTenanta(info.id), udalosti, upozorni, now, log, nazev: info.nazev });
+        s = createStavTenantu({ tenant: info.id, tabulky: pdp.tabulky, kamery: () => kameryTenanta(info.id), udalosti, upozorni, nahravky, now, log, nazev: info.nazev });
         stavy.set(info.id, s);
       }
       return s;

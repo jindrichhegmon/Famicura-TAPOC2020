@@ -14,6 +14,7 @@
  * (cameras.json na serveru s polem tenant, řádek A_KAM_Kamera). Skutečné
  * události kamery (ONVIF) sem skládá server při každém dotazu, jako dřív.
  */
+import { smiNahravat } from './nahravky.mjs';
 import { proved, AKCE, KINDS, defaultWatch, POSKYTOVATEL_VYCHOZI, DEN_OD, NOC_OD } from '../public/proto/sim-core.js';
 
 const MAPA = { 'cam-linecross': 'linecross', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion', 'cam-pet': 'motion', 'cam-vehicle': 'motion', 'cam-smart': 'motion' };
@@ -59,7 +60,7 @@ function radekPovoleni(id, g, w) {
   return { KameraID: id, Druh: g ? g.kind : null, Kdo: g ? g.by : null, Od: g ? (g.since || null) : null, DoCas: g ? g.until : null, SledujeKdo: w ? w.who : null, SledujeOd: w ? w.since : null };
 }
 
-export function createStavTenantu({ tenant, tabulky, kamery = async () => [], udalosti = null, upozorni = null, now = Date.now, log = console, nazev = '' }) {
+export function createStavTenantu({ tenant, tabulky, kamery = async () => [], udalosti = null, upozorni = null, nahravky = null, now = Date.now, log = console, nazev = '' }) {
   if (!tenant) throw new Error('Chybí tenant.');
   let data = null;                   // { v, state }
   let otisky = new Map();            // 'tab:klíč' → otisk uloženého řádku
@@ -74,12 +75,18 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     const t = now();
     const nastaveni = Object.fromEntries((await tabulky.vyber(tenant, 'A_KAM_Nastaveni')).map((r) => [r.Klic, r.Hodnota]));
     const poskytovatel = { ...POSKYTOVATEL_VYCHOZI, nazev: nazev || POSKYTOVATEL_VYCHOZI.nazev, telefon: '', email: '', dispecer: 'Dispečink', smena: '', zaloha: '', zalohaTelefon: '', vedouci: '', vedouciTelefon: '' };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (nastaveni['poskytovatel.' + k] !== undefined && nastaveni['poskytovatel.' + k] !== null) poskytovatel[k] = k === 'eskalaceMin' ? Number(nastaveni['poskytovatel.' + k]) || POSKYTOVATEL_VYCHOZI.eskalaceMin : nastaveni['poskytovatel.' + k];
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (nastaveni['poskytovatel.' + k] !== undefined && nastaveni['poskytovatel.' + k] !== null) poskytovatel[k] = (k === 'eskalaceMin' || k === 'nahravkaS') ? Number(nastaveni['poskytovatel.' + k]) || POSKYTOVATEL_VYCHOZI[k] : nastaveni['poskytovatel.' + k];
     const kam = (await tabulky.vyber(tenant, 'A_KAM_Kamera', { razeni: [['Nazev', 'ASC']] })).filter((r) => r.Aktivni !== false);
     const patients = kam.map((r) => pacientZRadku(r, poskytovatel.nazev));
     const klid = {}; for (const r of kam) if (r.KlidDo && r.KlidDo > t) klid[r.KameraID] = r.KlidDo;
     const ud = await tabulky.vyber(tenant, 'A_KAM_Udalost', { razeni: [['Cas', 'DESC']], limit: UDALOSTI_MAX });
     const events = ud.map(udalostZRadku);
+    // odkazy na nahrávky k událostem (tabulka A_KAM_Nahravka; do řádku události se nepíší)
+    if (nahravky) {
+      const podleUdalosti = new Map();
+      for (const n of await nahravky.seznam(tenant, { limit: 300 }).catch(() => [])) if (n.udalostId && !podleUdalosti.has(n.udalostId)) podleUdalosti.set(n.udalostId, n);
+      for (const e of events) { const n = podleUdalosti.get(e.id); if (n) e.nahravka = { id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba }; }
+    }
     const zad = await tabulky.vyber(tenant, 'A_KAM_Zadost', { razeni: [['Cas', 'DESC']], limit: ZADOSTI_MAX });
     const requests = zad.map(zadostZRadku);
     const pov = await tabulky.vyber(tenant, 'A_KAM_Povoleni');
@@ -162,6 +169,25 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     cekajici.add(p);
   }
 
+  /* ---------- nahrávka po události (mimo frontu, odkaz k události) ---------- */
+  function nahravani(ev, kdo = '') {
+    if (!nahravky || !ev || !ev.id || !ev.rec) return;
+    const s = data.state;
+    const p = s.patients.find((x) => x.id === ev.patientId);
+    const smi = smiNahravat(s, p, ev.kind, now());
+    const zapis = (n) => serializovane(async () => {
+      const e = data.state.events.find((x) => x.id === ev.id);
+      if (!e) return;
+      e.nahravka = n; data.v++;
+    });
+    if (!smi.ok) { zapis({ chyba: `nenahráno: ${smi.duvod}` }); return; }
+    const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, delkaS: s.poskytovatel?.nahravkaS, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
+      .then((n) => { if (!n || n.preskoceno) return zapis({ chyba: `nenahráno: ${n?.duvod || 'nahrávka neproběhla'}` }); return zapis({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba }); })
+      .catch((e) => { if (log && log.error) log.error('[nahravky]', tenant, e.message); })
+      .finally(() => cekajici.delete(pr));
+    cekajici.add(pr);
+  }
+
   /** Vypršení, eskalace, nové skutečné události kamer tenanta. */
   async function udrzba() {
     let zmena = proved(data.state, 'tick', [], now()).zmena;
@@ -173,6 +199,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
         try {
           const out = proved(data.state, 'emit', [ev.kameraId, kind, { real: true, text: ev.text }], now());
           upozorneni(out.vysledek);
+          nahravani(out.vysledek);
           zmena = true;
         } catch (e) { log.error('[stav-tenant]', tenant, 'událost kamery se nezapsala:', e.message); }
       }
@@ -199,7 +226,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
         const out = proved(data.state, akce, args, now());
         data.state = out.state;
         if (out.zmena) { data.v++; await uloz(); }
-        if (akce === 'emit') upozorneni(out.vysledek);
+        if (akce === 'emit') { upozorneni(out.vysledek); nahravani(out.vysledek); }
         return { v: data.v, state: data.state, vysledek: out.vysledek };
       });
     },

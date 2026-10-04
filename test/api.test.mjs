@@ -8,6 +8,7 @@ import { mockDbs } from './mock-db.mjs';
 import { createUzivatele } from '../src/uzivatele.mjs';
 import { createMockTabulky } from './mock-tabulky.mjs';
 import { createNajemci } from '../src/najemci.mjs';
+import { createNahravky } from '../src/nahravky.mjs';
 import { createUpozorneni } from '../src/upozorneni.mjs';
 import { cookieRodina, cookieDispecer } from '../src/session.mjs';
 
@@ -61,9 +62,9 @@ function handler(over = {}) {
   // kamery ze serveru (cameras.json): tapoc2020 patří T, cizi T2; go2rtc streamuje obě
   const kameryTenanty = over.kameryTenanty || (async () => [{ id: 'tapoc2020', name: 'TAPO Test', tenant: T, place: 'Kancelář Famicura' }, { id: 'cizi', name: 'Cizí kamera', tenant: T2, place: '' }]);
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
-  const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, log: { log() {} } }), log: { log() {}, error() {} } });
+  const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -599,4 +600,49 @@ test('zkušební SMS z nastavení: jen poskytovatel, normalizuje telefon, hlás�
   const { h: h2 } = handler();
   const n = await h2(req('POST', '/api/sms/test', { cookies: cookie(), body: { telefon: '777123456' } }));
   assert.equal(n.status, 400); assert.match((await n.json()).error, /vps-env\.sh/);
+});
+
+/** Nahrávky: falešný Disk (jhn-apps + Google) a go2rtc, který na stream.mp4 vrátí klip. */
+function fakeDisk(stav = { google: { pripojen: true, email: 'posk@x.cz' }, slozka: { id: 's1', nazev: 'Famicura Kamera – FamiCura', url: 'https://drive/s1' } }) {
+  const nahrane = [];
+  return { nastaveno: true, nahrane, async stav() { return stav; }, async zalozSlozku(t, nazev) { stav.slozka = { id: 's2', nazev: nazev || 'Famicura Kamera – FamiCura', url: 'https://drive/s2' }; return { ...stav, zprava: 'založeno' }; },
+    async nahraj(tenant, { nazev, mime, data }) { nahrane.push({ tenant, nazev, mime, velikost: data.length }); return { id: 'f' + nahrane.length, nazev, url: 'https://drive/f' + nahrane.length, velikost: data.length, email: 'posk@x.cz', slozka: stav.slozka }; } };
+}
+test('nahrávky: stav účtu a adresář, ruční nahrávka ze serveru (jen při plném obrazu), soubor z hlavní aplikace, seznam; rodina 403, bez nastavení 503', async () => {
+  const go2rtc = { ...fakeGo2rtc(), async proxy() { return new Response(Buffer.alloc(50 * 1024, 3), { status: 200 }); } };
+  const disk = fakeDisk();
+  const tabulky = createMockTabulky();
+  const nahravky = createNahravky({ go2rtc, disk, tabulky, kamery: async () => [{ id: 'tapoc2020', name: 'TAPO Test', tenant: T }], log: { log() {}, error() {} } });
+  const { h, uzivatele, vsichni } = handler({ go2rtc, disk, nahravky, tabulky });
+  const st = await (await h(req('GET', '/api/nahravky/stav', { cookies: cookie() }))).json();
+  assert.equal(st.nastaveno, true); assert.equal(st.google.email, 'posk@x.cz'); assert.equal(st.slozka.id, 's1'); assert.equal(st.delkaS, 15);
+  const sl = await (await h(req('POST', '/api/nahravky/slozka', { cookies: cookie(), body: { nazev: 'Famicura Kamera – test' } }))).json();
+  assert.equal(sl.slozka.id, 's2');
+  // rodina povolila jen drátěný model → ruční nahrávka se nepořídí
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setConsent', args: ['tapoc2020', { den: 'skeleton', noc: 'skeleton', nouze: true }] } }));
+  let r = await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'tapoc2020', delkaS: 10 } }));
+  assert.equal(r.status, 403, 'ruční nahrávka při drátěném modelu'); assert.match((await r.json()).error, /rodina povolila jen/);
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full', noc: 'full', nouze: true }] } }));
+  r = await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'tapoc2020', delkaS: 10 } }));
+  assert.equal(r.status, 200); const n1 = (await r.json()).nahravka; assert.equal(n1.url, 'https://drive/f1'); assert.equal(n1.zdroj, 'rucni'); assert.equal(n1.delkaS, 10);
+  assert.equal((await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'cizi' } }))).status, 404, 'cizí kamera');
+  // soubor z hlavní aplikace (správce bez tenanta: tenant podle kamery)
+  const up = new Request('http://localhost/api/nahravky?kamera=tapoc2020&zdroj=plan&delkaS=30&text=Pl%C3%A1n', { method: 'POST', headers: { 'content-type': 'video/webm', cookie: cookieServer() }, body: Buffer.alloc(4096, 1) });
+  r = await h(up); assert.equal(r.status, 200); const n2 = (await r.json()).nahravka; assert.match(n2.nazev, /\.webm$/); assert.equal(n2.zdroj, 'plan'); assert.equal(disk.nahrane[1].mime, 'video/webm');
+  assert.equal((await h(new Request('http://localhost/api/nahravky?kamera=tapoc2020', { method: 'POST', headers: { 'content-type': 'text/plain', cookie: cookie() }, body: 'x'.repeat(2000) }))).status, 415);
+  const sez = await (await h(req('GET', '/api/nahravky?kamera=tapoc2020', { cookies: cookie() }))).json();
+  assert.equal(sez.nahravky.length, 2); assert.equal(sez.nahravky[0].id, n2.id);
+  // událost s Nahrávat → nahrávka u události
+  const ev = await (await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'emit', args: ['tapoc2020', 'fall'] } }))).json();
+  await (await (await h(req('GET', '/api/health'))).json(), nahravky.hotovo());
+  const stav = await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json();
+  assert.equal(stav.state.events.find((e) => e.id === ev.vysledek.id).nahravka.url, 'https://drive/f3');
+  // rodina nic z toho nesmí
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  assert.equal((await h(req('GET', '/api/nahravky?kamera=tapoc2020', { cookies: cookieRodina(T, rod.id).split(';')[0] }))).status, 403, 'rodina nesmí seznam nahrávek');
+  // bez nastavení
+  const { h: h2 } = handler();
+  assert.equal((await (await h2(req('GET', '/api/nahravky/stav', { cookies: cookie() }))).json()).nastaveno, false);
+  assert.equal((await h2(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'tapoc2020' } }))).status, 503, 'bez nastavení 503');
 });

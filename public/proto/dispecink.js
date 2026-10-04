@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 /* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
 let JA = null;
 const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin'];
+const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
@@ -36,8 +36,58 @@ function otevriNastaveni() {
   $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
   $('hlErr').classList.add('hide');
   $('nastaveni').classList.remove('hide'); $('hlNazev').focus();
-  smsStavNacti();
+  smsStavNacti(); diskStavNacti();
 }
+/* Seznam nahrávek kamery (tabulka A_KAM_Nahravka): odkazy na Google Disk, krátká cache, obnova po změně stavu. */
+const nahravkyCache = new Map();   // pid → { cas, html, pocet }
+async function nactiNahravky(pid) {
+  const el = document.querySelector('#detail #dnahravky'); if (!el) return;
+  const pocet = sim.state.events.filter((e) => e.patientId === pid && e.nahravka).length;
+  const c = nahravkyCache.get(pid);
+  if (c && c.pocet === pocet && Date.now() - c.cas < 60000) { if (el.innerHTML !== c.html) el.innerHTML = c.html; return; }
+  nahravkyCache.set(pid, { cas: Date.now(), pocet, html: c?.html || el.innerHTML });
+  let html;
+  try {
+    const r = await fetch('/api/nahravky?kamera=' + encodeURIComponent(pid) + '&limit=20', { credentials: 'same-origin' });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    html = j.nahravky.map((n) => {
+      const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
+      const vel = n.velikost ? ` · ${(n.velikost / 1048576).toFixed(1)} MB` : '';
+      return `<li><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`}</span></li>`;
+    }).join('') || '<li class="muted">Zatím žádná nahrávka. Nahrává se po události se zatrženým Nahrávat (sekce Nastavení) nebo tlačítkem Nahrát teď.</li>';
+  } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
+  nahravkyCache.set(pid, { cas: Date.now(), pocet, html });
+  const el2 = document.querySelector('#detail #dnahravky'); if (el2 && selected === pid) el2.innerHTML = html;
+}
+
+/* Nahrávky na Google Disku: účet, který má poskytovatel připojený v Péče doma plus (Export dat); adresář zakládá dispečink. */
+let diskInfo = null;
+function diskUkaz(b) {
+  diskInfo = b;
+  const el = $('diskStav'), btn = $('diskSlozkaBtn'), odkaz = $('diskSlozkaOdkaz');
+  btn.disabled = true; odkaz.classList.add('hide');
+  if (!b || b.nastaveno === false) { el.textContent = 'Nahrávky na Google Disk nejsou na serveru nastavené: správce spustí ./deploy/vps-env.sh (klíč FAMICURA_KAMERA_KLIC) a v portálu Péče doma plus nasadí aplikaci pecedomaplus-kamera-disk.'; return; }
+  if (b.chyba) { el.textContent = `Stav Google Disku se nepodařilo zjistit: ${b.chyba}`; return; }
+  if (!b.google || !b.google.pripojen) { el.textContent = 'Poskytovatel nemá v Péče doma plus připojený Google účet. Připojte ho v portálu Péče doma plus → Export dat → Připojit Google účet (stejný účet pak slouží i nahrávkám kamer).'; return; }
+  if (!b.slozka) { el.textContent = `Google účet ${b.google.email} je připojený (z Péče doma plus). Nahrávky zatím nemají kam: založte adresář.`; btn.disabled = false; return; }
+  el.textContent = `Nahrávky se ukládají na Google Disk ${b.google.email}, adresář „${b.slozka.nazev}“. Nahrává server po události se zatrženým Nahrávat (plný obraz, nebo kritická událost s nouzovým přístupem) a tlačítkem Nahrát teď v detailu kamery.`;
+  btn.disabled = false; btn.textContent = 'Založit nový adresář'; odkaz.href = b.slozka.url; odkaz.classList.remove('hide');
+}
+async function diskStavNacti() {
+  $('diskStav').textContent = 'Zjišťuji…';
+  try { const r = await fetch('/api/nahravky/stav', { credentials: 'same-origin' }); diskUkaz(await r.json()); }
+  catch { diskUkaz({ nastaveno: true, chyba: 'server neodpovídá' }); }
+}
+$('diskSlozkaBtn').onclick = async () => {
+  const b = $('diskSlozkaBtn'); b.disabled = true; $('diskStav').textContent = 'Zakládám adresář na Google Disku…';
+  try {
+    const r = await fetch('/api/nahravky/slozka', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'nepodařilo se');
+    diskUkaz({ nastaveno: true, google: j.google, slozka: j.slozka }); toast(j.zprava || 'Adresář založen.');
+  } catch (e) { $('diskStav').textContent = `Adresář se nepodařilo založit: ${e.message}`; b.disabled = false; }
+};
 $('hlUprav').onclick = otevriNastaveni;
 // Zkušební SMS: stejný webhook Make a Twilio jako pozvánky a žádosti o obraz; výsledek se ukáže pod polem.
 let smsNastaveno = null, smsAdresa = '', smsZamena = false;
@@ -83,7 +133,7 @@ $('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.pre
 $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  const p = {}; for (const k of HL_POLE) p[k] = k === 'eskalaceMin' ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  const p = {}; for (const k of HL_POLE) p[k] = (k === 'eskalaceMin' || k === 'nahravkaS') ? Number(hlPole(k).value) : hlPole(k).value.trim();
   try {
     const r = await sim.setPoskytovatel(p);
     if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }
@@ -327,7 +377,8 @@ function renderDetail(rebuild = false) {
         <div class="row" id="dbtn"></div>
         <h3 style="margin-top:12px">Přidat poznámku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</span></h3>
         <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
-        <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění</span></h3><ul class="list" id="dhist"></ul>
+        <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění, 🎞 = nahrávka na Google Disku</span></h3><ul class="list" id="dhist"></ul>
+        <h3 style="margin-top:12px">Nahrávky <span class="small muted" style="text-transform:none;font-weight:400">– na Google Disku poskytovatele; nahrává server po události se zatrženým Nahrávat a tlačítkem Nahrát teď</span></h3><ul class="list" id="dnahravky"><li class="muted">Načítám…</li></ul>
       </section>
       <section class="dsec hide" data-sec="komunikace">
         <div class="kv"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
@@ -420,6 +471,7 @@ function renderDetail(rebuild = false) {
     btns.push(pending ? `<span class="badge warn">žádost čeká na rodinu (do ${fmtT(pending.until)})</span>` : `<button class="sm" id="askG">Požádat rodinu o plný obraz</button>`);
     btns.push(`<button class="sm bad" id="emerg" ${p.consent.nouze && crit ? '' : 'disabled'} title="${p.consent.nouze ? 'jen při otevřeném kritickém alertu' : 'rodina nouzový přístup nepovolila'}">Nouzový přístup 10 min</button>`);
   }
+  if (sim.naServeru && p.real) btns.push(`<button class="sm sec" id="recNow" ${mode === 'full' ? '' : 'disabled'} title="${mode === 'full' ? 'server uloží obraz z kamery na Google Disk poskytovatele' : 'jen při plném obrazu (rodina povolila ' + ({ none: 'žádný obraz', skeleton: 'drátěný model', blur: 'rozostření' }[mode] || mode) + ')'}">🎞 Nahrát teď (${s.poskytovatel?.nahravkaS || 15} s)</button>`);
   const changed = setHtml(d.querySelector('#dbtn'), btns.join(' '));
   if (changed) {
     d.querySelector('#askG')?.addEventListener('click', () => { askOpen = true; renderDetail(); });
@@ -437,7 +489,18 @@ function renderDetail(rebuild = false) {
     d.querySelector('#emergNo')?.addEventListener('click', () => { emergOpen = false; renderDetail(); });
     d.querySelector('#emergYes')?.addEventListener('click', () => { emergOpen = false; sim.emergencyAccess(p.id, `Dispečerka ${ME()}`); });
     d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME()}`));
+    d.querySelector('#recNow')?.addEventListener('click', async (ev) => {
+      const b = ev.currentTarget; b.disabled = true; const puv = b.textContent; b.textContent = 'Nahrávám…';
+      try {
+        const r = await fetch('/api/nahravky/rucni', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: p.id }) });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'nahrávka se nepodařila');
+        toast(`Nahrávka uložena na Google Disk (${j.nahravka.delkaS} s).`); nahravkyCache.delete(p.id); nactiNahravky(p.id);
+      } catch (e) { toast(`Nahrávka se nepodařila: ${e.message}`, 'crit'); }
+      b.textContent = puv; b.disabled = false;
+    });
   }
+  nactiNahravky(p.id);
   d.querySelector('#dnoteKdo').textContent = `zapíše se jako ${ME()}, ${new Date().toLocaleDateString('cs-CZ')}`;
   d.querySelector('#dkontaktyStav').textContent = describeKontakty(p) ? `Uloženo: ${describeKontakty(p)}` : 'Zatím žádné kontakty; bez nich SMS ani e-mail neodcházejí.';
   if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();
@@ -445,11 +508,12 @@ function renderDetail(rebuild = false) {
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];
+    const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || 'bez nahrávky').slice(0, 60))}</span>`) : '';
     const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
     const u = e.upozorneni;
     const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';
     const chyba = u && (u.sms?.chyba || u.mail?.chyba);
-    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}${upoz ? ` · <span class="${chyba ? 'bad' : 'muted'}" title="${esc(chyba || 'odeslaná upozornění SMS / e-mail')}">${upoz}${chyba ? ' ⚠' : ''}</span>` : ''}</span></li>`;
+    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}${upoz ? ` · <span class="${chyba ? 'bad' : 'muted'}" title="${esc(chyba || 'odeslaná upozornění SMS / e-mail')}">${upoz}${chyba ? ' ⚠' : ''}</span>` : ''}${nahr}</span></li>`;
   }).join(''));
 }
 

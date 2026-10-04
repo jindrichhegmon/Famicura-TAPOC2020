@@ -45,6 +45,8 @@ const { createNajemci } = await import('./src/najemci.mjs');
 const { createUzivatele } = await import('./src/uzivatele.mjs');
 const { createSms } = await import('./src/sms.mjs');
 const { createUpozorneni } = await import('./src/upozorneni.mjs');
+const { createDisk } = await import('./src/disk.mjs');
+const { createNahravky } = await import('./src/nahravky.mjs');
 const store = createStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 // The camera's own detections: the server subscribes to each camera in
@@ -70,12 +72,19 @@ if (!pdp.nastaveno) console.error('[famicura-tapo] POZOR: PeceDomaPlus není nas
 else pdp.zajistiTabulky().catch((e) => console.error('[famicura-tapo] tabulky PeceDomaPlus:', e.message));
 const kameryTenanty = async () => (await nactiKamery()).map((k) => ({ id: k.id, name: k.name || k.id, tenant: k.tenant || '', place: k.place || '' }));
 const sms = createSms();
-const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }) });
+const go2rtc = createGo2rtc();
+// Nahrávky na Google Disk poskytovatele (účet z Péče doma plus přes jhn-apps); bez klíče jen hlásí, že nejsou nastavené.
+const disk = createDisk();
+if (!disk.nastaveno) console.error('[famicura-tapo] Nahrávky na Google Disk nejsou nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC) – spusťte ./deploy/vps-env.sh.');
+const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, tabulky: pdp.tabulky, kamery: kameryTenanty }) : null;
+const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }), nahravky });
 const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
-const handle = createHandler({ dbs, go2rtc: createGo2rtc(), store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
+// A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.
 const MAX_BODY = 256 * 1024;
+const MAX_BODY_NAHRAVKA = 64 * 1024 * 1024;
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
@@ -86,9 +95,10 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
       const chunks = []; let size = 0;
+      const limit = req.method === 'POST' && url.pathname === '/api/nahravky' ? MAX_BODY_NAHRAVKA : MAX_BODY;
       for await (const c of req) {
         size += c.length;
-        if (size > MAX_BODY) { res.writeHead(413, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Příliš velký požadavek'); return; }
+        if (size > limit) { res.writeHead(413, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Příliš velký požadavek'); return; }
         chunks.push(c);
       }
       // A live picture over HTTPS is one long answer: it is passed on as it

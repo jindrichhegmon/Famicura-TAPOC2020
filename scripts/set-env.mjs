@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOUBOR = path.join(ROOT, '.env');
-const POVINNE = ['SQL_SERVER', 'SQL_USER', 'SQL_PASSWORD', 'FAMICURA_PASSWORD', 'SESSION_KEY', 'PDP_SQL_PASSWORD', 'JHN_APPS_TOKEN', 'SMS_WEBHOOK_URL', 'SMS_WEBHOOK_KLIC'];
+const POVINNE = ['SQL_SERVER', 'SQL_USER', 'SQL_PASSWORD', 'FAMICURA_PASSWORD', 'SESSION_KEY', 'PDP_SQL_PASSWORD', 'JHN_APPS_TOKEN', 'FAMICURA_KAMERA_KLIC', 'SMS_WEBHOOK_URL', 'SMS_WEBHOOK_KLIC'];
 
 const RADEK = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/;
 

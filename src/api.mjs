@@ -14,6 +14,13 @@
  *   GET  /api/diag              počty řádků v CLB1
  *   POST /api/clb               { typ: 'udalost' | 'nahravka', ... } → zápis do CLB1
  *
+ * Nahrávky na Google Disk poskytovatele (src/nahravky.mjs, src/disk.mjs; dispečer nebo správce s tenantem):
+ *   GET  /api/nahravky/stav     Google účet z Péče doma plus a adresář nahrávek tenanta
+ *   POST /api/nahravky/slozka   { nazev? } založí adresář na Disku tenanta
+ *   GET  /api/nahravky?kamera=&limit=   seznam nahrávek (tabulka A_KAM_Nahravka)
+ *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery a uloží na Disk
+ *   POST /api/nahravky?kamera=&cas=&delkaS=&zdroj=&text=   tělo = soubor (video/mp4 | video/webm) z hlavní aplikace
+ *
  * Tenant (poskytovatel) jako v Péče doma plus: dispečink a rodina pracují
  * vždy s daty jednoho tenanta z databáze PeceDomaPlus (src/najemci.mjs).
  *   GET  /api/tenant?id=        název tenanta pro přihlašovací stránku (bez přihlášení)
@@ -92,7 +99,7 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null,
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null,
                                 pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [] }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
@@ -126,7 +133,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     const m = req.method.toUpperCase();
 
     try {
-      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno });
+      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && disk && disk.nastaveno) });
 
       // Tenant pro přihlašovací stránku: jen název, aby uživatel viděl, že je u správného poskytovatele.
       if (m === 'GET' && path === '/api/tenant') {
@@ -340,6 +347,65 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           r.sms = stav;
         }
         return json({ ok: true, ...vysledek });
+      }
+
+      // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.
+      if (path === '/api/nahravky' || path.startsWith('/api/nahravky/')) {
+        if (rodina) return jenPoskytovatel();
+        const nejsou = () => json({ ok: false, nastaveno: false, error: 'Nahrávky na Google Disk nejsou na serveru nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC – ./deploy/vps-env.sh).' }, 503);
+        // Správce bez tenanta (hlavní aplikace): tenant podle kamery z cameras.json.
+        const tenantKamery = async (id) => { const c = (await kamery()).find((k) => k.id === id); return c ? c.tenant : ''; };
+        if (m === 'GET' && path === '/api/nahravky/stav') {
+          if (!nahravky || !disk || !disk.nastaveno) return json({ ok: true, nastaveno: false, error: 'Nahrávky na Google Disk nejsou na serveru nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC – ./deploy/vps-env.sh).' });
+          const t = tenant || await tenantKamery(url.searchParams.get('kamera') || '');
+          if (!t) return json({ ok: true, nastaveno: true, tenant: null });
+          try { const s = await disk.stav(t); return json({ ok: true, nastaveno: true, tenant: t, google: s.google, slozka: s.slozka, delkaS: (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel?.nahravkaS || 15 }); }
+          catch (e) { return json({ ok: true, nastaveno: true, tenant: t, google: null, slozka: null, chyba: e.message }); }
+        }
+        if (!nahravky) return nejsou();
+        const bezDisku = !disk || !disk.nastaveno;
+        if (m === 'POST' && path === '/api/nahravky/slozka') {
+          if (bezDisku) return nejsou();
+          const { nazev } = await telo(req);
+          const s = await disk.zalozSlozku((await stavTenanta()).tenant, typeof nazev === 'string' ? nazev.slice(0, 200) : '');
+          return json({ ok: true, google: s.google, slozka: s.slozka, zprava: s.zprava || '' });
+        }
+        if (m === 'GET' && path === '/api/nahravky') {
+          const k = url.searchParams.get('kamera') || '';
+          if (k && !(await smiKameruId(k))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+          const t = tenant || (k ? await tenantKamery(k) : '');
+          if (!t) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
+          return json({ ok: true, nahravky: await nahravky.seznam(t, { kameraId: k, limit: Number(url.searchParams.get('limit')) || 50 }) });
+        }
+        if (m === 'POST' && path === '/api/nahravky/rucni') {
+          if (bezDisku) return nejsou();
+          const { kamera, delkaS } = await telo(req);
+          if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+          const st = await stavTenanta();
+          const s = await st.stav();
+          const p = s.state.patients.find((x) => x.id === kamera);
+          const smi = nahravky.smiNahravat(s.state, p, 'state');
+          if (!smi.ok) return json({ ok: false, error: `Nahrávka se nepořídí: ${smi.duvod}.` }, 403);
+          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, zdroj: 'rucni', kdo: ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
+          if (n.preskoceno) return json({ ok: false, error: n.duvod }, 409);
+          if (n.chyba) return json({ ok: false, nahravka: n, error: n.chyba }, 502);
+          return json({ ok: true, nahravka: n });
+        }
+        if (m === 'POST' && path === '/api/nahravky') {
+          if (bezDisku) return nejsou();
+          const k = url.searchParams.get('kamera') || '';
+          if (!isDeviceId(k) || !(await smiKameruId(k))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+          const t = tenant || await tenantKamery(k);
+          if (!t) return json({ ok: false, error: 'Kamera nepatří žádnému poskytovateli (vps-kamera.sh tenant …).' }, 400);
+          const mime = (req.headers.get('content-type') || 'video/mp4').split(';')[0].trim();
+          if (!/^video\/(mp4|webm)$/.test(mime)) return json({ ok: false, error: 'Tělo musí být video/mp4 nebo video/webm.' }, 415);
+          const data = Buffer.from(await req.arrayBuffer());
+          if (data.length < 1024) return json({ ok: false, error: 'Prázdná nahrávka.' }, 400);
+          const n = await nahravky.uloz(t, { kameraId: k, data, mime, cas: Number(url.searchParams.get('cas')) || undefined, delkaS: Number(url.searchParams.get('delkaS')) || null,
+            zdroj: ['rucni', 'plan', 'udalost'].includes(url.searchParams.get('zdroj')) ? url.searchParams.get('zdroj') : 'rucni', kdo: ja.jmeno || 'Správce', text: (url.searchParams.get('text') || '').slice(0, 300) });
+          return n.chyba ? json({ ok: false, nahravka: n, error: n.chyba }, 502) : json({ ok: true, nahravka: n });
+        }
+        return json({ ok: false, error: 'Neznámá adresa.' }, 404);
       }
 
       // Zkušební SMS z nastavení dispečinku: ověří webhook Make a Twilio bez zakládání účtu rodině.

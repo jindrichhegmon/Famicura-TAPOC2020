@@ -5,6 +5,33 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.1 · 4. 10. 2026 · nahrávky na Google Disku poskytovatele
+
+- **Nahrávky kamer se ukládají na Google Disk poskytovatele** stejným
+  principem jako Export dat v Péče doma plus: poskytovatel má Google účet
+  připojený jednou v portálu Plus (Export dat → Připojit Google účet),
+  v Google se nic dalšího nenastavuje. Dispečink v ⚙ Nastavení → Nahrávky
+  na Google Disku založí adresář „Famicura Kamera – <poskytovatel>“.
+- **Nahrává server, ne prohlížeč** (`src/nahravky.mjs`): po události se
+  zatrženým Nahrávat vezme z go2rtc nastavený počet sekund obrazu (⚙ →
+  Nahrávka po události, 5–60 s, výchozí 15) jako MP4 a nahraje ho na Disk
+  (`src/disk.mjs`, přes aplikaci `pecedomaplus-kamera-disk` na jhn-apps
+  s klíčem `FAMICURA_KAMERA_KLIC`). Řádek je v tabulce `A_KAM_Nahravka`
+  tenanta, odkaz 🎞 u události v historii a v seznamu Nahrávky v detailu
+  kamery; tlačítko **Nahrát teď**. Obraz před událostí server nemá.
+- **Soukromí:** nahrává se jen při plném obrazu povoleném rodinou, nebo při
+  kritické události s povoleným nouzovým přístupem; jinak je u události
+  důvod, proč se nenahrálo.
+- Hlavní aplikace: každou hotovou nahrávku (ruční, plán, událost z analýzy)
+  pošle serveru a ten ji uloží na Disk poskytovatele kamery
+  (`POST /api/nahravky`, až 64 MB); odkaz je u nahrávky v seznamu.
+- Tunel pro více míst (`wireguard-vps.sh --misto N`, README 2d): kamera
+  u jiného poskytovatele má vlastní bránu a vlastní místo v tunelu.
+- Nasazení: `vps-env.sh` vygeneruje `FAMICURA_KAMERA_KLIC` a opíše ho do
+  `.env` jhn-apps (`deploy/sdilej-klic-jhn.sh`); v repozitáři
+  WEB-PeceDomaPlus `./deploy-jhn-apps.sh` nasadí aplikaci
+  `pecedomaplus-kamera-disk`.
+
 ## 2.0 · 3. 10. 2026 · ostrý provoz podle poskytovatele (tenanta)
 
 - **Konec prototypu se společným stavem.** Každý poskytovatel (tenant Péče

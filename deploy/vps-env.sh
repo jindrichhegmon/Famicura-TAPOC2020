@@ -24,7 +24,7 @@ cd "$(dirname "$0")/.."
 # Pomocník musí být na VPS i tehdy, když se od posledního nasazení změnil.
 $SSH "$VPS" "mkdir -p $DIR/scripts $DIR/deploy && chown -R jhnapps:jhnapps $DIR"
 rsync -az -e "$SSH" scripts/set-env.mjs "$VPS:$DIR/scripts/"
-rsync -az -e "$SSH" deploy/prevezmi-jhn.sh "$VPS:$DIR/deploy/"
+rsync -az -e "$SSH" deploy/prevezmi-jhn.sh deploy/sdilej-klic-jhn.sh "$VPS:$DIR/deploy/"
 PREVEZMI="bash $DIR/deploy/prevezmi-jhn.sh"
 rsync -az -e "$SSH" .env.example "$VPS:$DIR/"
 $SSH "$VPS" "chown -R jhnapps:jhnapps $DIR && $JAKO 'cd $DIR && ( [ -f .env ] || cp .env.example .env ) && chmod 600 .env'"
@@ -69,6 +69,11 @@ if $SSH "$VPS" "$PREVEZMI JHN_APPS_TOKEN '^FAMICURA_REPORTY_TOKEN\$' $JHN_ZDROJ 
   unset H
 fi
 
+echo "Nahrávky na Google Disk poskytovatele: klíč FAMICURA_KAMERA_KLIC (vygeneruje se tady a opíše do .env jhn-apps, jhn-apps se restartuje)."
+$SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs generuj FAMICURA_KAMERA_KLIC'"
+$SSH "$VPS" "bash $DIR/deploy/sdilej-klic-jhn.sh FAMICURA_KAMERA_KLIC $DIR $JHN_ZDROJ" || echo "Klíč se do $JHN_ZDROJ zapsat nepodařilo – nahrávky na Disk nepůjdou, dokud tam FAMICURA_KAMERA_KLIC nebude stejný jako tady."
+
+echo
 echo "Heslo správce serveru (hlavní aplikace, nouzový vstup do dispečinku bez účtu Péče doma plus)."
 read -rs -p "FAMICURA_PASSWORD (Enter = nechat, jak je): " P; echo
 if [ -n "$P" ]; then
@@ -108,6 +113,6 @@ $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-env.mjs stav'"
 $SSH "$VPS" "$JAKO 'cd $DIR && [ -f deploy/ecosystem.config.cjs ] && PORT=$PORT pm2 startOrRestart deploy/ecosystem.config.cjs --update-env >/dev/null && pm2 save >/dev/null && echo \"Aplikace restartována.\" || echo \"Aplikace ještě není nasazená – spusťte ./deploy/vps-deploy.sh\"'"
 sleep 4
 echo "Kontrola serveru (tenanti = databáze PeceDomaPlus, dispecer = přihlášení účtem Péče doma plus):"
-$SSH "$VPS" "curl -s http://127.0.0.1:$PORT/api/health" | tr ',' '\n' | grep -E '"(ok|tenanti|dispecer)"' | sed 's/^/   /'
+$SSH "$VPS" "curl -s http://127.0.0.1:$PORT/api/health" | tr ',' '\n' | grep -E '"(ok|tenanti|dispecer|nahravky)"' | sed 's/^/   /'
 echo "Poslední hlášky serveru o databázi:"
 $SSH "$VPS" "$JAKO 'pm2 logs famicura-tapo --lines 60 --nostream 2>/dev/null | grep -i \"pdp\|PeceDomaPlus\|jhn-apps\" | tail -5'" | sed 's/^/   /'

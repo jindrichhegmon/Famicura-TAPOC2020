@@ -49,7 +49,7 @@ async function poll() {
   if (!server || polluji) return;
   polluji = true;
   try { const b = await api(`/api/proto/stav?v=${server.v}`); if (b.zmena) adopt(b); }
-  catch (e) { if (e.status === 401 || e.status === 403) odpojit(); }
+  catch (e) { if (e.status === 401 || e.status === 403) odpojit(); else console.error('[sim] stav ze serveru se nepodařilo převzít:', e.message, e.stack || ''); }
   polluji = false;
 }
 function odpojit() { server = null; clearInterval(pollTimer); pollTimer = null; state = load(); notify({ nahrazeno: true }); }

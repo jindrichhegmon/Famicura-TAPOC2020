@@ -44,6 +44,12 @@ export const SCHEMA = {
     klic: ['Klic'],
     sloupce: { Klic: ['c', 64], Hodnota: ['s', 0] },
   },
+  A_KAM_Nahravka: {
+    klic: ['Id'],
+    sloupce: { Id: ['c', 40], KameraID: ['c', 40], Cas: ['i'], DelkaS: ['i'], Velikost: ['i'], UdalostId: ['c', 40], Druh: ['c', 20], Zdroj: ['c', 20],
+      Nazev: ['s', 200], SouborID: ['s', 120], Url: ['s', 400], Email: ['s', 120], Kdo: ['s', 80], Chyba: ['s', 300] },
+    indexy: [['Cas'], ['KameraID', 'Cas']],
+  },
   A_KAM_UzivatelRodiny: {
     klic: ['Id'],
     sloupce: { Id: ['c', 16], Jmeno: ['s', 60], Telefon: ['c', 9], HesloHash: ['s', 200], Kamery: ['s', 0], PozvankaHash: ['s', 100], PozvankaDo: ['i'],
