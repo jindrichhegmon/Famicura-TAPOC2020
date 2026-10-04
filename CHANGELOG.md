@@ -20,6 +20,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   je na serveru málo místa, poskytovatel je přes 90 % limitu, nebo ho
   překročil; stránka se ptá každých 5 minut (`misto.varovani` v
   `GET /api/nahravky/stav`).
+- **Filtr typu událostí v historii** (detail kamery → Historie), jako v
+  aplikaci rodiny: Vše, Kritické, Varování, Kamera, Analýza, S nahrávkou,
+  S upozorněním, Souhlasy, Poznámky. Platí pro posledních 12 i pro zvolené
+  období; s filtrem se živě ukazuje až 40 posledních vyhovujících. Excel
+  stahuje vždy celé období bez filtru.
 
 ## 2.5 · 4. 10. 2026 · log za období s exportem do Excelu, detail v blocích, nahrávka po události
 

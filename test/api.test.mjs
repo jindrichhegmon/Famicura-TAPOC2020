@@ -740,12 +740,13 @@ test('otočení kamery: kdo kameru smí vidět, smí ji otočit (rodina jen svou
 
 test('log událostí za období: JSON pro stránku a sešit Excelu; rodina nemá; špatné datum 400', async () => {
   const { h, uzivatele, vsichni } = handler();
-  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'emit', args: ['tapoc2020', 'linecross'] } }));
+  // pád místo překročení čáry: čára se hlídá jen 07:00–20:00, test musí projít v kteroukoli hodinu
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'emit', args: ['tapoc2020', 'fall'] } }));
   await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'poznamka', args: ['tapoc2020', 'Volala dcera.', 'Dispečerka Jana'] } }));
   const dnes = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' });
   let r = await h(req('GET', `/api/udalosti?od=${dnes}&do=${dnes}&kamera=tapoc2020`, { cookies: cookie() }));
   assert.equal(r.status, 200); const j = await r.json();
-  assert.ok(j.udalosti.length >= 2); assert.equal(j.udalosti[0].kamera, 'TAPO Test'); assert.ok(j.udalosti.some((u) => u.druh === 'Překročení čáry') && j.udalosti.some((u) => u.druh === 'poznámka' && u.text === 'Volala dcera.'));
+  assert.ok(j.udalosti.length >= 2); assert.equal(j.udalosti[0].kamera, 'TAPO Test'); assert.ok(j.udalosti.some((u) => u.druh === 'Možný pád') && j.udalosti.some((u) => u.druh === 'poznámka' && u.text === 'Volala dcera.'));
   assert.equal(j.udalosti[0].datum, new Date().toLocaleDateString('cs-CZ', { timeZone: 'Europe/Prague', day: 'numeric', month: 'numeric', year: 'numeric' }));
   // mimo období nic; bez období vše
   assert.equal((await (await h(req('GET', '/api/udalosti?od=2000-01-01&do=2000-01-02', { cookies: cookie() }))).json()).udalosti.length, 0);

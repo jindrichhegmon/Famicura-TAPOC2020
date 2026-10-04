@@ -443,6 +443,7 @@ function renderDetail(rebuild = false) {
         </div><div class="blok"><h3>Přidat poznámku</h3><p class="small muted">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</p>
         <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="akce"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
         </div><div class="blok"><h3>Historie</h3><p class="small muted">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění, 🎞 = nahrávka (na serveru nebo na Google Disku)</p>
+        <div class="chips" id="dlogFiltr" role="group" aria-label="typ událostí">${[['all', 'Vše'], ['crit', 'Kritické'], ['warn', 'Varování'], ['kamera', 'Kamera'], ['analýza', 'Analýza'], ['nahravka', '🎞 S nahrávkou'], ['upozorneni', '📱✉ S upozorněním'], ['consent', 'Souhlasy'], ['poznamka', 'Poznámky']].map(([f, t]) => `<button type="button" class="chip" data-f="${f}" aria-pressed="${f === dfiltr}">${t}</button>`).join('')}</div>
         <div class="akce" id="dlogAkce"><label class="small">od <input type="date" id="dlogOd"></label><label class="small">do <input type="date" id="dlogDo"></label><label class="small"><input type="checkbox" id="dlogVse"> všechny kamery</label><button type="button" class="sm sec" id="dlogZobraz">Zobrazit období</button><button type="button" class="sm sec hide" id="dlogZive">Zpět na posledních 12</button><button type="button" class="sm" id="dlogExcel" title="stáhne události za zvolené období (bez období: všechny) jako sešit Excelu">⬇ Stáhnout do Excelu</button><span class="small muted" id="dlogStav"></span></div><ul class="list" id="dhist"></ul>
         </div><div class="blok"><h3>Nahrávky</h3><p class="small muted">– na serveru (▶ přehrát v aplikaci) nebo na Google Disku poskytovatele podle Nastavení; nahrává server po události se zatrženým Nahrávat a tlačítkem Nahrát teď</p><ul class="list" id="dnahravky"><li class="muted">Načítám…</li></ul>
       </div></section>
@@ -580,6 +581,35 @@ function renderDetail(rebuild = false) {
 
 /* ---------- historie: posledních 12 ze stavu, nebo zvolené období z databáze (GET /api/udalosti) ---------- */
 let dlog = null;   // { od, do, vse, radky } – zobrazené období; null = živě posledních 12
+let dfiltr = 'all'; // typ událostí v historii (čipy jako v aplikaci rodiny); zůstává při přepnutí kamery
+/** Filtr nad událostí ze stavu (živě). */
+function filtrUdalosti(e) {
+  const k = KINDS[e.kind];
+  switch (dfiltr) {
+    case 'all': return true;
+    case 'crit': return k?.level === 'crit';
+    case 'warn': return k?.level === 'warn';
+    case 'consent': return e.kind === 'consent';
+    case 'poznamka': return e.kind === 'poznamka';
+    case 'nahravka': return !!(e.nahravka && (e.nahravka.id || e.nahravka.url) && !e.nahravka.chyba && !e.nahravka.smazano);
+    case 'upozorneni': return !!(e.upozorneni && ((e.upozorneni.sms?.odeslano || 0) + (e.upozorneni.mail?.odeslano || 0) > 0));
+    default: return k?.source === dfiltr;
+  }
+}
+/** Filtr nad řádkem logu ze serveru (období). */
+function filtrRadku(r) {
+  const k = KINDS[r.kind];
+  switch (dfiltr) {
+    case 'all': return true;
+    case 'crit': return k?.level === 'crit';
+    case 'warn': return k?.level === 'warn';
+    case 'consent': return r.kind === 'consent';
+    case 'poznamka': return r.kind === 'poznamka';
+    case 'nahravka': return /^ano/.test(r.nahravka || '');
+    case 'upozorneni': return /^[1-9]\d*\//.test(r.sms || '') || /^[1-9]\d*\//.test(r.mail || '');
+    default: return k?.source === dfiltr;
+  }
+}
 function historieOvladani(d, p) {
   const stav = (t, spatne = false) => { const el = d.querySelector('#dlogStav'); el.textContent = t; el.classList.toggle('bad', spatne); };
   const obdobi = () => { const od = d.querySelector('#dlogOd').value, doD = d.querySelector('#dlogDo').value, vse = d.querySelector('#dlogVse').checked; return { od, do: doD, vse }; };
@@ -598,6 +628,7 @@ function historieOvladani(d, p) {
       renderHistorie(d, p, sim.state);
     } catch (e) { stav(`Nepodařilo se načíst: ${e.message}`, true); }
   };
+  d.querySelectorAll('#dlogFiltr .chip').forEach((b) => { b.onclick = () => { dfiltr = b.dataset.f; d.querySelectorAll('#dlogFiltr .chip').forEach((o) => o.setAttribute('aria-pressed', String(o === b))); renderHistorie(d, p, sim.state); }; });
   d.querySelector('#dlogZive').onclick = () => { dlog = null; d.querySelector('#dlogZive').classList.add('hide'); stav(''); renderHistorie(d, p, sim.state); };
   d.querySelector('#dlogExcel').onclick = () => {
     const o = obdobi();
@@ -610,16 +641,18 @@ function historieOvladani(d, p) {
 const fmtDatumISO = (iso) => { const [y, m, dd] = iso.split('-'); return `${Number(dd)}. ${Number(m)}. ${y}`; };
 function renderHistorie(d, p, s) {
   if (dlog && dlog.radky) {
-    setHtml(d.querySelector('#dhist'), dlog.radky.slice(0, 500).map((r) => {
+    setHtml(d.querySelector('#dhist'), dlog.radky.filter(filtrRadku).slice(0, 500).map((r) => {
       const k = KINDS[r.kind];
       const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : r.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
       const kam = dlog.vse ? ` <span class="muted">· ${esc(r.kamera)}</span>` : '';
       const dalsi = [r.stav && r.stav !== 'uzavřen' ? `<em>${esc(r.stav)}</em>` : '', r.vysledek ? esc(r.vysledek) : '', r.sms ? `📱 ${esc(r.sms)}` : '', r.mail ? `✉ ${esc(r.mail)}` : '', r.nahravka ? `🎞 ${esc(r.nahravka)}` : ''].filter(Boolean).join(' · ');
       return `<li><span class="when">${esc(r.datum)} ${esc(r.casText.slice(0, 5))}</span><span class="grow">${badge}${esc(r.text || r.druh)}${kam}${dalsi ? ` · <span class="muted">${dalsi}</span>` : ''}</span></li>`;
-    }).join('') || '<li class="muted">V tomto období není žádná událost.</li>');
+    }).join('') || `<li class="muted">V tomto období není žádná ${dfiltr === 'all' ? 'událost' : 'událost tohoto typu'}.</li>`);
     return;
   }
-  setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
+  // živě: posledních 12; s filtrem posledních 40 vyhovujících (starší jsou v období)
+  const zive = s.events.filter((e) => e.patientId === p.id && filtrUdalosti(e)).slice(0, dfiltr === 'all' ? 12 : 40);
+  setHtml(d.querySelector('#dhist'), zive.map((e) => {
     const k = KINDS[e.kind];
     const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''} – přehrát v sekci Nahrávky">🎞 nahrávka</a>` : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || (e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky')).slice(0, 60))}</span>`) : '';
     const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
@@ -627,7 +660,7 @@ function renderHistorie(d, p, s) {
     const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';
     const chyba = u && (u.sms?.chyba || u.mail?.chyba);
     return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}${upoz ? ` · <span class="${chyba ? 'bad' : 'muted'}" title="${esc(chyba || 'odeslaná upozornění SMS / e-mail')}">${upoz}${chyba ? ' ⚠' : ''}</span>` : ''}${nahr}</span></li>`;
-  }).join(''));
+  }).join('') || `<li class="muted">${dfiltr === 'all' ? 'Zatím žádná událost.' : 'Mezi posledními událostmi není žádná tohoto typu – zkuste zvolit období.'}</li>`);
 }
 
 /* ---------- uživatelé rodiny: účty na serveru, pozvánka SMS ----------
