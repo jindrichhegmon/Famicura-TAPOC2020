@@ -49,11 +49,16 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   const serverOk = () => !!(uloziste && uloziste.nastaveno);
   const diskOk = () => !!(disk && disk.nastaveno);
 
-  /** Kam ukládat podle volby poskytovatele a toho, co je na serveru nastavené: 'server' | 'disk', nebo chyba. */
-  function cil(volba) {
-    if (volba === 'disk') { if (diskOk()) return 'disk'; if (serverOk()) return 'server'; }
-    if (serverOk()) return 'server';
-    if (diskOk()) return 'disk';
+  /**
+   * Kam ukládat: 'server' (když je úložiště na serveru), 'disk' (Google Disk místo serveru, když server není,
+   * nebo volba 'disk'), nebo chyba. `disk` = kopie na Google Disk zapnutá v ⚙ (vedle serveru).
+   * → { hlavni: 'server'|'disk', kopieDisk: bool }
+   */
+  function cil(volba, disk = false) {
+    const chceDisk = volba === 'disk' || disk === true;
+    if (serverOk()) return { hlavni: 'server', kopieDisk: chceDisk && diskOk() };
+    if (chceDisk && diskOk()) return { hlavni: 'disk', kopieDisk: false };
+    if (diskOk()) return { hlavni: 'disk', kopieDisk: false };
     throw chyba('Nahrávky nemají kam: na serveru není nastavené úložiště (NAHRAVKY_KLIC) ani Google Disk (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC) – ./deploy/vps-env.sh.', 503);
   }
 
@@ -90,7 +95,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   }
 
   /** Uloží hotový soubor (ze serveru i z prohlížeče) a zapíše řádek; při chybě řádek s chybou. */
-  async function uloz(tenant, { kameraId, data, mime = 'video/mp4', cas, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server' }) {
+  async function uloz(tenant, { kameraId, data, mime = 'video/mp4', cas, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
     const t = cas || now();
     const info = await kameraInfo(kameraId);
     const label = druh && KINDS[druh] ? KINDS[druh].label : (zdroj === 'rucni' ? 'rucni' : zdroj);
@@ -99,11 +104,16 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
       Nazev: nazev, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: null, Uloziste: null, Soubor: null, Mime: mime, SmazanoCas: null };
     let slozka = '';
     try {
-      const kam = cil(volba);
-      radek.Uloziste = kam;
-      if (kam === 'server') {
+      const kam = cil(volba, kopie);
+      radek.Uloziste = kam.hlavni;
+      if (kam.hlavni === 'server') {
         const v = await uloziste.uloz(tenant, radek.Id, data);
         radek.Soubor = v.soubor; slozka = 'server:' + tenant;
+        if (kam.kopieDisk) {
+          // kopie na Google Disk: chyba Disku nahrávku na serveru neruší, jen se zapíše
+          try { const v2 = await disk.nahraj(tenant, { nazev, mime, data, popis: text || `Famicura Kamera – ${label}` }); Object.assign(radek, { SouborID: v2.id, Url: v2.url, Email: v2.email }); slozka += ' + Google Disk ' + (v2.email || ''); }
+          catch (e) { radek.Chyba = ('Google Disk: ' + String(e.message || e)).slice(0, 300); log.error('[nahravky]', tenant, kameraId, 'kopie na Google Disk se nepodařila:', e.message); }
+        }
       } else {
         const v = await disk.nahraj(tenant, { nazev, mime, data, popis: text || `Famicura Kamera – ${label}` });
         Object.assign(radek, { SouborID: v.id, Url: v.url, Email: v.email, Nazev: v.nazev || nazev }); slozka = 'Google Disk ' + (v.email || '');
@@ -113,26 +123,26 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
       log.error('[nahravky]', tenant, kameraId, 'uložení se nepodařilo:', radek.Chyba);
     }
     await tabulky.vloz(tenant, 'A_KAM_Nahravka', radek);
-    if (!radek.Chyba) await evidenceClb(tenant, radek, info.name || kameraId, slozka);
+    if (radek.Uloziste && (radek.Soubor || radek.SouborID)) await evidenceClb(tenant, radek, info.name || kameraId, slozka);
     return zRadku(radek);
   }
 
   /** Nahrávka N sekund z kamery (po události nebo ručně). Jedna na kameru najednou. */
-  function porid(tenant, { kameraId, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server' }) {
+  function porid(tenant, { kameraId, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
     const klic = tenant + ':' + kameraId;
     if (bezi.has(klic)) return bezi.get(klic).then(() => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží' }));
     const d = normDelka(delkaS);
     const p = (async () => {
       const cas = now();
       let data;
-      try { cil(volba); data = await klip(kameraId, d); }
+      try { cil(volba, kopie); data = await klip(kameraId, d); }
       catch (e) {
         const radek = { Id: nid(cas), KameraID: kameraId, Cas: cas, DelkaS: d, Velikost: 0, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj, Nazev: null, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: String(e.message || e).slice(0, 300), Uloziste: null, Soubor: null, Mime: null, SmazanoCas: null };
         await tabulky.vloz(tenant, 'A_KAM_Nahravka', radek).catch(() => {});
         log.error('[nahravky]', tenant, kameraId, 'nahrávka se nepořídila:', radek.Chyba);
         return zRadku(radek);
       }
-      return uloz(tenant, { kameraId, data, cas, delkaS: d, druh, udalostId, zdroj, kdo, text, uloziste: volba });
+      return uloz(tenant, { kameraId, data, cas, delkaS: d, druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie });
     })().finally(() => bezi.delete(klic));
     bezi.set(klic, p);
     return p;
@@ -148,6 +158,16 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
     get nastaveno() { return serverOk() || diskOk(); },
     get uloziste() { return { server: serverOk(), disk: diskOk() }; },
     normDelka, porid, uloz, smiNahravat, cil,
+    /** Kolik nahrávky tenanta zabírají na serveru a kolik místa VPS má → { soubory, bajty, volne, celkem }. */
+    async misto(tenant) {
+      const r = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde: { Uloziste: 'server', SmazanoCas: null }, limit: 10000 });
+      const out = { soubory: r.length, bajty: r.reduce((a, x) => a + (Number(x.Velikost) || 0) + 32, 0), volne: null, celkem: null };
+      if (uloziste && uloziste.dir) {
+        try { const { statfs } = await import('node:fs/promises'); const st = await statfs(uloziste.dir).catch(async () => { const { mkdir } = await import('node:fs/promises'); await mkdir(uloziste.dir, { recursive: true }); return statfs(uloziste.dir); }); out.volne = Number(st.bavail) * Number(st.bsize); out.celkem = Number(st.blocks) * Number(st.bsize); }
+        catch { /* bez údaje o disku */ }
+      }
+      return out;
+    },
     /** Nahrávky tenanta (nejnovější první): jedné kamery, nebo jen daných kamer (rodina). */
     async seznam(tenant, { kameraId = '', kamery: jen = null, limit = 50, iSmazane = false } = {}) {
       const kde = {};

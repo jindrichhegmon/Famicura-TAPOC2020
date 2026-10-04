@@ -318,7 +318,21 @@ function render() {
   }).join('') || '<li class="muted">Zatím nic.</li>');
   prehravaniOvladani($('history'));
   nactiNahravky();
+  ptzUkaz();
 }
+
+/* Otočení kamery (Tapo pan/tilt přes ONVIF): jen u skutečné kamery se stavem na serveru; krátký krok na stisknutí. */
+function ptzUkaz() {
+  const box = $('ptz'); if (!box) return;
+  const p = sim.patient(patientId);
+  box.classList.toggle('hide', !(sim.naServeru && p && p.real));
+}
+$('ptz')?.querySelectorAll('[data-ptz]').forEach((b) => { b.onclick = async () => {
+  const box = $('ptz'); box.classList.add('busy');
+  try { const r = await fetch('/api/ptz', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: patientId, smer: b.dataset.ptz }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'nepodařilo se'); }
+  catch (e) { toast(`Otočení kamery: ${e.message}`, 'crit'); }
+  box.classList.remove('busy');
+}; });
 
 /* Nahrávky kamery rodiny: seznam ze serveru (jen své kamery), přehrání v aplikaci (jde do auditu poskytovatele). */
 let nahravkyCache = { cas: 0, pocet: -1, html: '', ver: 0 };

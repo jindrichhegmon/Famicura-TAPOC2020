@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.3 · 4. 10. 2026 · Google Disk zapnout/vypnout, místo na serveru, otáčení kamery
+
+- **Google Disk jde zapnout a vypnout** (⚙ Nastavení → zaškrtávátko Google
+  Disk): zapnuto = každá nahrávka je na serveru i jako kopie na Google Disku
+  poskytovatele; vypnuto = na Disk se nic neposílá, i když je adresář
+  zapojený. Chyba Disku nahrávku na serveru neruší, jen se zapíše k řádku.
+- **Místo na serveru**: v ⚙ u části Nahrávky na serveru je, kolik nahrávky
+  tohoto poskytovatele zabírají (MB/GB, počet souborů) a kolik je na VPS
+  volného místa (`misto` v `GET /api/nahravky/stav`).
+- **Otáčení kamery** (Tapo C200/C210/C220, ONVIF PTZ stejným účtem a portem
+  2020 jako události): kříž šipek na obraze v detailu dispečinku i v aplikaci
+  rodiny (jen u své kamery), ⌂ = výchozí poloha; `POST /api/ptz` (`src/ptz.mjs`,
+  `onvif.ptz`), krok = krátký ContinuousMove a Stop, jeden pohyb na kameru
+  najednou.
+
 ## 2.2 · 4. 10. 2026 · úložiště nahrávek na serveru, přehrávání v aplikaci
 
 - **Druhá volba úložiště: na serveru (doporučeno).** ⚙ Nastavení → Úložiště

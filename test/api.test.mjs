@@ -68,7 +68,7 @@ function handler(over = {}) {
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
   const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -712,4 +712,22 @@ test('úložiště na serveru: nahrávka z prohlížeče zůstane šifrovaně na
   await tabulky.uprav(T, 'A_KAM_Nahravka', { Id: n1.id }, { Cas: Date.now() - 2 * 86400000 });
   assert.equal(await nahravky.promaz(), 1, 'starší než 1 den se smaže');
   assert.equal((await h(new Request('http://localhost/api/nahravky/' + n1.id + '/soubor', { headers: { cookie: cookie() } }))).status, 410);
+});
+
+test('otočení kamery: kdo kameru smí vidět, smí ji otočit (rodina jen svou); směry; bez PTZ 503', async () => {
+  const pohyby = [];
+  const ptz = { async pohni(id, smer, o) { pohyby.push({ id, smer, o }); if (smer === 'zoom') { const e = new Error('Směr: left…'); e.status = 400; throw e; } return { ok: true }; } };
+  const { h, uzivatele, vsichni } = handler({ ptz });
+  assert.equal((await h(req('POST', '/api/ptz', { cookies: cookie(), body: { kamera: 'tapoc2020', smer: 'left' } }))).status, 200);
+  assert.deepEqual(pohyby[0], { id: 'tapoc2020', smer: 'left', o: { rychlost: 0.5, ms: 400 } });
+  assert.equal((await h(req('POST', '/api/ptz', { cookies: cookie(), body: { kamera: 'cizi', smer: 'left' } }))).status, 404, 'kamera jiného tenanta');
+  assert.equal((await h(req('POST', '/api/ptz', { cookies: cookie(), body: { kamera: 'tapoc2020', smer: 'zoom' } }))).status, 400);
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  assert.equal((await h(req('POST', '/api/ptz', { cookies: rc, body: { kamera: 'tapoc2020', smer: 'home' } }))).status, 200, 'rodina svou kameru otočí');
+  assert.equal(pohyby.length, 3);
+  assert.equal((await h(req('POST', '/api/ptz', { cookies: rc, body: { kamera: 'cizi', smer: 'home' } }))).status, 404);
+  const { h: h2 } = handler();
+  assert.equal((await h2(req('POST', '/api/ptz', { cookies: cookie(), body: { kamera: 'tapoc2020', smer: 'up' } }))).status, 503);
 });

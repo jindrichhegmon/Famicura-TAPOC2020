@@ -22,6 +22,7 @@
  *   GET  /api/nahravky/:id/soubor   přehrání nahrávky ze serveru (Range), každé přehrání do auditu A_KAM_Prehrani; z Disku přesměruje
  *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
  *   DELETE /api/nahravky/:id        smazání (poskytovatel)
+ *   POST /api/ptz               { kamera, smer: left|right|up|down|home|stop } otočení kamery (ONVIF PTZ; rodina jen svou)
  *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery a uloží na Disk
  *   POST /api/nahravky?kamera=&cas=&delkaS=&zdroj=&text=   tělo = soubor (video/mp4 | video/webm) z hlavní aplikace
  *
@@ -103,7 +104,7 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null,
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null,
                                 pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [] }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
@@ -353,6 +354,15 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         return json({ ok: true, ...vysledek });
       }
 
+      // Otočení kamery (Tapo pan/tilt přes ONVIF): kdo kameru smí vidět, smí ji i otočit (rodina jen svou).
+      if (m === 'POST' && path === '/api/ptz') {
+        const { kamera, smer, rychlost, ms } = await telo(req);
+        if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        if (!ptz) return json({ ok: false, error: 'Otáčení kamery není na serveru k dispozici.' }, 503);
+        await ptz.pohni(kamera, String(smer || ''), { rychlost: Number(rychlost) || 0.5, ms: Number(ms) || 400 });
+        return json({ ok: true });
+      }
+
       // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.
       if (path === '/api/nahravky' || path.startsWith('/api/nahravky/')) {
         const nejsou = () => json({ ok: false, nastaveno: false, error: 'Nahrávky nejsou na serveru nastavené (NAHRAVKY_KLIC pro úložiště na serveru, nebo JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC pro Google Disk – ./deploy/vps-env.sh).' }, 503);
@@ -402,7 +412,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           const t = tenant || await tenantKamery(url.searchParams.get('kamera') || '');
           if (!t) return json({ ok: true, nastaveno: nahravky.nastaveno, uloziste: nahravky.uloziste, tenant: null });
           const posk = (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel || {};
-          const out = { ok: true, nastaveno: nahravky.nastaveno, uloziste: nahravky.uloziste, tenant: t, volba: posk.nahravkyUloziste || 'server', dny: posk.nahravkyDny || 30, delkaS: posk.nahravkaS || 15, google: null, slozka: null };
+          const out = { ok: true, nastaveno: nahravky.nastaveno, uloziste: nahravky.uloziste, tenant: t, volba: posk.nahravkyUloziste || 'server', kopieDisk: !!posk.nahravkyDisk, dny: posk.nahravkyDny || 30, delkaS: posk.nahravkaS || 15, google: null, slozka: null, misto: await nahravky.misto(t).catch(() => null) };
           if (disk && disk.nastaveno) { try { const s = await disk.stav(t); out.google = s.google; out.slozka = s.slozka; } catch (e) { out.chyba = e.message; } }
           return json(out);
         }
@@ -435,7 +445,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           const p = s.state.patients.find((x) => x.id === kamera);
           const smi = nahravky.smiNahravat(s.state, p, 'state');
           if (!smi.ok) return json({ ok: false, error: `Nahrávka se nepořídí: ${smi.duvod}.` }, 403);
-          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, uloziste: s.state.poskytovatel?.nahravkyUloziste, zdroj: 'rucni', kdo: ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
+          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, uloziste: s.state.poskytovatel?.nahravkyUloziste, disk: !!s.state.poskytovatel?.nahravkyDisk, zdroj: 'rucni', kdo: ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
           if (n.preskoceno) return json({ ok: false, error: n.duvod }, 409);
           if (n.chyba) return json({ ok: false, nahravka: n, error: n.chyba }, 502);
           return json({ ok: true, nahravka: n });
@@ -449,8 +459,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (!/^video\/(mp4|webm)$/.test(mime)) return json({ ok: false, error: 'Tělo musí být video/mp4 nebo video/webm.' }, 415);
           const data = Buffer.from(await req.arrayBuffer());
           if (data.length < 1024) return json({ ok: false, error: 'Prázdná nahrávka.' }, 400);
-          const volba = (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel?.nahravkyUloziste || 'server';
-          const n = await nahravky.uloz(t, { kameraId: k, data, mime, cas: Number(url.searchParams.get('cas')) || undefined, delkaS: Number(url.searchParams.get('delkaS')) || null, uloziste: volba,
+          const poskU = (await najemci.pro(t).then((x) => x.stav()).catch(() => null))?.state?.poskytovatel || {};
+          const n = await nahravky.uloz(t, { kameraId: k, data, mime, cas: Number(url.searchParams.get('cas')) || undefined, delkaS: Number(url.searchParams.get('delkaS')) || null, uloziste: poskU.nahravkyUloziste || 'server', disk: !!poskU.nahravkyDisk,
             zdroj: ['rucni', 'plan', 'udalost'].includes(url.searchParams.get('zdroj')) ? url.searchParams.get('zdroj') : 'rucni', kdo: ja.jmeno || 'Správce', text: (url.searchParams.get('text') || '').slice(0, 300) });
           return n.chyba ? json({ ok: false, nahravka: n, error: n.chyba }, 502) : json({ ok: true, nahravka: n });
         }

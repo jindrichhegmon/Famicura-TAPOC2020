@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 /* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
 let JA = null;
 const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny'];
+const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
@@ -32,7 +32,7 @@ function renderSmena() {
 }
 function otevriNastaveni() {
   const h = sim.poskytovatel;
-  for (const k of HL_POLE) hlPole(k).value = h[k] ?? '';
+  for (const k of HL_POLE) { if (k === 'nahravkyDisk') hlPole(k).checked = !!h[k]; else hlPole(k).value = h[k] ?? ''; }
   $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
   $('hlErr').classList.add('hide');
   $('nastaveni').classList.remove('hide'); $('hlNazev').focus();
@@ -64,6 +64,17 @@ async function nactiNahravky(pid) {
   nahravkyCache.set(pid, { cas: Date.now(), pocet, html, ver });
   const el2 = document.querySelector('#detail #dnahravky'); if (el2 && selected === pid) ukaz(html, ver);
 }
+/* Otočení kamery (ONVIF PTZ): krátký krok na každé stisknutí; server hlídá, aby šel jeden pohyb najednou. */
+function ptzOvladani(box, pid) {
+  if (!box) return;
+  box.querySelectorAll('[data-ptz]').forEach((b) => { b.onclick = async () => {
+    box.classList.add('busy');
+    try { const r = await fetch('/api/ptz', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: pid, smer: b.dataset.ptz }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'nepodařilo se'); }
+    catch (e) { toast(`Otočení kamery: ${e.message}`, 'crit'); }
+    box.classList.remove('busy');
+  }; });
+}
+
 /* Přehrání nahrávky ze serveru přímo v seznamu (video pod řádkem) a smazání. */
 function prehravaniOvladani(el, pid) {
   el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = (ev) => {
@@ -90,8 +101,12 @@ function diskUkaz(b) {
   const el = $('diskStav'), btn = $('diskSlozkaBtn'), odkaz = $('diskSlozkaOdkaz'), odpojit = $('diskOdpojitBtn');
   btn.disabled = true; btn.classList.remove('hide'); btn.textContent = 'Založit adresář na Google Disku'; odkaz.classList.add('hide'); odpojit.classList.add('hide');
   const u = b?.uloziste || {};
-  $('diskUloziste').textContent = u.server ? `Úložiště na serveru je připravené (šifrované soubory, mazání po ${b.dny || 30} dnech). Zvolené úložiště: ${b.volba === 'disk' ? 'Google Disk' : 'server'}.` : 'Úložiště na serveru není nastavené (správce: ./deploy/vps-env.sh vygeneruje NAHRAVKY_KLIC).';
+  $('diskUloziste').textContent = u.server ? `Úložiště na serveru je připravené (šifrované soubory, mazání po ${b.dny || 30} dnech). Zvolené úložiště: ${b.volba === 'disk' ? 'Google Disk' : 'server'}; kopie na Google Disk ${b.kopieDisk ? 'zapnutá' : 'vypnutá'}.` : 'Úložiště na serveru není nastavené (správce: ./deploy/vps-env.sh vygeneruje NAHRAVKY_KLIC).';
+  const mb = (x) => x == null ? '?' : x >= 1073741824 ? (x / 1073741824).toFixed(1).replace('.', ',') + ' GB' : (x / 1048576).toFixed(1).replace('.', ',') + ' MB';
+  const mi = b?.misto;
+  $('diskMisto').textContent = mi ? `Nahrávky tohoto poskytovatele zabírají na serveru ${mb(mi.bajty)} (${mi.soubory} ${mi.soubory === 1 ? 'soubor' : mi.soubory >= 2 && mi.soubory <= 4 ? 'soubory' : 'souborů'})${mi.celkem ? `; volné místo na serveru ${mb(mi.volne)} z ${mb(mi.celkem)}` : ''}.` : '';
   if (!b || b.nastaveno === false || !u.disk) { el.textContent = 'Nahrávky na Google Disk nejsou na serveru nastavené: správce spustí ./deploy/vps-env.sh (klíč FAMICURA_KAMERA_KLIC) a v portálu Péče doma plus nasadí aplikaci pecedomaplus-kamera-disk.' + (u.server ? ' Nahrávky se ukládají na server.' : ''); return; }
+  if (!b.kopieDisk && b.volba !== 'disk') { el.textContent = 'Google Disk je vypnutý (zaškrtávátko „Google Disk“ výše): nahrávky zůstávají jen na serveru' + (b.slozka ? `, adresář „${b.slozka.nazev}“ zůstává zapojený` : '') + '.'; btn.classList.add('hide'); if (b.slozka) { odkaz.href = b.slozka.url; odkaz.classList.remove('hide'); } return; }
   if (b.chyba) { el.textContent = `Stav Google Disku se nepodařilo zjistit: ${b.chyba}`; return; }
   if (!b.google || !b.google.pripojen) { el.textContent = 'Poskytovatel nemá v Péče doma plus připojený Google účet. Připojte ho v portálu Péče doma plus → Export dat → Připojit Google účet (stejný účet pak slouží i nahrávkám kamer).'; return; }
   if (!b.slozka) { el.textContent = `Google účet ${b.google.email} je připojený (z Péče doma plus). Nahrávky zatím nemají kam: založte adresář.`; btn.disabled = false; return; }
@@ -169,7 +184,7 @@ $('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.pre
 $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  const p = {}; for (const k of HL_POLE) p[k] = (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  const p = {}; for (const k of HL_POLE) p[k] = k === 'nahravkyDisk' ? hlPole(k).checked : (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(hlPole(k).value) : hlPole(k).value.trim();
   try {
     const r = await sim.setPoskytovatel(p);
     if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }
@@ -408,13 +423,13 @@ function renderDetail(rebuild = false) {
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
       <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
       <section class="dsec" data-sec="monitoring">
-        <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span></div>
+        <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
         <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
         <div class="row" id="dbtn"></div>
         <h3 style="margin-top:12px">Přidat poznámku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</span></h3>
         <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
-        <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění, 🎞 = nahrávka na Google Disku</span></h3><ul class="list" id="dhist"></ul>
-        <h3 style="margin-top:12px">Nahrávky <span class="small muted" style="text-transform:none;font-weight:400">– na Google Disku poskytovatele; nahrává server po události se zatrženým Nahrávat a tlačítkem Nahrát teď</span></h3><ul class="list" id="dnahravky"><li class="muted">Načítám…</li></ul>
+        <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění, 🎞 = nahrávka (na serveru nebo na Google Disku)</span></h3><ul class="list" id="dhist"></ul>
+        <h3 style="margin-top:12px">Nahrávky <span class="small muted" style="text-transform:none;font-weight:400">– na serveru (▶ přehrát v aplikaci) nebo na Google Disku poskytovatele podle Nastavení; nahrává server po události se zatrženým Nahrávat a tlačítkem Nahrát teď</span></h3><ul class="list" id="dnahravky"><li class="muted">Načítám…</li></ul>
       </section>
       <section class="dsec hide" data-sec="komunikace">
         <div class="kv"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
@@ -489,6 +504,7 @@ function renderDetail(rebuild = false) {
     d.querySelector('#dnoteAdd').onclick = pridej;
     d.querySelector('#dnote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); pridej(); } });
     d.__naplnWatch = naplnWatch;
+    ptzOvladani(d.querySelector('#dptz'), p.id);
   }
   const s = sim.state;
   const mode = tileMode(p.id);
@@ -544,7 +560,7 @@ function renderDetail(rebuild = false) {
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];
-    const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || 'bez nahrávky').slice(0, 60))}</span>`) : '';
+    const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''} – přehrát v sekci Nahrávky">🎞 nahrávka</a>` : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || (e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky')).slice(0, 60))}</span>`) : '';
     const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
     const u = e.upozorneni;
     const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';

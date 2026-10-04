@@ -48,6 +48,7 @@ const { createUpozorneni } = await import('./src/upozorneni.mjs');
 const { createDisk } = await import('./src/disk.mjs');
 const { createNahravky } = await import('./src/nahravky.mjs');
 const { createUloziste } = await import('./src/uloziste.mjs');
+const { createPtz } = await import('./src/ptz.mjs');
 const zaznamy = await import('./src/zaznamy.mjs');
 const store = createStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
@@ -86,7 +87,8 @@ const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulk
 if (nahravky) { const promaz = () => nahravky.promaz().catch((e) => console.error('[famicura-tapo] mazání nahrávek:', e.message)); setTimeout(promaz, 60 * 1000); setInterval(promaz, 60 * 60 * 1000); }
 const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }), nahravky });
 const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky });
+const ptz = createPtz({ kamery: nactiKamery });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

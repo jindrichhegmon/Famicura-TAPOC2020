@@ -32,6 +32,8 @@ const NS = {
   tev: 'http://www.onvif.org/ver10/events/wsdl',
   wsnt: 'http://docs.oasis-open.org/wsn/b-2',
   tt: 'http://www.onvif.org/ver10/schema',
+  trt: 'http://www.onvif.org/ver10/media/wsdl',
+  tptz: 'http://www.onvif.org/ver20/ptz/wsdl',
 };
 const DIGEST = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest';
 const BASE64 = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary';
@@ -176,7 +178,7 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
   async function soap(url, { action, to, body, auth = true, timeoutMs = 10000 }) {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>` +
       `<s:Envelope xmlns:s="${NS.s}" xmlns:wsa="${NS.wsa}" xmlns:wsse="${NS.wsse}" xmlns:wsu="${NS.wsu}" ` +
-      `xmlns:tds="${NS.tds}" xmlns:tev="${NS.tev}" xmlns:wsnt="${NS.wsnt}" xmlns:tt="${NS.tt}">` +
+      `xmlns:tds="${NS.tds}" xmlns:tev="${NS.tev}" xmlns:wsnt="${NS.wsnt}" xmlns:tt="${NS.tt}" xmlns:trt="${NS.trt}" xmlns:tptz="${NS.tptz}">` +
       `<s:Header>${action ? `<wsa:Action s:mustUnderstand="1">${action}</wsa:Action>` : ''}` +
       `${to ? `<wsa:To s:mustUnderstand="1">${esc(to)}</wsa:To>` : ''}${auth ? security() : ''}</s:Header>` +
       `<s:Body>${body}</s:Body></s:Envelope>`;
@@ -210,8 +212,36 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
 
   let eventsUrl = null;
   let stavy = new Map();                // last value per topic|item, for one subscription
+  let ptzInfo = null;                   // { url, profil } – otáčení kamery (Tapo C200/C210/C220)
+
+  /* ---------- otáčení kamery (PTZ) ---------- */
+  async function ptzPriprav() {
+    if (ptzInfo) return ptzInfo;
+    const cap = await soap(`${base}/onvif/device_service`, { body: '<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>' });
+    const ptzX = textUzlu(najdi(cap, 'PTZ', 'XAddr')), mediaX = textUzlu(najdi(cap, 'Media', 'XAddr'));
+    if (!ptzX) throw new OnvifError('Kamera otáčení (PTZ) nenabízí.', 'GetCapabilities bez PTZ');
+    const prof = await soap(nase(mediaX || `${base}/onvif/media_service`), { body: '<trt:GetProfiles/>' });
+    const profily = vsechny(prof, 'Profiles');
+    const p = profily.find((x) => najdi(x, 'PTZConfiguration')) || profily[0];
+    const token = p && p.attrs && p.attrs.token;
+    if (!token) throw new OnvifError('Kamera nevrátila profil pro otáčení.', 'GetProfiles bez token');
+    ptzInfo = { url: nase(ptzX), profil: token };
+    return ptzInfo;
+  }
 
   return {
+    /** Otáčení kamery: směr left|right|up|down (ContinuousMove rychlostí 0–1, po ms Stop), home (GotoHomePosition), stop. */
+    async ptz(smer, { rychlost = 0.5, ms = 400 } = {}) {
+      const { url, profil } = await ptzPriprav();
+      const r = Math.max(0.1, Math.min(1, Number(rychlost) || 0.5));
+      const v = { left: [-r, 0], right: [r, 0], up: [0, r], down: [0, -r] }[smer];
+      if (smer === 'home') { await soap(url, { body: `<tptz:GotoHomePosition><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GotoHomePosition>` }); return { ok: true }; }
+      if (smer === 'stop' || !v) { await soap(url, { body: `<tptz:Stop><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PanTilt>true</tptz:PanTilt><tptz:Zoom>true</tptz:Zoom></tptz:Stop>` }); return { ok: true }; }
+      await soap(url, { body: `<tptz:ContinuousMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Velocity><tt:PanTilt x="${v[0]}" y="${v[1]}"/></tptz:Velocity></tptz:ContinuousMove>` });
+      await new Promise((res) => setTimeout(res, Math.max(100, Math.min(3000, Number(ms) || 400))));
+      await soap(url, { body: `<tptz:Stop><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PanTilt>true</tptz:PanTilt><tptz:Zoom>false</tptz:Zoom></tptz:Stop>` });
+      return { ok: true };
+    },
     /** Posun hodin kamery; bez něj by kamera digest s naším časem odmítla. */
     async syncClock() {
       const doc = await soap(`${base}/onvif/device_service`, { auth: false, body: '<tds:GetSystemDateAndTime/>' });

@@ -111,8 +111,26 @@ Disk poskytovatele* (níže). Na serveru:
 - **Evidence v CLB1**: každá uložená nahrávka jde i do
   `FamicuraRingNahravky` (Soubor = název, Složka = `server:<tenant>` nebo
   `Google Disk <účet>`, Zdroj = rucni / plan / udalost).
+- **Google Disk zapnout/vypnout** (od 2.3, ⚙ zaškrtávátko Google Disk,
+  `nahravkyDisk`): zapnuto = kopie každé nahrávky na Disk vedle serveru
+  (řádek má `Soubor` i `Url`), vypnuto = na Disk se nic neposílá. Chyba
+  Disku se zapíše k řádku, nahrávka na serveru zůstává.
+- **Místo** (od 2.3): `GET /api/nahravky/stav` vrací `misto` (soubory, bajty
+  nahrávek tenanta na serveru, volné a celkové místo disku VPS přes
+  `statfs`); ⚙ to ukazuje u části Nahrávky na serveru.
 - Bez `NAHRAVKY_KLIC` se ukládá na Google Disk (je-li nastavený) a naopak;
   bez obojího server nahrávku nepořídí a řekne to.
+
+### Otáčení kamery (od 2.3)
+
+Tapo C200/C210/C220 mají otočnou hlavu a ONVIF PTZ na stejném portu (2020)
+a účtu jako události. `src/ptz.mjs` + `onvif.ptz(smer)`: `GetCapabilities`
+→ adresa služby PTZ (přepsaná na adresu v tunelu), `GetProfiles` → profil
+s `PTZConfiguration`, krok = `ContinuousMove` (rychlost 0,5, 400 ms) a
+`Stop`; `home` = `GotoHomePosition`. `POST /api/ptz { kamera, smer }`
+smí každý, kdo kameru smí vidět (rodina jen svou); jeden pohyb na kameru
+najednou (409), kamera bez PTZ nebo bez odpovědi 502. Kříž šipek je na
+obraze v detailu dispečinku a v aplikaci rodiny (`.ptz` v `proto.css`).
 
 ### Nahrávky na Google Disku poskytovatele (od 2.1)
 
@@ -261,7 +279,7 @@ i CLB1. Hlídání pádů se nesmí tvářit, že běží, když nic nevyhodnocu
 
 ## Prototyp prostředí pro role (rodina, dispečink, provoz)
 
-Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.2**) a
+Verze všech aplikací je na jednom místě (`public/verze.js`, teď **2.3**) a
 ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
@@ -468,11 +486,11 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.2) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.3) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
-`git tag -a v2.3 -m "Famicura Kamera 2.3" && git push origin v2.3`.
+`git tag -a v2.4 -m "Famicura Kamera 2.4" && git push origin v2.4`.
 Drobné opravy mezi verzemi číslo nemění.
 
 ## Prezentace a video

@@ -89,6 +89,13 @@ th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;l
 .tiles[data-pocet="1"] .tile .st-badge,.tiles[data-pocet="2"] .tile .st-badge{font-size:.85rem}
 .tiles .bezkamery{font-size:1.05rem;max-width:720px;grid-column:1/-1}
 video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border-radius:10px;background:#000}
+/* otočení kamery: kříž šipek vpravo dole na obraze */
+.ptz{position:absolute;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(3,34px);grid-template-rows:repeat(3,34px);gap:3px;opacity:.85}
+.ptz button{background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;font-size:15px;line-height:1;cursor:pointer;padding:0}
+.ptz button:active{background:var(--blue)}
+.ptz.busy button{opacity:.5}
+.ptz [data-ptz=up]{grid-column:2;grid-row:1}.ptz [data-ptz=left]{grid-column:1;grid-row:2}.ptz [data-ptz=home]{grid-column:2;grid-row:2}.ptz [data-ptz=right]{grid-column:3;grid-row:2}.ptz [data-ptz=down]{grid-column:2;grid-row:3}
+@media (max-width:480px){.ptz{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px)}.ptz button{font-size:17px}}
 .tile{background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px;cursor:pointer;transition:border-color .2s}
 .tile.sel{outline:3px solid var(--blue);outline-offset:1px}
 .tile.klid{border-color:var(--line)}

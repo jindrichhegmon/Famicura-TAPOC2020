@@ -151,8 +151,30 @@ test('uloziste: AES-256-GCM, soubor na disku není čitelný bez klíče, klíč
 test('cíl nahrávky: volba poskytovatele, náhrada podle toho, co je nastavené', () => {
   const tb = createMockTabulky();
   const jen = (server, disk) => createNahravky({ go2rtc: fakeGo2rtc(), disk: disk ? fakeDisk() : null, uloziste: server ? { nastaveno: true } : null, tabulky: tb, kamery, log: ticho });
-  assert.equal(jen(true, true).cil('server'), 'server'); assert.equal(jen(true, true).cil('disk'), 'disk');
-  assert.equal(jen(true, false).cil('disk'), 'server', 'bez Disku se ukládá na server'); assert.equal(jen(false, true).cil('server'), 'disk', 'bez klíče serveru na Disk');
+  assert.deepEqual(jen(true, true).cil('server'), { hlavni: 'server', kopieDisk: false });
+  assert.deepEqual(jen(true, true).cil('server', true), { hlavni: 'server', kopieDisk: true }, 'Google Disk zapnutý = kopie vedle serveru');
+  assert.deepEqual(jen(true, true).cil('disk'), { hlavni: 'server', kopieDisk: true }, 'starší volba disk = server + kopie');
+  assert.deepEqual(jen(true, false).cil('server', true), { hlavni: 'server', kopieDisk: false }, 'bez Disku na serveru žádná kopie');
+  assert.deepEqual(jen(false, true).cil('server', false), { hlavni: 'disk', kopieDisk: false }, 'bez klíče serveru jde na Disk');
   assert.throws(() => jen(false, false).cil('server'), /nemají kam/);
   assert.deepEqual(jen(true, false).uloziste, { server: true, disk: false });
+});
+
+test('kopie na Google Disk vedle serveru: řádek má soubor na serveru i odkaz na Disk; chyba Disku nahrávku na serveru neruší; misto()', async () => {
+  const tb = createMockTabulky(), nahrane = [];
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'fkn-'));
+  const u = createUloziste({ dir, klic: Buffer.alloc(32, 7) });
+  const clb = [];
+  const n = createNahravky({ go2rtc: fakeGo2rtc(), disk: fakeDisk(nahrane), uloziste: u, tabulky: tb, kamery, zapisClb: async (r) => { clb.push(r); return { ok: true }; }, log: ticho });
+  const v = await n.uloz(T, { kameraId: 'tapoc2020', data: Buffer.alloc(2048, 1), delkaS: 10, zdroj: 'rucni', disk: true });
+  assert.equal(v.uloziste, 'server'); assert.match(v.soubor, /\.enc$/); assert.equal(v.url, 'https://drive.google.com/file/d/f1/view'); assert.equal(v.chyba, null);
+  assert.equal(nahrane.length, 1); assert.match(clb[0].slozka, /^server:22202480FAMICURA \+ Google Disk/);
+  const v2 = await n.uloz(T, { kameraId: 'tapoc2020', data: Buffer.alloc(2048, 2), delkaS: 10, zdroj: 'rucni', disk: false });
+  assert.equal(v2.url, null); assert.equal(nahrane.length, 1, 'vypnutý Disk = nic se tam neposílá');
+  const rozbity = { nastaveno: true, async nahraj() { throw new Error('Disk odmítl'); } };
+  const n2 = createNahravky({ go2rtc: fakeGo2rtc(), disk: rozbity, uloziste: u, tabulky: tb, kamery, log: ticho });
+  const v3 = await n2.uloz(T, { kameraId: 'tapoc2020', data: Buffer.alloc(2048, 3), delkaS: 10, zdroj: 'rucni', disk: true });
+  assert.equal(v3.uloziste, 'server'); assert.ok(v3.soubor); assert.match(v3.chyba, /Google Disk: Disk odmítl/);
+  const m = await n.misto(T);
+  assert.equal(m.soubory, 3); assert.equal(m.bajty, 3 * (2048 + 32)); assert.ok(m.celkem === null || m.celkem > 0);
 });
