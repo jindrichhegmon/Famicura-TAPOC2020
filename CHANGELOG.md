@@ -27,6 +27,8 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   (`POST /api/nahravky`, až 64 MB); odkaz je u nahrávky v seznamu.
 - Tunel pro více míst (`wireguard-vps.sh --misto N`, README 2d): kamera
   u jiného poskytovatele má vlastní bránu a vlastní místo v tunelu.
+- Adresář na Disku je jeden: jiný jde založit až po **Odpojit adresář**
+  (⚙ Nastavení; odpojený adresář na Disku zůstává i s nahrávkami).
 - Nasazení: `vps-env.sh` vygeneruje `FAMICURA_KAMERA_KLIC` a opíše ho do
   `.env` jhn-apps (`deploy/sdilej-klic-jhn.sh`); v repozitáři
   WEB-PeceDomaPlus `./deploy-jhn-apps.sh` nasadí aplikaci

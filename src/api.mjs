@@ -16,7 +16,8 @@
  *
  * Nahrávky na Google Disk poskytovatele (src/nahravky.mjs, src/disk.mjs; dispečer nebo správce s tenantem):
  *   GET  /api/nahravky/stav     Google účet z Péče doma plus a adresář nahrávek tenanta
- *   POST /api/nahravky/slozka   { nazev? } založí adresář na Disku tenanta
+ *   POST /api/nahravky/slozka   { nazev? } založí adresář na Disku tenanta (jen když žádný není zapojený)
+ *   POST /api/nahravky/odpojit  odpojí zapojený adresář (na Disku zůstává), pak jde založit nový
  *   GET  /api/nahravky?kamera=&limit=   seznam nahrávek (tabulka A_KAM_Nahravka)
  *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery a uloží na Disk
  *   POST /api/nahravky?kamera=&cas=&delkaS=&zdroj=&text=   tělo = soubor (video/mp4 | video/webm) z hlavní aplikace
@@ -368,6 +369,11 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (bezDisku) return nejsou();
           const { nazev } = await telo(req);
           const s = await disk.zalozSlozku((await stavTenanta()).tenant, typeof nazev === 'string' ? nazev.slice(0, 200) : '');
+          return json({ ok: true, google: s.google, slozka: s.slozka, zprava: s.zprava || '' });
+        }
+        if (m === 'POST' && path === '/api/nahravky/odpojit') {
+          if (bezDisku) return nejsou();
+          const s = await disk.odpojSlozku((await stavTenanta()).tenant);
           return json({ ok: true, google: s.google, slozka: s.slozka, zprava: s.zprava || '' });
         }
         if (m === 'GET' && path === '/api/nahravky') {

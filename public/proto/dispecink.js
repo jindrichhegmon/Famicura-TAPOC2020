@@ -65,20 +65,32 @@ async function nactiNahravky(pid) {
 let diskInfo = null;
 function diskUkaz(b) {
   diskInfo = b;
-  const el = $('diskStav'), btn = $('diskSlozkaBtn'), odkaz = $('diskSlozkaOdkaz');
-  btn.disabled = true; odkaz.classList.add('hide');
+  const el = $('diskStav'), btn = $('diskSlozkaBtn'), odkaz = $('diskSlozkaOdkaz'), odpojit = $('diskOdpojitBtn');
+  btn.disabled = true; btn.classList.remove('hide'); btn.textContent = 'Založit adresář na Google Disku'; odkaz.classList.add('hide'); odpojit.classList.add('hide');
   if (!b || b.nastaveno === false) { el.textContent = 'Nahrávky na Google Disk nejsou na serveru nastavené: správce spustí ./deploy/vps-env.sh (klíč FAMICURA_KAMERA_KLIC) a v portálu Péče doma plus nasadí aplikaci pecedomaplus-kamera-disk.'; return; }
   if (b.chyba) { el.textContent = `Stav Google Disku se nepodařilo zjistit: ${b.chyba}`; return; }
   if (!b.google || !b.google.pripojen) { el.textContent = 'Poskytovatel nemá v Péče doma plus připojený Google účet. Připojte ho v portálu Péče doma plus → Export dat → Připojit Google účet (stejný účet pak slouží i nahrávkám kamer).'; return; }
   if (!b.slozka) { el.textContent = `Google účet ${b.google.email} je připojený (z Péče doma plus). Nahrávky zatím nemají kam: založte adresář.`; btn.disabled = false; return; }
-  el.textContent = `Nahrávky se ukládají na Google Disk ${b.google.email}, adresář „${b.slozka.nazev}“. Nahrává server po události se zatrženým Nahrávat (plný obraz, nebo kritická událost s nouzovým přístupem) a tlačítkem Nahrát teď v detailu kamery.`;
-  btn.disabled = false; btn.textContent = 'Založit nový adresář'; odkaz.href = b.slozka.url; odkaz.classList.remove('hide');
+  el.textContent = `Nahrávky se ukládají na Google Disk ${b.google.email}, adresář „${b.slozka.nazev}“. Nahrává server po události se zatrženým Nahrávat (plný obraz, nebo kritická událost s nouzovým přístupem) a tlačítkem Nahrát teď v detailu kamery. Jiný adresář: nejdřív tenhle odpojte (na Disku zůstane i s nahrávkami), pak založte nový.`;
+  btn.classList.add('hide'); odpojit.classList.remove('hide'); odkaz.href = b.slozka.url; odkaz.classList.remove('hide');
 }
 async function diskStavNacti() {
   $('diskStav').textContent = 'Zjišťuji…';
   try { const r = await fetch('/api/nahravky/stav', { credentials: 'same-origin' }); diskUkaz(await r.json()); }
   catch { diskUkaz({ nastaveno: true, chyba: 'server neodpovídá' }); }
 }
+$('diskOdpojitBtn').onclick = async () => {
+  const nazev = diskInfo?.slozka?.nazev || 'adresář';
+  if (!confirm(`Odpojit adresář „${nazev}“? Na Google Disku zůstane i s nahrávkami, nové nahrávky se nebudou ukládat, dokud nezaložíte nový adresář.`)) return;
+  const b = $('diskOdpojitBtn'); b.disabled = true; $('diskStav').textContent = 'Odpojuji adresář…';
+  try {
+    const r = await fetch('/api/nahravky/odpojit', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'nepodařilo se');
+    diskUkaz({ nastaveno: true, google: j.google, slozka: j.slozka }); toast(j.zprava || 'Adresář odpojen.');
+  } catch (e) { $('diskStav').textContent = `Adresář se nepodařilo odpojit: ${e.message}`; }
+  b.disabled = false;
+};
 $('diskSlozkaBtn').onclick = async () => {
   const b = $('diskSlozkaBtn'); b.disabled = true; $('diskStav').textContent = 'Zakládám adresář na Google Disku…';
   try {

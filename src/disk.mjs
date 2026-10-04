@@ -57,8 +57,10 @@ export function createDisk({ url = process.env.JHN_APPS_URL || 'https://95-216-2
     get nastaveno() { return !!(token && klic); },
     /** Google účet z Péče doma plus a adresář nahrávek tenanta → { google: { pripojen, email }, slozka }. */
     async stav(tenant) { return app('stav', { tenant }); },
-    /** Založí (nebo přeloží) adresář nahrávek na Disku tenanta. */
+    /** Založí adresář nahrávek na Disku tenanta (jen když žádný není zapojený; jinak 409). */
     async zalozSlozku(tenant, nazev = '') { tokeny.delete(tenant); return app('slozka', { tenant, nazev }); },
+    /** Odpojí zapojený adresář (na Disku zůstává i s nahrávkami); pak jde založit nový. */
+    async odpojSlozku(tenant) { tokeny.delete(tenant); return app('odpojit', { tenant }); },
     /**
      * Nahraje soubor do adresáře tenanta (Drive resumable upload: hlavička s metadaty, pak celé tělo).
      * data = Buffer; → { id, nazev, url, velikost, email, slozka }.

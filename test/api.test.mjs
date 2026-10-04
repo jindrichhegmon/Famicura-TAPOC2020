@@ -605,7 +605,9 @@ test('zkušební SMS z nastavení: jen poskytovatel, normalizuje telefon, hlás�
 /** Nahrávky: falešný Disk (jhn-apps + Google) a go2rtc, který na stream.mp4 vrátí klip. */
 function fakeDisk(stav = { google: { pripojen: true, email: 'posk@x.cz' }, slozka: { id: 's1', nazev: 'Famicura Kamera – FamiCura', url: 'https://drive/s1' } }) {
   const nahrane = [];
-  return { nastaveno: true, nahrane, async stav() { return stav; }, async zalozSlozku(t, nazev) { stav.slozka = { id: 's2', nazev: nazev || 'Famicura Kamera – FamiCura', url: 'https://drive/s2' }; return { ...stav, zprava: 'založeno' }; },
+  return { nastaveno: true, nahrane, async stav() { return stav; },
+    async zalozSlozku(t, nazev) { if (stav.slozka) { const e = new Error('Adresář už je zapojený – nejdřív ho odpojte'); e.status = 409; throw e; } stav.slozka = { id: 's2', nazev: nazev || 'Famicura Kamera – FamiCura', url: 'https://drive/s2' }; return { ...stav, zprava: 'založeno' }; },
+    async odpojSlozku() { stav.slozka = null; return { ...stav, zprava: 'odpojeno' }; },
     async nahraj(tenant, { nazev, mime, data }) { nahrane.push({ tenant, nazev, mime, velikost: data.length }); return { id: 'f' + nahrane.length, nazev, url: 'https://drive/f' + nahrane.length, velikost: data.length, email: 'posk@x.cz', slozka: stav.slozka }; } };
 }
 test('nahrávky: stav účtu a adresář, ruční nahrávka ze serveru (jen při plném obrazu), soubor z hlavní aplikace, seznam; rodina 403, bez nastavení 503', async () => {
@@ -616,6 +618,11 @@ test('nahrávky: stav účtu a adresář, ruční nahrávka ze serveru (jen při
   const { h, uzivatele, vsichni } = handler({ go2rtc, disk, nahravky, tabulky });
   const st = await (await h(req('GET', '/api/nahravky/stav', { cookies: cookie() }))).json();
   assert.equal(st.nastaveno, true); assert.equal(st.google.email, 'posk@x.cz'); assert.equal(st.slozka.id, 's1'); assert.equal(st.delkaS, 15);
+  // nový adresář jde založit až po odpojení zapojeného
+  let r0 = await h(req('POST', '/api/nahravky/slozka', { cookies: cookie(), body: { nazev: 'Famicura Kamera – test' } }));
+  assert.equal(r0.status, 409); assert.match((await r0.json()).error, /odpojte/);
+  const od = await (await h(req('POST', '/api/nahravky/odpojit', { cookies: cookie(), body: {} }))).json();
+  assert.equal(od.ok, true); assert.equal(od.slozka, null);
   const sl = await (await h(req('POST', '/api/nahravky/slozka', { cookies: cookie(), body: { nazev: 'Famicura Kamera – test' } }))).json();
   assert.equal(sl.slozka.id, 's2');
   // rodina povolila jen drátěný model → ruční nahrávka se nepořídí
