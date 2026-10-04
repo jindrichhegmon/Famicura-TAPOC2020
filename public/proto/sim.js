@@ -143,7 +143,8 @@ export const sim = {
    *  Se stavem na serveru je skládá server sám (jednou pro všechny), tady jen bez přihlášení. */
   startRealEvents(patientId = 'tapoc2020') {
     let since = Date.now();
-    const map = { 'cam-linecross': 'linecross', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion', 'cam-pet': 'motion', 'cam-vehicle': 'motion', 'cam-smart': 'motion' };
+    const map = { 'cam-linecross': 'linecross', 'cam-intrusion': 'intrusion', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion',
+      'cam-vehicle': 'vehicle', 'cam-pet': 'pet', 'cam-smart': 'motion', 'cam-babycry': 'babycry', 'cam-sound': 'sound', 'cam-glassbreak': 'glassbreak', 'cam-bark': 'pet', 'cam-meow': 'pet' };
     const poll = async () => {
       if (server) { since = Date.now(); return; }
       try {

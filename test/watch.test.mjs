@@ -159,14 +159,15 @@ test('události kamery: filtr podle nastavení a hodin', () => {
 });
 
 test('popis karty jmenuje i to, co hlásí kamera', () => {
-  const umi = [{ kind: 'cam-motion' }, { kind: 'cam-person' }, { kind: 'cam-babycry', label: 'BabyCry (hlásí kamera)' }];
+  const umi = [{ kind: 'cam-motion' }, { kind: 'cam-person' }, { kind: 'cam-babycry' }, { kind: 'cam-visitor', label: 'Visitor (hlásí kamera)' }];
   const w = normalizeWatch({ 'cam-person': { enabled: false }, 'cam-motion': { from: '22:00', to: '06:00' } }).watch;
   const d = describeWatch(w, umi);
-  assert.match(d, /kamera hlásí: pohyb \(22:00–06:00\), babycry \(hlásí kamera\)$/);
+  assert.match(d, /kamera hlásí: pohyb \(22:00–06:00\), pláč, visitor \(hlásí kamera\)$/);
   assert.doesNotMatch(d, /osoba/);
   assert.doesNotMatch(describeWatch(w, []), /kamera hlásí/);
   assert.equal(cameraEventLabel('cam-tamper'), 'Zakrytí nebo posunutí kamery');
-  assert.equal(cameraEventLabel('cam-babycry', 'BabyCry (hlásí kamera)'), 'BabyCry (hlásí kamera)');
+  assert.equal(cameraEventLabel('cam-babycry', 'BabyCry (hlásí kamera)'), 'Pláč', 'katalog má přednost před popiskem z kamery');
+  assert.equal(cameraEventLabel('cam-visitor', 'Visitor (hlásí kamera)'), 'Visitor (hlásí kamera)');
   assert.equal(cameraEventLabel('cam-neco'), 'neco');
 });
 

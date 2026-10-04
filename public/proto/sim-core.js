@@ -12,11 +12,17 @@ export const KINDS = {
   devfall:    { label: 'Pád hlášený náramkem',         level: 'crit', source: 'náramek' },
   inactivity: { label: 'Nečinnost',                    level: 'warn', source: 'analýza' },
   linecross:  { label: 'Překročení čáry',              level: 'warn', source: 'kamera' },
+  intrusion:  { label: 'Vstup do hlídané oblasti',     level: 'warn', source: 'kamera' },
   tamper:     { label: 'Zakrytí nebo posunutí kamery', level: 'warn', source: 'kamera' },
+  babycry:    { label: 'Pláč',                         level: 'warn', source: 'kamera' },
+  sound:      { label: 'Hlasitý nebo neobvyklý zvuk',  level: 'warn', source: 'kamera' },
+  glassbreak: { label: 'Rozbití skla',                 level: 'warn', source: 'kamera' },
   missing:    { label: 'Ztráta postavy',               level: 'info', source: 'analýza' },
   state:      { label: 'Změna polohy',                 level: 'info', source: 'analýza' },
   person:     { label: 'Osoba',                        level: 'info', source: 'kamera' },
   motion:     { label: 'Pohyb',                        level: 'info', source: 'kamera' },
+  vehicle:    { label: 'Vozidlo',                      level: 'info', source: 'kamera' },
+  pet:        { label: 'Zvíře',                        level: 'info', source: 'kamera' },
   offline:    { label: 'Kamera nedostupná',            level: 'tech', source: 'systém' },
   online:     { label: 'Kamera opět dostupná',         level: 'tech', source: 'systém' },
   battery:    { label: 'Slabá baterie náramku',        level: 'tech', source: 'náramek' },
@@ -25,14 +31,20 @@ export const LEVEL_LABEL = { crit: 'kritická', warn: 'varování', info: 'infor
 export const CONSENT = { none: 'žádný obraz (jen události)', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' };
 
 /** What the provider watches for a patient: on/off, hours, recording. The family only reads it. */
-export const WATCH_KINDS = ['fall', 'longlie', 'sos', 'devfall', 'inactivity', 'linecross', 'tamper', 'missing', 'state', 'person', 'motion'];
+/* Pořadí = pořadí v tabulce Nastavení. Z kamery (Tapo přes ONVIF): překročení čáry,
+ * vstup do hlídané oblasti, zakrytí, pláč, zvuk, rozbití skla, osoba, pohyb, vozidlo, zvíře. */
+export const WATCH_KINDS = ['fall', 'longlie', 'sos', 'devfall', 'inactivity', 'linecross', 'intrusion', 'tamper', 'babycry', 'sound', 'glassbreak', 'missing', 'state', 'person', 'motion', 'vehicle', 'pet'];
 export function defaultWatch() {
   const w = {};
   // sms/mail: upozornění na kontakty kamery (p.kontakty); výchozí jen u kritických, a jen když jsou kontakty vyplněné
   for (const k of WATCH_KINDS) w[k] = { on: true, from: '', to: '', rec: KINDS[k].level === 'crit' || k === 'linecross', sms: KINDS[k].level === 'crit', mail: KINDS[k].level === 'crit' };
   w.linecross = { on: true, from: '07:00', to: '20:00', rec: true, sms: false, mail: false };
+  w.intrusion = { on: true, from: '', to: '', rec: true, sms: false, mail: false };
   w.motion = { on: false, from: '', to: '', rec: false, sms: false, mail: false };
   w.state = { on: false, from: '', to: '', rec: false, sms: false, mail: false };
+  // vozidlo a zvíře nejsou v péči o klienta důvod k alertu; kdo chce, zapne je
+  w.vehicle = { on: false, from: '', to: '', rec: false, sms: false, mail: false };
+  w.pet = { on: false, from: '', to: '', rec: false, sms: false, mail: false };
   return w;
 }
 export function describeWatch(w) {

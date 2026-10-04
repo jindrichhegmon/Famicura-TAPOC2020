@@ -48,29 +48,48 @@ const esc = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&g
 
 /*
  * Detekce, které kamery Tapo hlásí, a pod jakým druhem je zná aplikace.
- * Klíč je konec tématu ONVIF, položka je jméno hodnoty ve zprávě.
+ * Tapo pojmenovává témata podle modelu a firmwaru různě (PeopleDetector/People
+ * i CellMotionDetector/People, TPSmartEventDetector/TPSmartEvent s IsVehicle
+ * i VehicleDetector/Vehicle …), ale jméno položky (IsPeople, IsVehicle, …)
+ * drží. Proto rozhoduje položka; téma jen říká, že jde o detektor
+ * (RuleEngine) nebo o zvuk (AudioAnalytics), případně o alarm pohybu
+ * (VideoSource/MotionAlarm se stavem State).
  */
+export const POLOZKY = {
+  IsMotion: 'cam-motion',                               // pohyb (CellMotionDetector/Motion, MotionRegionDetector)
+  IsPeople: 'cam-person', IsPerson: 'cam-person',       // osoba (PeopleDetector/People, CellMotionDetector/People)
+  IsVehicle: 'cam-vehicle',                             // vozidlo (TPSmartEvent i VehicleDetector/Vehicle)
+  IsPet: 'cam-pet',                                     // zvíře (TPSmartEvent i PetDetector/Pet)
+  IsTPSmartEvent: 'cam-smart', IsTpSmartEvent: 'cam-smart', // chytrá detekce bez rozlišení (starší firmware)
+  IsLineCross: 'cam-linecross',                         // překročení čáry (LineCrossDetector, CellMotionDetector/LineCross)
+  IsIntrusion: 'cam-intrusion', IsInside: 'cam-intrusion', // vstup do hlídané oblasti (IntrusionDetector, CellMotionDetector/Intrusion, FieldDetector/ObjectsInside)
+  IsTamper: 'cam-tamper',                               // zakrytí nebo posunutí kamery
+  IsBabyCry: 'cam-babycry',                             // pláč dítěte (BabyCryDetector/BabyCry)
+  IsSoundDetected: 'cam-sound', IsAbnormalSound: 'cam-sound', IsSound: 'cam-sound', // hlasitý/neobvyklý zvuk (AudioAnalytics/Audio/DetectedSound, SoundDetector)
+  IsGlassBreak: 'cam-glassbreak', IsGlassBreaking: 'cam-glassbreak', // rozbití skla
+  IsBark: 'cam-bark', IsDogBark: 'cam-bark',            // štěkot psa
+  IsMeow: 'cam-meow', IsCatMeow: 'cam-meow',            // mňoukání kočky
+};
+
+/** Témata mimo RuleEngine, která aplikace také zařadí: [konec tématu, položka, druh]. */
 export const DETEKCE = [
-  { topic: 'CellMotionDetector/Motion',       item: 'IsMotion',    kind: 'cam-motion' },
-  { topic: 'VideoSource/MotionAlarm',         item: 'State',       kind: 'cam-motion' },
-  { topic: 'PeopleDetector/People',           item: 'IsPeople',    kind: 'cam-person' },
-  { topic: 'TPSmartEventDetector/TPSmartEvent', item: 'IsTPSmartEvent', kind: 'cam-smart' },   // how a real C2xx declares it
-  { topic: 'TPSmartEventDetector/TPSmartEvent', item: 'IsVehicle', kind: 'cam-vehicle' },
-  { topic: 'TPSmartEventDetector/TPSmartEvent', item: 'IsPet',     kind: 'cam-pet' },
-  { topic: 'LineCrossDetector/LineCross',     item: 'IsLineCross', kind: 'cam-linecross' },
-  { topic: 'TamperDetector/Tamper',           item: 'IsTamper',    kind: 'cam-tamper' },
+  { topic: 'VideoSource/MotionAlarm',          item: 'State',           kind: 'cam-motion' },
+  { topic: 'AudioAnalytics/Audio/DetectedSound', item: 'IsSoundDetected', kind: 'cam-sound' },
+  ...Object.entries(POLOZKY).map(([item, kind]) => ({ topic: 'RuleEngine/', item, kind })),
 ];
 
 /**
  * Druh události pro téma a položku. Mimo katalog: jen detektory z RuleEngine
  * s položkou Is…, aby se z kamery nenabízelo něco jako stav digitálního
- * vstupu. Druh je pak cam-<položka>, popisek zůstane z kamery.
+ * vstupu nebo „obraz příliš tmavý“ (VideoSource/ImageTooDark). Druh je pak
+ * cam-<položka>, popisek zůstane z kamery.
  */
 export function druhDetekce(topic, item) {
   const t = topic.replace(/^.*?:/, '');            // bez prefixu tns1:
-  const d = DETEKCE.find((x) => t.endsWith(x.topic) && x.item === item);
+  const d = DETEKCE.find((x) => !x.topic.endsWith('/') && t.endsWith(x.topic) && x.item === item);
   if (d) return { kind: d.kind, label: null };
   if (!/RuleEngine\//.test(t) || !/^Is[A-Z]/.test(item)) return null;
+  if (POLOZKY[item]) return { kind: POLOZKY[item], label: null };
   const jmeno = item.slice(2);
   const kind = 'cam-' + jmeno.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
   return kind.length > 4 ? { kind, label: `${jmeno} (hlásí kamera)` } : null;

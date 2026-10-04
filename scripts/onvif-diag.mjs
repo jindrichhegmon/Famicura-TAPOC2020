@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createOnvif, DETEKCE } from '../src/onvif.mjs';
+import { createOnvif, druhDetekce } from '../src/onvif.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sekund = Math.max(10, Number(process.argv[2]) || 60);
@@ -33,7 +33,7 @@ for (const k of kamery) {
     const temata = await c.topics();
     console.log(`témata (${temata.length}):`);
     for (const t of temata) {
-      const zname = t.items.some((it) => DETEKCE.some((d) => t.topic.endsWith(d.topic) && d.item === it));
+      const zname = t.items.some((it) => druhDetekce(t.topic, it));
       console.log(`  ${zname ? '✓' : ' '} ${t.topic}  [${t.items.join(', ')}]`);
     }
     console.log('  (✓ = aplikace zařadí; ostatní se zapisují jen do logu serveru)');

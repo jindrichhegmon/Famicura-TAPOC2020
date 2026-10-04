@@ -427,7 +427,9 @@ const KIND_LABEL = {
   missing: "ztráta detekce", found: "návrat detekce", abrupt: "prudká změna",
   stream: "spojení",
   "cam-motion": "pohyb", "cam-person": "osoba", "cam-vehicle": "vozidlo", "cam-pet": "zvíře",
-  "cam-smart": "chytrá detekce", "cam-linecross": "překročení čáry", "cam-tamper": "zakrytí kamery"
+  "cam-smart": "chytrá detekce", "cam-linecross": "překročení čáry", "cam-intrusion": "vstup do oblasti",
+  "cam-tamper": "zakrytí kamery", "cam-babycry": "pláč", "cam-sound": "zvuk", "cam-glassbreak": "rozbití skla",
+  "cam-bark": "štěkot", "cam-meow": "mňoukání"
 };
 
 /**

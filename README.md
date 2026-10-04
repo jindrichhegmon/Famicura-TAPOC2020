@@ -39,9 +39,17 @@ kamera Tapo ──RTSP──▶ Windows server ══ WireGuard ══▶ VPS: g
 ### Události, které hlásí kamera sama
 
 Kamera Tapo má vlastní rozpoznávání: pohyb, u novějších modelů osobu,
-vozidlo, zvíře, překročení čáry, zakrytí nebo posunutí kamery. Hlásí je
-přes ONVIF na svém portu 2020 a v `GetEventProperties` řekne, které z nich
-umí. Server na VPS se ke kameře přihlásí účtem kamery (tím samým, co
+vozidlo, zvíře, překročení čáry, vstup do hlídané oblasti, zakrytí nebo
+posunutí kamery a zvukové detekce (pláč, hlasitý nebo neobvyklý zvuk,
+rozbití skla, štěkot, mňoukání – podle modelu). Hlásí je přes ONVIF na
+svém portu 2020 a v `GetEventProperties` řekne, které z nich umí. Témata
+pojmenovává každý firmware trochu jinak (`PeopleDetector/People` i
+`CellMotionDetector/People`, `TPSmartEventDetector/TPSmartEvent` s
+`IsVehicle` i `VehicleDetector/Vehicle`), ale jména položek (`IsPeople`,
+`IsVehicle`, `IsIntrusion`, `IsBabyCry` …) drží, proto aplikace zařazuje
+podle položky (`POLOZKY` v `src/onvif.mjs`). Detektor, který katalog
+nezná, se nabídne pod jménem z kamery (např. „Visitor (hlásí kamera)“);
+stavy obrazu (`ImageTooDark`) a vstupy zařízení se nenabízí. Server na VPS se ke kameře přihlásí účtem kamery (tím samým, co
 go2rtc), založí odběr (PullPoint) a drží ho trvale: každou událost projde
 nastavením Sledovaných událostí té kamery a zapíše do CLB1 sám, **i když
 nikdo nemá otevřený prohlížeč**. Stránka se každých pár sekund zeptá, co
@@ -53,7 +61,11 @@ sekundách. Kamera, která neodpovídá vůbec, se zkouší s rostoucím odstupe
 V kartě **Události** u kamery jsou dvě části: „Z analýzy obrazu v
 prohlížeči“ (pád, dlouhé ležení… – běží jen s otevřenou kamerou) a
 „Rozpozná kamera sama“ – tam je přesně to, co kamera nahlásila, že umí:
-C200 jen pohyb, C210/C220 i osobu, vozidlo a zvíře. Každou událost lze
+C200 jen pohyb, C210/C220 i osobu, vozidlo, zvíře, překročení čáry, vstup
+do oblasti, zakrytí a pláč. V dispečinku (sekce Nastavení) má každá z
+těchto detekcí svůj řádek (Hlídat, hodiny, Nahrávat, SMS, E-mail); vozidlo
+a zvíře jsou tam výchozí vypnuté, protože v péči o klienta nejsou důvod k
+alertu. Každou událost lze
 vypnout nebo omezit hodinami (v čase pečovatelů, Europe/Prague, ne serveru).
 Bez nastavení je vše zapnuté celý den. Událost je přechod hodnoty na
 „true“: Tapo C220 (firmware 1.0.3) posílá během detekce „true“ každých
@@ -486,7 +498,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.3) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.4) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

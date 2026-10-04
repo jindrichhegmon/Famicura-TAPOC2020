@@ -17,7 +17,10 @@
 import { smiNahravat } from './nahravky.mjs';
 import { proved, AKCE, KINDS, defaultWatch, POSKYTOVATEL_VYCHOZI, DEN_OD, NOC_OD } from '../public/proto/sim-core.js';
 
-const MAPA = { 'cam-linecross': 'linecross', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion', 'cam-pet': 'motion', 'cam-vehicle': 'motion', 'cam-smart': 'motion' };
+// Druh z kamery (cam-…, public/watch.js) → druh v dispečinku (KINDS v sim-core). Co tu není, do dispečinku nejde (jen do logu hlavní aplikace a CLB1).
+const MAPA = { 'cam-linecross': 'linecross', 'cam-intrusion': 'intrusion', 'cam-tamper': 'tamper', 'cam-person': 'person', 'cam-motion': 'motion',
+  'cam-vehicle': 'vehicle', 'cam-pet': 'pet', 'cam-smart': 'motion', 'cam-babycry': 'babycry', 'cam-sound': 'sound', 'cam-glassbreak': 'glassbreak',
+  'cam-bark': 'pet', 'cam-meow': 'pet' };
 const UDALOSTI_MAX = 400, ZADOSTI_MAX = 100;
 const ZAKAZANE = new Set(['reset']);   // ostrá data tenanta nikdo nevynuluje z prohlížeče
 // akce, jejichž první argument je kamera: musí patřit tenantovi (jinak by šlo zapsat událost cizí kameře)

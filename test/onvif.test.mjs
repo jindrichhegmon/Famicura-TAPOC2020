@@ -31,8 +31,22 @@ test('témata Tapo → druhy událostí; mimo RuleEngine a bez Is… se nenabíz
   assert.deepEqual(druhDetekce('tns1:VideoSource/MotionAlarm', 'State'), { kind: 'cam-motion', label: null });
   assert.equal(druhDetekce('tns1:RuleEngine/TPSmartEventDetector/TPSmartEvent', 'IsPet').kind, 'cam-pet');
   assert.equal(druhDetekce('tns1:RuleEngine/TPSmartEventDetector/TPSmartEvent', 'IsVehicle').kind, 'cam-vehicle');
+  // Tapo pojmenovává témata různě podle firmwaru; rozhoduje položka.
+  assert.equal(druhDetekce('tns1:RuleEngine/CellMotionDetector/People', 'IsPeople').kind, 'cam-person');
+  assert.equal(druhDetekce('tns1:RuleEngine/VehicleDetector/Vehicle', 'IsVehicle').kind, 'cam-vehicle');
+  assert.equal(druhDetekce('tns1:RuleEngine/PetDetector/Pet', 'IsPet').kind, 'cam-pet');
+  assert.equal(druhDetekce('tns1:RuleEngine/CellMotionDetector/LineCross', 'IsLineCross').kind, 'cam-linecross');
+  assert.equal(druhDetekce('tns1:RuleEngine/CellMotionDetector/Intrusion', 'IsIntrusion').kind, 'cam-intrusion');
+  assert.equal(druhDetekce('tns1:RuleEngine/FieldDetector/ObjectsInside', 'IsInside').kind, 'cam-intrusion');
+  assert.equal(druhDetekce('tns1:RuleEngine/CellMotionDetector/Tamper', 'IsTamper').kind, 'cam-tamper');
+  assert.equal(druhDetekce('tns1:RuleEngine/CellMotionDetector/TpSmartEvent', 'IsTpSmartEvent').kind, 'cam-smart');
+  assert.deepEqual(druhDetekce('tns1:RuleEngine/BabyCryDetector/BabyCry', 'IsBabyCry'), { kind: 'cam-babycry', label: null });
+  assert.deepEqual(druhDetekce('tns1:AudioAnalytics/Audio/DetectedSound', 'IsSoundDetected'), { kind: 'cam-sound', label: null });
+  assert.equal(druhDetekce('tns1:RuleEngine/GlassBreakDetector/GlassBreak', 'IsGlassBreak').kind, 'cam-glassbreak');
+  assert.equal(druhDetekce('tns1:RuleEngine/DogBarkDetector/DogBark', 'IsDogBark').kind, 'cam-bark');
+  assert.equal(druhDetekce('tns1:RuleEngine/CatMeowDetector/CatMeow', 'IsMeow').kind, 'cam-meow');
   // Something the catalogue does not know, but the camera declares as a detector.
-  assert.deepEqual(druhDetekce('tns1:RuleEngine/BabyCryDetector/BabyCry', 'IsBabyCry'), { kind: 'cam-babycry', label: 'BabyCry (hlásí kamera)' });
+  assert.deepEqual(druhDetekce('tns1:RuleEngine/VisitorDetector/Visitor', 'IsVisitor'), { kind: 'cam-visitor', label: 'Visitor (hlásí kamera)' });
   assert.equal(druhDetekce('tns1:VideoSource/ImageTooDark', 'State'), null);
   assert.equal(druhDetekce('tns1:Device/Trigger/DigitalInput', 'IsOpen'), null);
   assert.equal(druhDetekce('tns1:RuleEngine/X/Y', 'Token'), null);

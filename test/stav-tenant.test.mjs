@@ -83,7 +83,9 @@ test('tenant: kamery ze serveru dostanou řádek, akce zapisují jen změněné 
 
 test('tenant: data jiného tenanta nejsou vidět, reset je zakázaný, skutečné události jdou jen ke svým kamerám', async () => {
   const tb = createMockTabulky();
-  const prijate = [{ prijato: 1_700_000_000_500, kameraId: 'tapoc2020', kind: 'cam-linecross', text: 'Kamera hlásí: překročení čáry.' }, { prijato: 1_700_000_000_600, kameraId: 'kam2', kind: 'cam-person', text: 'Kamera hlásí: osoba.' }];
+  const prijate = [{ prijato: 1_700_000_000_500, kameraId: 'tapoc2020', kind: 'cam-linecross', text: 'Kamera hlásí: překročení čáry.' }, { prijato: 1_700_000_000_600, kameraId: 'kam2', kind: 'cam-person', text: 'Kamera hlásí: osoba.' },
+    { prijato: 1_700_000_000_700, kameraId: 'kam2', kind: 'cam-intrusion', text: 'Kamera hlásí: vstup do hlídané oblasti.' }, { prijato: 1_700_000_000_750, kameraId: 'kam2', kind: 'cam-babycry', text: 'Kamera hlásí: pláč.' },
+    { prijato: 1_700_000_000_800, kameraId: 'kam2', kind: 'cam-vehicle', text: 'Kamera hlásí: vozidlo.' }, { prijato: 1_700_000_000_850, kameraId: 'kam2', kind: 'cam-visitor', text: 'Kamera hlásí: visitor.' }];
   const udalosti = { nedavne: (od) => prijate.filter((e) => e.prijato > od) };
   const a = stav(tb, { udalosti }), b = stav(tb, { tenant: T2, udalosti });
   await a.s.stav(); await b.s.stav();
@@ -93,6 +95,11 @@ test('tenant: data jiného tenanta nejsou vidět, reset je zakázaný, skutečn�
   assert.equal(sa.state.events.filter((e) => e.kind === 'linecross').length, 0, 'mimo hodiny');
   assert.equal(sb.state.events.filter((e) => e.kind === 'person').length, 1);
   assert.equal(sb.state.events[0].patientId, 'kam2');
+  // všechny detekce Tapo mají v dispečinku svůj druh; vozidlo je ve výchozím nastavení vypnuté, neznámý druh z kamery do dispečinku nejde
+  assert.equal(sb.state.events.filter((e) => e.kind === 'intrusion').length, 1, 'vstup do oblasti');
+  assert.equal(sb.state.events.filter((e) => e.kind === 'babycry').length, 1, 'pláč');
+  assert.equal(sb.state.events.filter((e) => e.kind === 'vehicle').length, 0, 'vozidlo je výchozí vypnuté');
+  assert.equal(sb.state.events.some((e) => /visitor/i.test(e.kind)), false);
   assert.deepEqual(sa.state.patients.map((p) => p.id), ['tapoc2020']); assert.deepEqual(sb.state.patients.map((p) => p.id), ['kam2']);
   assert.equal((tb.data[T].A_KAM_Udalost || []).some((u) => u.KameraID === 'kam2'), false, 'událost kam2 není u tenanta A');
   await assert.rejects(() => a.s.proved('reset', []), (e) => e.status === 400);

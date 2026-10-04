@@ -5,6 +5,26 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.4 · 4. 10. 2026 · všechny detekce kamery Tapo v nastavení
+
+- **Všechny události, které Tapo přes ONVIF hlásí, mají svůj řádek v
+  Nastavení** (dispečink, detail kamery → Nastavení): k překročení čáry,
+  zakrytí, osobě a pohybu přibyly *vstup do hlídané oblasti*, *pláč*,
+  *hlasitý nebo neobvyklý zvuk*, *rozbití skla*, *vozidlo* a *zvíře*
+  (štěkot a mňoukání se počítají jako zvíře). Vozidlo a zvíře jsou výchozí
+  vypnuté, vstup do oblasti se nahrává; u uložených nastavení se nové řádky
+  doplní výchozí hodnotou, nic se nepřepisuje. Rodina je vidí v „Co
+  poskytovatel hlídá“, hlavní aplikace má nové popisky (Pláč, Vstup do
+  hlídané oblasti, …) místo jmen z kamery.
+- **Zařazení podle položky, ne podle jména tématu** (`POLOZKY` v
+  `src/onvif.mjs`): Tapo pojmenovává témata podle firmwaru různě
+  (`PeopleDetector/People` i `CellMotionDetector/People`,
+  `TPSmartEventDetector/TPSmartEvent` s `IsVehicle` i
+  `VehicleDetector/Vehicle`, `CellMotionDetector/Intrusion`,
+  `FieldDetector/ObjectsInside`, `AudioAnalytics/Audio/DetectedSound`), teď
+  všechny varianty padnou do stejného druhu. Neznámý detektor se dál nabízí
+  pod jménem z kamery; `scripts/onvif-diag.mjs` značí ✓ podle téhož.
+
 ## 2.3 · 4. 10. 2026 · Google Disk zapnout/vypnout, místo na serveru, otáčení kamery
 
 - **Google Disk jde zapnout a vypnout** (⚙ Nastavení → zaškrtávátko Google

@@ -48,7 +48,13 @@ export const CAMERA_EVENTS = [
   { kind: 'cam-pet',       label: 'Zvíře',                        level: 'info' },
   { kind: 'cam-smart',     label: 'Chytrá detekce (vozidlo, zvíře…)', level: 'info' },
   { kind: 'cam-linecross', label: 'Překročení čáry',              level: 'warn' },
+  { kind: 'cam-intrusion', label: 'Vstup do hlídané oblasti',     level: 'warn' },
   { kind: 'cam-tamper',    label: 'Zakrytí nebo posunutí kamery', level: 'warn' },
+  { kind: 'cam-babycry',   label: 'Pláč',                         level: 'warn' },
+  { kind: 'cam-sound',     label: 'Hlasitý nebo neobvyklý zvuk',  level: 'warn' },
+  { kind: 'cam-glassbreak', label: 'Rozbití skla',                level: 'warn' },
+  { kind: 'cam-bark',      label: 'Štěkot psa',                   level: 'info' },
+  { kind: 'cam-meow',      label: 'Mňoukání kočky',               level: 'info' },
 ];
 const BY_CAM = Object.fromEntries(CAMERA_EVENTS.map((e) => [e.kind, e]));
 export const CAMERA_KIND = /^cam-[a-z0-9]{1,30}$/;
