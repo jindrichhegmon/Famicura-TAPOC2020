@@ -88,7 +88,11 @@ export function createPdp({ db = null, log = console, cacheMs = 60000, now = Dat
       await spojeni.query(ddl());
       for (const tab of TABULKY) {
         try { await spojeni.query(rlsSql(tab)); }
-        catch (e) { log.error(`[pdp] RLS pro ${tab} se nepodařilo nastavit (dotazy filtrují IDTENANT i samy):`, String(e && e.message || e).slice(0, 160)); }
+        catch (e) {
+          // „already been defined“ = politika tabulku už má (např. z druhého startu serveru těsně po sobě): v pořádku.
+          if (/already been defined/i.test(String(e && e.message || ''))) continue;
+          log.error(`[pdp] RLS pro ${tab} se nepodařilo nastavit (dotazy filtrují IDTENANT i samy):`, String(e && e.message || e).slice(0, 160));
+        }
       }
       tabulkyOk = true;
       log.log('[pdp] tabulky A_KAM_* v PeceDomaPlus připravené');
