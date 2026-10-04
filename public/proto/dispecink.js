@@ -423,34 +423,37 @@ function renderDetail(rebuild = false) {
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
       <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
       <section class="dsec" data-sec="monitoring">
+        <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
         <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
-        <div class="row" id="dbtn"></div>
-        <h3 style="margin-top:12px">Přidat poznámku <span class="small muted" style="text-transform:none;font-weight:400">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</span></h3>
-        <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="row"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
-        <h3 style="margin-top:12px">Historie <span class="small muted" style="text-transform:none;font-weight:400">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění, 🎞 = nahrávka (na serveru nebo na Google Disku)</span></h3><ul class="list" id="dhist"></ul>
-        <h3 style="margin-top:12px">Nahrávky <span class="small muted" style="text-transform:none;font-weight:400">– na serveru (▶ přehrát v aplikaci) nebo na Google Disku poskytovatele podle Nastavení; nahrává server po události se zatrženým Nahrávat a tlačítkem Nahrát teď</span></h3><ul class="list" id="dnahravky"><li class="muted">Načítám…</li></ul>
-      </section>
+        <div class="akce" id="dbtn"></div>
+        </div><div class="blok"><h3>Přidat poznámku</h3><p class="small muted">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</p>
+        <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="akce"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
+        </div><div class="blok"><h3>Historie</h3><p class="small muted">– události, souhlasy, poznámky; 📱 ✉ = odeslaná upozornění, 🎞 = nahrávka (na serveru nebo na Google Disku)</p>
+        <div class="akce" id="dlogAkce"><label class="small">od <input type="date" id="dlogOd"></label><label class="small">do <input type="date" id="dlogDo"></label><label class="small"><input type="checkbox" id="dlogVse"> všechny kamery</label><button type="button" class="sm sec" id="dlogZobraz">Zobrazit období</button><button type="button" class="sm sec hide" id="dlogZive">Zpět na posledních 12</button><button type="button" class="sm" id="dlogExcel" title="stáhne události za zvolené období (bez období: všechny) jako sešit Excelu">⬇ Stáhnout do Excelu</button><span class="small muted" id="dlogStav"></span></div><ul class="list" id="dhist"></ul>
+        </div><div class="blok"><h3>Nahrávky</h3><p class="small muted">– na serveru (▶ přehrát v aplikaci) nebo na Google Disku poskytovatele podle Nastavení; nahrává server po události se zatrženým Nahrávat a tlačítkem Nahrát teď</p><ul class="list" id="dnahravky"><li class="muted">Načítám…</li></ul>
+      </div></section>
       <section class="dsec hide" data-sec="komunikace">
+        <div class="blok"><h3>Klient a poskytovatel</h3>
         <div class="kv"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
           <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
-        <h3 style="margin-top:12px">Uživatelé rodiny <span class="small muted" style="text-transform:none;font-weight:400">– kdo smí otevřít aplikaci rodiny k téhle kameře</span></h3>
+        </div><div class="blok"><h3>Uživatelé rodiny</h3><p class="small muted">– kdo smí otevřít aplikaci rodiny k téhle kameře</p>
         <div id="dusers"></div>
-        <h3 style="margin-top:12px">Kontakty pro upozornění <span class="small muted" style="text-transform:none;font-weight:400">– až tři čísla na SMS a tři e-maily; na které události jdou, se zatrhává v Nastavení</span></h3>
+        </div><div class="blok"><h3>Kontakty pro upozornění</h3><p class="small muted">– až tři čísla na SMS a tři e-maily; na které události jdou, se zatrhává v Nastavení</p>
         <form class="kontakty" id="dkontakty">
           <div class="kgrid">${[0, 1, 2].map((i) => `<label>SMS ${i + 1}<input type="tel" class="ksms" maxlength="20" placeholder="777 123 456" value="${esc(kon.sms[i] || '')}"></label>`).join('')}</div>
           <div class="kgrid">${[0, 1, 2].map((i) => `<label>E-mail ${i + 1}<input type="email" class="kmail" maxlength="120" placeholder="dcera@example.cz" value="${esc(kon.mail[i] || '')}"></label>`).join('')}</div>
-          <div class="row"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
+          <div class="akce"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
           <p class="small bad hide" id="dkontaktyErr"></p>
         </form>
-        <h3 style="margin-top:12px">Poznámky dispečinku <span class="small muted" style="text-transform:none;font-weight:400">– přehled všech poznámek k této kameře, nejnovější nahoře; novou přidáte v Monitoringu</span></h3>
+        </div><div class="blok"><h3>Poznámky dispečinku</h3><p class="small muted">– přehled všech poznámek k této kameře, nejnovější nahoře; novou přidáte v Monitoringu</p>
         <div class="notes"><ul id="dnotes"></ul></div>
-      </section>
+      </div></section>
       <section class="dsec hide" data-sec="nastaveni">
-        <h3>Sledování, nahrávání a upozornění <span class="small muted" style="text-transform:none;font-weight:400">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</span></h3>
+        <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</p>
         <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS</th><th>E-mail</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td><td><input type="checkbox" class="sms"></td><td><input type="checkbox" class="mail"></td></tr>`).join('')}</tbody></table>
         <p class="small muted" id="dwatchPozn"></p>
-      </section>`;
+      </div></section>`;
     detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
     const tabs = d.querySelector('#dtabs');
     const ukazTab = (t) => { dtab = t; tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t))); d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== t)); };
@@ -505,6 +508,7 @@ function renderDetail(rebuild = false) {
     d.querySelector('#dnote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); pridej(); } });
     d.__naplnWatch = naplnWatch;
     ptzOvladani(d.querySelector('#dptz'), p.id);
+    dlog = null; historieOvladani(d, p);
   }
   const s = sim.state;
   const mode = tileMode(p.id);
@@ -523,7 +527,7 @@ function renderDetail(rebuild = false) {
     btns.push(pending ? `<span class="badge warn">žádost čeká na rodinu (do ${fmtT(pending.until)})</span>` : `<button class="sm" id="askG">Požádat rodinu o plný obraz</button>`);
     btns.push(`<button class="sm bad" id="emerg" ${p.consent.nouze && crit ? '' : 'disabled'} title="${p.consent.nouze ? 'jen při otevřeném kritickém alertu' : 'rodina nouzový přístup nepovolila'}">Nouzový přístup 10 min</button>`);
   }
-  if (sim.naServeru && p.real) btns.push(`<button class="sm sec" id="recNow" ${mode === 'full' ? '' : 'disabled'} title="${mode === 'full' ? 'server uloží obraz z kamery na Google Disk poskytovatele' : 'jen při plném obrazu (rodina povolila ' + ({ none: 'žádný obraz', skeleton: 'drátěný model', blur: 'rozostření' }[mode] || mode) + ')'}">🎞 Nahrát teď (${s.poskytovatel?.nahravkaS || 15} s)</button>`);
+  if (sim.naServeru && p.real) btns.push(`<button class="sm sec" id="recNow" ${mode === 'full' ? '' : 'disabled'} title="${mode === 'full' ? 'server uloží obraz z kamery (na server nebo Google Disk podle Nastavení)' : 'jen při plném obrazu (rodina povolila ' + ({ none: 'žádný obraz', skeleton: 'drátěný model', blur: 'rozostření' }[mode] || mode) + ')'}">🎞 Nahrát teď (${s.poskytovatel?.nahravkaS || 15} s)</button>`);
   const changed = setHtml(d.querySelector('#dbtn'), btns.join(' '));
   if (changed) {
     d.querySelector('#askG')?.addEventListener('click', () => { askOpen = true; renderDetail(); });
@@ -547,7 +551,7 @@ function renderDetail(rebuild = false) {
         const r = await fetch('/api/nahravky/rucni', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: p.id }) });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'nahrávka se nepodařila');
-        toast(`Nahrávka uložena na Google Disk (${j.nahravka.delkaS} s).`); nahravkyCache.delete(p.id); nactiNahravky(p.id);
+        toast(`Nahrávka uložena (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}, ${j.nahravka.delkaS} s).`); nahravkyCache.delete(p.id); nactiNahravky(p.id);
       } catch (e) { toast(`Nahrávka se nepodařila: ${e.message}`, 'crit'); }
       b.textContent = puv; b.disabled = false;
     });
@@ -558,6 +562,50 @@ function renderDetail(rebuild = false) {
   if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();
   d.querySelector('#dtrvala').textContent = p.note || 'zatím žádná (tlačítko Upravit)';
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
+  renderHistorie(d, p, s);
+}
+
+/* ---------- historie: posledních 12 ze stavu, nebo zvolené období z databáze (GET /api/udalosti) ---------- */
+let dlog = null;   // { od, do, vse, radky } – zobrazené období; null = živě posledních 12
+function historieOvladani(d, p) {
+  const stav = (t, spatne = false) => { const el = d.querySelector('#dlogStav'); el.textContent = t; el.classList.toggle('bad', spatne); };
+  const obdobi = () => { const od = d.querySelector('#dlogOd').value, doD = d.querySelector('#dlogDo').value, vse = d.querySelector('#dlogVse').checked; return { od, do: doD, vse }; };
+  const dotaz = (o, format) => `/api/udalosti?od=${encodeURIComponent(o.od)}&do=${encodeURIComponent(o.do)}${o.vse ? '' : '&kamera=' + encodeURIComponent(p.id)}${format ? '&format=' + format : ''}`;
+  d.querySelector('#dlogZobraz').onclick = async () => {
+    const o = obdobi();
+    if (!o.od && !o.do) { stav('Zadejte aspoň datum od, nebo do.', true); return; }
+    if (!sim.naServeru) { stav('Období jde vybrat jen se stavem na serveru.', true); return; }
+    stav('Načítám…');
+    try {
+      const r = await fetch(dotaz(o), { cache: 'no-store' }); const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'server odmítl');
+      dlog = { ...o, radky: j.udalosti };
+      d.querySelector('#dlogZive').classList.remove('hide');
+      stav(`${j.udalosti.length} ${j.udalosti.length === 1 ? 'událost' : j.udalosti.length >= 2 && j.udalosti.length <= 4 ? 'události' : 'událostí'} ${o.od ? 'od ' + fmtDatumISO(o.od) : ''} ${o.do ? 'do ' + fmtDatumISO(o.do) : ''}${o.vse ? ', všechny kamery' : ''}`);
+      renderHistorie(d, p, sim.state);
+    } catch (e) { stav(`Nepodařilo se načíst: ${e.message}`, true); }
+  };
+  d.querySelector('#dlogZive').onclick = () => { dlog = null; d.querySelector('#dlogZive').classList.add('hide'); stav(''); renderHistorie(d, p, sim.state); };
+  d.querySelector('#dlogExcel').onclick = () => {
+    const o = obdobi();
+    if (!sim.naServeru) { stav('Export jde jen se stavem na serveru.', true); return; }
+    if (o.od && o.do && o.od > o.do) { stav('Začátek období je až po jeho konci.', true); return; }
+    const a = document.createElement('a'); a.href = dotaz(o, 'xlsx'); a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+    stav(`Stahuji sešit Excelu${o.od || o.do ? '' : ' (celá historie)'}…`);
+  };
+}
+const fmtDatumISO = (iso) => { const [y, m, dd] = iso.split('-'); return `${Number(dd)}. ${Number(m)}. ${y}`; };
+function renderHistorie(d, p, s) {
+  if (dlog && dlog.radky) {
+    setHtml(d.querySelector('#dhist'), dlog.radky.slice(0, 500).map((r) => {
+      const k = KINDS[r.kind];
+      const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : r.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
+      const kam = dlog.vse ? ` <span class="muted">· ${esc(r.kamera)}</span>` : '';
+      const dalsi = [r.stav && r.stav !== 'uzavřen' ? `<em>${esc(r.stav)}</em>` : '', r.vysledek ? esc(r.vysledek) : '', r.sms ? `📱 ${esc(r.sms)}` : '', r.mail ? `✉ ${esc(r.mail)}` : '', r.nahravka ? `🎞 ${esc(r.nahravka)}` : ''].filter(Boolean).join(' · ');
+      return `<li><span class="when">${esc(r.datum)} ${esc(r.casText.slice(0, 5))}</span><span class="grow">${badge}${esc(r.text || r.druh)}${kam}${dalsi ? ` · <span class="muted">${dalsi}</span>` : ''}</span></li>`;
+    }).join('') || '<li class="muted">V tomto období není žádná událost.</li>');
+    return;
+  }
   setHtml(d.querySelector('#dhist'), s.events.filter((e) => e.patientId === p.id).slice(0, 12).map((e) => {
     const k = KINDS[e.kind];
     const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''} – přehrát v sekci Nahrávky">🎞 nahrávka</a>` : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || (e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky')).slice(0, 60))}</span>`) : '';

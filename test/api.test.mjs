@@ -731,3 +731,27 @@ test('otočení kamery: kdo kameru smí vidět, smí ji otočit (rodina jen svou
   const { h: h2 } = handler();
   assert.equal((await h2(req('POST', '/api/ptz', { cookies: cookie(), body: { kamera: 'tapoc2020', smer: 'up' } }))).status, 503);
 });
+
+test('log událostí za období: JSON pro stránku a sešit Excelu; rodina nemá; špatné datum 400', async () => {
+  const { h, uzivatele, vsichni } = handler();
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'emit', args: ['tapoc2020', 'linecross'] } }));
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'poznamka', args: ['tapoc2020', 'Volala dcera.', 'Dispečerka Jana'] } }));
+  const dnes = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' });
+  let r = await h(req('GET', `/api/udalosti?od=${dnes}&do=${dnes}&kamera=tapoc2020`, { cookies: cookie() }));
+  assert.equal(r.status, 200); const j = await r.json();
+  assert.ok(j.udalosti.length >= 2); assert.equal(j.udalosti[0].kamera, 'TAPO Test'); assert.ok(j.udalosti.some((u) => u.druh === 'Překročení čáry') && j.udalosti.some((u) => u.druh === 'poznámka' && u.text === 'Volala dcera.'));
+  assert.equal(j.udalosti[0].datum, new Date().toLocaleDateString('cs-CZ', { timeZone: 'Europe/Prague', day: 'numeric', month: 'numeric', year: 'numeric' }));
+  // mimo období nic; bez období vše
+  assert.equal((await (await h(req('GET', '/api/udalosti?od=2000-01-01&do=2000-01-02', { cookies: cookie() }))).json()).udalosti.length, 0);
+  assert.ok((await (await h(req('GET', '/api/udalosti', { cookies: cookie() }))).json()).udalosti.length >= 2, 'všechny kamery, celá historie');
+  // Excel
+  r = await h(req('GET', `/api/udalosti?od=${dnes}&format=xlsx&kamera=tapoc2020`, { cookies: cookie() }));
+  assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /spreadsheetml/); assert.match(r.headers.get('content-disposition'), /attachment; filename="famicura-log_TAPO-Test_\d{4}-\d{2}-\d{2}_dnes\.xlsx"/);
+  const b = Buffer.from(await r.arrayBuffer()); assert.equal(b.slice(0, 2).toString(), 'PK'); assert.ok(b.length > 1500);
+  assert.equal((await h(req('GET', '/api/udalosti?od=4.10.2026', { cookies: cookie() }))).status, 400);
+  assert.equal((await h(req('GET', '/api/udalosti?od=2026-10-05&do=2026-10-04', { cookies: cookie() }))).status, 400);
+  assert.equal((await h(req('GET', '/api/udalosti?kamera=cizi', { cookies: cookie() }))).status, 404, 'kamera jiného tenanta');
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  assert.equal((await h(req('GET', '/api/udalosti', { cookies: cookieRodina(T, rod.id).split(';')[0] }))).status, 403, 'rodina log nestahuje');
+});

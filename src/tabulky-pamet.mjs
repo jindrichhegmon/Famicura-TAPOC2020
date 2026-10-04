@@ -1,7 +1,7 @@
 /**
  * Paměťová brána nad tabulkami se stejným rozhraním jako createTabulky
  * (src/tabulky.mjs): řádky podle tenanta, klíče, podmínky rovnosti / IN /
- * IS NULL, řazení a limit. Bez SQL Serveru: pro testy a pro vývoj či ukázku
+ * IS NULL / rozsah {od, do}, řazení a limit. Bez SQL Serveru: pro testy a pro vývoj či ukázku
  * na notebooku (PDP_FAKE_TENANTS v .env, src/pdp.mjs). Data žijí jen v paměti
  * procesu; po restartu serveru jsou pryč.
  */
@@ -11,7 +11,8 @@ export function createTabulkyPamet() {
   const data = {};   // tenant → tab → [radky]
   const zaznamy = [];
   const seznam = (t, tab) => { data[t] = data[t] || {}; data[t][tab] = data[t][tab] || []; return data[t][tab]; };
-  const sedi = (r, podminky) => Object.entries(podminky || {}).every(([k, v]) => Array.isArray(v) ? v.includes(r[k]) : v === null ? r[k] == null : r[k] === v);
+  const sedi = (r, podminky) => Object.entries(podminky || {}).every(([k, v]) => Array.isArray(v) ? v.includes(r[k]) : v === null ? r[k] == null
+    : v && typeof v === 'object' ? (v.od == null || r[k] >= v.od) && (v.do == null || r[k] <= v.do) : r[k] === v);
   const norm = (tab, r) => { const o = {}; for (const k of Object.keys(SCHEMA[tab].sloupce)) { const v = r[k]; o[k] = v === undefined ? null : (typeof v === 'object' && v !== null ? JSON.stringify(v) : v); } return o; };
   const over = (tab) => { if (!SCHEMA[tab]) throw new Error('Neznámá tabulka ' + tab); };
   const tenantNebo = (t) => { if (t === '*') return '*'; const n = normTenant(t); if (!n) { const e = new Error('Neplatné ID tenanta.'); e.status = 400; throw e; } return n; };

@@ -140,12 +140,16 @@ export function createTabulky(db) {
       if (!def.sloupce[k]) throw chyba(`Neznámý sloupec ${k}.`, 500);
       if (Array.isArray(v)) { if (!v.length) { casti.push('1 = 0'); continue; } const n = v.map((x) => { p['p' + i] = hodnota(def, k, x); return '@p' + (i++); }); casti.push(`${k} IN (${n.join(', ')})`); }
       else if (v === null) casti.push(`${k} IS NULL`);
+      else if (v && typeof v === 'object') {   // rozsah: { od, do } (včetně; jedno z nich může chybět)
+        if (v.od !== undefined && v.od !== null) { p['p' + i] = hodnota(def, k, v.od); casti.push(`${k} >= @p${i++}`); }
+        if (v.do !== undefined && v.do !== null) { p['p' + i] = hodnota(def, k, v.do); casti.push(`${k} <= @p${i++}`); }
+      }
       else { p['p' + i] = hodnota(def, k, v); casti.push(`${k} = @p${i++}`); }
     }
     return { text: casti.length ? ' WHERE ' + casti.join(' AND ') : '', i };
   };
   return {
-    /** Řádky: { kde: {sloupec: hodnota | [hodnoty] | null}, razeni: [['Cas','DESC']], limit } */
+    /** Řádky: { kde: {sloupec: hodnota | [hodnoty] | null | {od, do}}, razeni: [['Cas','DESC']], limit } */
     async vyber(tenant, tab, { kde: podminky = {}, razeni = [], limit = 0 } = {}) {
       const def = overTabulku(tab);
       const { sql, p } = kontext(tenant);

@@ -5,6 +5,32 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.5 · 4. 10. 2026 · log za období s exportem do Excelu, detail v blocích, nahrávka po události
+
+- **Log událostí za zvolené období a stažení do Excelu** (detail kamery →
+  Monitoring → blok Historie): zadejte *od* a *do* (dny pražského času),
+  *Zobrazit období* načte události přímo z databáze (ne jen posledních pár
+  v paměti), zaškrtnutí *všechny kamery* vezme celý dispečink; *Stáhnout do
+  Excelu* uloží sešit `.xlsx` (list Události: datum, čas, kamera, událost,
+  závažnost, zdroj, text, stav, převzal(a), převzato, uzavřeno, výsledek,
+  poznámka, eskalováno, SMS, e-mail, nahrávka, původ; list Období). Bez
+  období se stáhne celá historie. `GET /api/udalosti?od=&do=&kamera=&format=xlsx`;
+  sešit skládá `src/xlsx.mjs` bez knihoven. Rodina log nemá.
+- **Detail kamery přehledněji**: každé téma je v ohraničeném bloku s
+  nadpisem (Monitoring: Obraz z kamery, Přidat poznámku, Historie,
+  Nahrávky; Komunikace: Klient a poskytovatel, Uživatelé rodiny, Kontakty
+  pro upozornění, Poznámky dispečinku; Nastavení: Sledování, nahrávání a
+  upozornění) a tlačítka každého bloku jsou v jedné liště pod obrazem /
+  nad seznamem, ne roztroušená v textu.
+- **Nahrávka po události, která se nepořídila, má vždy vidět důvod**: když ji
+  server odmítne (rodina nepovolila plný obraz a nejde o kritickou událost
+  s nouzovým přístupem) nebo klip selže, zapíše se řádek s důvodem do
+  Nahrávek i k události v historii (🎞 nenahráno: …) a zůstane tam i po
+  restartu serveru; každý krok je v logu serveru (`pm2 logs famicura-tapo`,
+  řádky `[nahravky]`). Skutečná událost z kamery se nahrává, i když je kamera
+  v dispečinku označená jako nedostupná (právě ji sama nahlásila). Tlačítko
+  Nahrát teď hlásí, kam se uložilo (server / Google Disk).
+
 ## 2.4 · 4. 10. 2026 · všechny detekce kamery Tapo v nastavení
 
 - **Všechny události, které Tapo přes ONVIF hlásí, mají svůj řádek v

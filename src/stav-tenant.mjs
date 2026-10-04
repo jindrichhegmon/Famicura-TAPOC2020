@@ -15,6 +15,7 @@
  * události kamery (ONVIF) sem skládá server při každém dotazu, jako dřív.
  */
 import { smiNahravat } from './nahravky.mjs';
+import { radekLogu } from './log-udalosti.mjs';
 import { proved, AKCE, KINDS, defaultWatch, POSKYTOVATEL_VYCHOZI, DEN_OD, NOC_OD } from '../public/proto/sim-core.js';
 
 // Druh z kamery (cam-…, public/watch.js) → druh v dispečinku (KINDS v sim-core). Co tu není, do dispečinku nejde (jen do logu hlavní aplikace a CLB1).
@@ -174,19 +175,31 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
 
   /* ---------- nahrávka po události (mimo frontu, odkaz k události) ---------- */
   function nahravani(ev, kdo = '') {
-    if (!nahravky || !ev || !ev.id || !ev.rec) return;
+    if (!ev || !ev.id) return;
     const s = data.state;
     const p = s.patients.find((x) => x.id === ev.patientId);
-    const smi = smiNahravat(s, p, ev.kind, now());
     const zapis = (n) => serializovane(async () => {
       const e = data.state.events.find((x) => x.id === ev.id);
       if (!e) return;
       e.nahravka = n; data.v++;
     });
-    if (!smi.ok) { zapis({ chyba: `nenahráno: ${smi.duvod}` }); return; }
+    // Každý krok do logu serveru (pm2 logs): proč se po události nahrávalo, nebo ne.
+    const hlas = (text) => { if (log && log.log) log.log('[nahravky]', tenant, ev.patientId, `${ev.kind}:`, text); };
+    if (!ev.rec) { hlas('nenahrává se (u události není zatržené Nahrávat)'); return; }
+    if (!nahravky) { hlas('nenahrává se (nahrávky nejsou na serveru nastavené)'); zapis({ chyba: 'nenahráno: nahrávky nejsou na serveru nastavené' }); return; }
+    // Odmítnutí i chyba se zapíší jako řádek bez souboru (A_KAM_Nahravka), aby důvod byl vidět i po restartu serveru.
+    const odmitni = (duvod) => { hlas(duvod); return Promise.resolve().then(() => nahravky.zapisOdmitnuti(tenant, { kameraId: ev.patientId, druh: ev.kind, udalostId: ev.id, kdo, duvod }))
+      .then((n) => zapis({ id: n?.id, chyba: n?.chyba || duvod }), () => zapis({ chyba: duvod })); };
+    const smi = smiNahravat(s, p, ev.kind, now(), { skutecna: !!ev.real });
+    if (!smi.ok) { const pr = odmitni(`nenahráno: ${smi.duvod}`).finally(() => cekajici.delete(pr)); cekajici.add(pr); return; }
+    hlas(`nahrávám ${s.poskytovatel?.nahravkaS || ''} s (${smi.nouze ? 'kritická událost s nouzovým přístupem' : 'plný obraz'})`);
     const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, delkaS: s.poskytovatel?.nahravkaS, uloziste: s.poskytovatel?.nahravkyUloziste, disk: !!s.poskytovatel?.nahravkyDisk, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
-      .then((n) => { if (!n || n.preskoceno) return zapis({ chyba: `nenahráno: ${n?.duvod || 'nahrávka neproběhla'}` }); return zapis({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste }); })
-      .catch((e) => { if (log && log.error) log.error('[nahravky]', tenant, e.message); })
+      .then((n) => {
+        if (!n || n.preskoceno) return odmitni(`nenahráno: ${n?.duvod || 'nahrávka neproběhla'}`);
+        hlas(n.chyba ? `chyba: ${n.chyba}` : `uloženo (${n.uloziste || 'disk'}, ${n.delkaS} s, ${Math.round((n.velikost || 0) / 1024)} kB)`);
+        return zapis({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste });
+      })
+      .catch((e) => { if (log && log.error) log.error('[nahravky]', tenant, ev.patientId, 'nahrávka po události selhala:', e.message); return odmitni(`nenahráno: ${e.message}`); })
       .finally(() => cekajici.delete(pr));
     cekajici.add(pr);
   }
@@ -231,6 +244,25 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
         if (out.zmena) { data.v++; await uloz(); }
         if (akce === 'emit') { upozorneni(out.vysledek); nahravani(out.vysledek); }
         return { v: data.v, state: data.state, vysledek: out.vysledek };
+      });
+    },
+    /**
+     * Log událostí za období (ms od–do včetně) přímo z databáze, ne jen posledních pár set v paměti:
+     * jedna kamera nebo všechny; nejnovější první. Řádky jsou hotové pro stránku i Excel (radekLogu).
+     */
+    vypisUdalosti({ od = 0, do: doMs = Number.MAX_SAFE_INTEGER, kameraId = '', limit = 5000 } = {}) {
+      return serializovane(async () => {
+        await nacti();
+        const kde = { Cas: { od: Math.max(0, Number(od) || 0), do: Number.isFinite(doMs) ? doMs : Number.MAX_SAFE_INTEGER } };
+        if (kameraId) kde.KameraID = kameraId;
+        const ud = await tabulky.vyber(tenant, 'A_KAM_Udalost', { kde, razeni: [['Cas', 'DESC']], limit: Math.min(10000, Math.max(1, limit)) });
+        const nahr = new Map();
+        if (nahravky && ud.length) {
+          const n = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde: { Cas: { od: kde.Cas.od, do: Math.min(kde.Cas.do + 3600000, Number.MAX_SAFE_INTEGER) }, ...(kameraId ? { KameraID: kameraId } : {}) }, razeni: [['Cas', 'ASC']], limit: 10000 }).catch(() => []);
+          for (const r of n) if (r.UdalostId && !nahr.has(r.UdalostId)) nahr.set(r.UdalostId, { chyba: r.Chyba || null, uloziste: r.Uloziste || (r.Url ? 'disk' : null), delkaS: r.DelkaS, smazanoCas: r.SmazanoCas || null, url: r.Url || null, id: r.Id });
+        }
+        const jmena = new Map(data.state.patients.map((p) => [p.id, p.name]));
+        return ud.map((r) => { const e = udalostZRadku(r); return radekLogu(e, jmena.get(e.patientId), nahr.get(e.id) || null); });
       });
     },
     /** Kamery tenanta přibyly nebo ubyly (cameras.json): doplní řádky. */

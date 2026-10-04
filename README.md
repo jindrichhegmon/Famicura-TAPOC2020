@@ -97,6 +97,20 @@ Safari (Mac i iPhone) do složky zapisovat neumí; místo toho je tam
 zatržítko **Každou hotovou nahrávku rovnou stáhnout**, po němž jde každá
 nahrávka sama do složky Stažené soubory prohlížeče.
 
+### Log událostí za období a export do Excelu (od 2.5)
+
+V detailu kamery (Monitoring → Historie) jde zvolit období *od–do* (dny
+pražského času) a zobrazit události přímo z databáze PeceDomaPlus
+(`A_KAM_Udalost`), jedné kamery nebo všech kamer poskytovatele; *Stáhnout
+do Excelu* uloží sešit `.xlsx` se všemi sloupci (datum, čas, kamera,
+událost, závažnost, zdroj, text, stav, kdo převzal, převzato, uzavřeno,
+výsledek, poznámka, eskalace, SMS a e-mail odesláno/příjemci, nahrávka,
+původ kamera/simulace). Endpoint `GET /api/udalosti?od=RRRR-MM-DD&do=…&kamera=…&format=xlsx`
+(bez `format` JSON pro stránku) je jen pro dispečera a správce; sešit
+skládá `src/xlsx.mjs` (ZIP + XML, bez knihoven). Nahrávka po události,
+která se nepořídila, má důvod v Nahrávkách i v historii (řádek bez souboru
+v `A_KAM_Nahravka`) a v logu serveru (`[nahravky]`).
+
 ### Úložiště nahrávek na serveru (od 2.2, doporučené)
 
 ⚙ Nastavení → **Úložiště nahrávek**: *Na serveru* (výchozí) nebo *Google
@@ -498,7 +512,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.4) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.5) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

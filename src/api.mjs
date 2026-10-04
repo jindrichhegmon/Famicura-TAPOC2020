@@ -55,6 +55,7 @@ import { createAsistent } from './asistent.mjs';
 import { createUpozorneni } from './upozorneni.mjs';
 import { createPdp } from './pdp.mjs';
 import { createNajemci } from './najemci.mjs';
+import { zacatekDne, konecDne, logXlsx } from './log-udalosti.mjs';
 import { createDispecer } from './dispecer.mjs';
 import { normTenant } from './tabulky.mjs';
 import { createLimiter } from './limit.mjs';
@@ -327,6 +328,25 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // ---------- prototyp (rodina, dispečink, provoz): stav sdílený mezi zařízeními ----------
       // Rodina i poskytovatel ho vidí celý: jsou to ukázková data plus
       // souhlasy a události k jejich kameře; nastavení serveru v něm není.
+      // Log událostí dispečinku za období (dny pražského času), jedna kamera nebo všechny; format=xlsx = sešit Excelu.
+      if (m === 'GET' && path === '/api/udalosti') {
+        if (rodina) return jenPoskytovatel();
+        const od = url.searchParams.get('od') || '', doDne = url.searchParams.get('do') || '', kam = url.searchParams.get('kamera') || '';
+        const odMs = od ? zacatekDne(od) : 0, doMs = doDne ? konecDne(doDne) : Number.MAX_SAFE_INTEGER;
+        if (odMs === null || doMs === null) return json({ ok: false, error: 'Datum zadejte ve tvaru RRRR-MM-DD.' }, 400);
+        if (odMs > doMs) return json({ ok: false, error: 'Začátek období je až po jeho konci.' }, 400);
+        if (kam && (!isDeviceId(kam) || !(await smiKameruId(kam)))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        const st = await stavTenanta();
+        const radky = await st.vypisUdalosti({ od: odMs, do: doMs, kameraId: kam, limit: Number(url.searchParams.get('limit')) || 5000 });
+        if (url.searchParams.get('format') === 'xlsx') {
+          const posk = (await st.stav()).state.poskytovatel || {};
+          const kamNazev = kam ? ((await st.stav()).state.patients.find((p) => p.id === kam)?.name || (await kamery()).find((c) => c.id === kam)?.name || kam) : '';
+          const data = logXlsx(radky, { poskytovatel: posk.nazev || tenant, od: od || 'od začátku', do: doDne || 'dnes', kamera: kamNazev });
+          const nazev = `famicura-log_${(kamNazev || 'vsechny-kamery').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-')}_${od || 'zacatek'}_${doDne || 'dnes'}.xlsx`;
+          return new Response(data, { status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="${nazev}"`, 'Cache-Control': 'private, no-store', 'Content-Length': String(data.length) } });
+        }
+        return json({ ok: true, od, do: doDne, kamera: kam, udalosti: radky });
+      }
       if (m === 'GET' && path === '/api/proto/stav') {
         const s = await (await stavTenanta()).stav();
         const v = Number(url.searchParams.get('v'));

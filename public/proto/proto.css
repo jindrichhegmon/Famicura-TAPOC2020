@@ -112,6 +112,16 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .detail .dtabs{margin:4px 0 12px}
 .detail .dtabs button{font-size:.9rem}
 .detail .dsec{animation:none}
+/* detail: každé téma v ohraničeném bloku, tlačítka v jedné liště (.akce) */
+.blok{border:1px solid var(--line);border-radius:14px;padding:12px 14px 14px;margin:0 0 12px;background:#fbfcfd}
+.blok>h3{margin:0 0 6px;color:var(--navy)}
+.blok>p.small{margin:0 0 8px;line-height:1.35}
+.blok .stage{margin-bottom:8px}
+.akce{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;background:var(--soft);border-radius:10px;margin:6px 0 8px}
+.akce label{display:inline-flex;align-items:center;gap:4px}
+.akce input[type=date]{min-height:30px;padding:2px 6px;border:1px solid #bcc8d1;border-radius:8px;font:inherit;font-size:.85rem}
+.blok .notes{margin-top:0}
+.blok .list{margin-top:2px}
 .kontakty{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .kontakty .kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .kontakty label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted);font-weight:600}

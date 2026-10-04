@@ -33,10 +33,11 @@ const casDoNazvu = (t) => {
 const bezpecnyNazev = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'kamera';
 
 /** Smí se obraz téhle kamery teď uložit ze serveru? → { ok } nebo { ok: false, duvod }. */
-export function smiNahravat(state, patient, kind, now = Date.now()) {
+export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna = false } = {}) {
   if (!patient) return { ok: false, duvod: 'kamera není v datech poskytovatele' };
-  if (patient.offline) return { ok: false, duvod: 'kamera je nedostupná' };
-  const m = efektivni(state, patient, now, !!state.night).mode;
+  // „nedostupná“ je stav ze simulace; událost, kterou kamera právě sama nahlásila, se o to nezastaví (klip se zkusí)
+  if (patient.offline && !skutecna) return { ok: false, duvod: 'kamera je nedostupná' };
+  const m = efektivni(state, patient.offline ? { ...patient, offline: false } : patient, now, !!state.night).mode;
   if (m === 'full') return { ok: true };
   const k = KINDS[kind];
   if (k && k.level === 'crit' && patient.consent?.nouze !== false) return { ok: true, nouze: true };
@@ -148,6 +149,19 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
     return p;
   }
 
+  /**
+   * Nahrávka se nepořídila ještě před klipem (soukromí rodiny, chyba háčku): řádek bez souboru s důvodem,
+   * aby to dispečink viděl v Nahrávkách i u události v historii i po restartu serveru.
+   */
+  async function zapisOdmitnuti(tenant, { kameraId, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', duvod = '' }) {
+    const cas = now();
+    const radek = { Id: nid(cas), KameraID: kameraId, Cas: cas, DelkaS: 0, Velikost: 0, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj, Nazev: null, SouborID: null, Url: null, Email: null,
+      Kdo: kdo || null, Chyba: String(duvod || 'nahrávka neproběhla').slice(0, 300), Uloziste: null, Soubor: null, Mime: null, SmazanoCas: null };
+    await tabulky.vloz(tenant, 'A_KAM_Nahravka', radek).catch((e) => log.error('[nahravky]', tenant, 'odmítnutí se nezapsalo:', e.message));
+    log.error('[nahravky]', tenant, kameraId, 'nahrávka se nepořídila:', radek.Chyba);
+    return zRadku(radek);
+  }
+
   async function dnyTenanta(tenant) {
     const r = await tabulky.vyber(tenant, 'A_KAM_Nastaveni', { kde: { Klic: 'poskytovatel.nahravkyDny' }, limit: 1 });
     const n = Number(r[0]?.Hodnota);
@@ -157,7 +171,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   return {
     get nastaveno() { return serverOk() || diskOk(); },
     get uloziste() { return { server: serverOk(), disk: diskOk() }; },
-    normDelka, porid, uloz, smiNahravat, cil,
+    normDelka, porid, uloz, smiNahravat, cil, zapisOdmitnuti,
     /** Kolik nahrávky tenanta zabírají na serveru a kolik místa VPS má → { soubory, bajty, volne, celkem }. */
     async misto(tenant) {
       const r = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde: { Uloziste: 'server', SmazanoCas: null }, limit: 10000 });
