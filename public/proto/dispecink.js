@@ -252,7 +252,9 @@ import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
   log.addEventListener('click', (e) => { const t = e.target.closest('.msg.bot .tema'); if (!t || t.textContent === 'AI') return; const d = [...document.querySelectorAll('.naptema')].find((x) => x.querySelector('summary').textContent === t.textContent); if (d) { tab('temata'); d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } });
 });
 let selected = null;
-let overlay = false;                 // skeleton over a full or blurred picture in the detail
+const OVL_KEY = 'famicura.dispecink.skel';
+let overlay = (() => { try { return localStorage.getItem(OVL_KEY) !== '0'; } catch { return true; } })();   // drátěný model přes plný/rozostřený obraz v detailu: výchozí zapnuto, volba se pamatuje v prohlížeči
+function ulozOverlay(v) { overlay = v; try { localStorage.setItem(OVL_KEY, v ? '1' : '0'); } catch { /* bez paměti prohlížeče */ } }
 let askOpen = false, emergOpen = false;   // inline forms in the detail
 let dtab = 'monitoring';            // sekce detailu: monitoring | komunikace | nastaveni (zůstává při přepnutí kamery)
 const seen = new Set(sim.state.events.map((e) => e.id));
@@ -338,6 +340,13 @@ function tileMode(pid) {
   const m = sim.effectiveMode(pid);
   if (m === 'offline') return 'none';
   return m;
+}
+/** Tlačítko drátěného modelu v detailu: stav zapnuto/vypnuto, mimo plný a rozostřený obraz nejde použít. */
+function kresliOvl(d, mode = null) {
+  const b = d.querySelector('#ovl'); if (!b) return;
+  if (mode !== null) b.disabled = !(mode === 'full' || mode === 'blur');
+  b.setAttribute('aria-pressed', overlay ? 'true' : 'false'); b.className = overlay ? 'sm' : 'sm sec';
+  b.textContent = `🦴 Drátěný model přes obraz: ${overlay ? 'zapnuto' : 'vypnuto'}`;
 }
 function detailMode(pid) {
   const m = tileMode(pid);
@@ -457,7 +466,7 @@ function renderDetail(rebuild = false) {
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
-        <div class="modebar"><span class="small" id="dmode"></span><label class="small"><input type="checkbox" id="ovl"> drátěný model přes obraz</label></div>
+        <div class="modebar"><span class="small" id="dmode"></span><button type="button" class="sm" id="ovl" aria-pressed="true" title="kostra postavy spočítaná v prohlížeči přes plný nebo rozostřený obraz (model MediaPipe); nezapisuje se, jen zobrazení">🦴 Drátěný model přes obraz: zapnuto</button></div>
         <div class="akce" id="dbtn"></div>
         </div><div class="blok"><h3>Přidat poznámku</h3><p class="small muted">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</p>
         <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="akce"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
@@ -534,7 +543,7 @@ function renderDetail(rebuild = false) {
         naplnWatch();
       } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
     };
-    const ovl = d.querySelector('#ovl'); ovl.checked = overlay; ovl.onchange = () => { overlay = ovl.checked; };
+    const ovl = d.querySelector('#ovl'); ovl.onclick = () => { ulozOverlay(!overlay); kresliOvl(d); };
     const tf = d.querySelector('#dtrvalaForm');
     d.querySelector('#dtrvalaEdit').onclick = () => { d.querySelector('#dtrvalaText').value = sim.patient(p.id)?.note || ''; tf.classList.remove('hide'); d.querySelector('#dtrvalaText').focus(); };
     d.querySelector('#dtrvalaCancel').onclick = () => tf.classList.add('hide');
@@ -550,7 +559,7 @@ function renderDetail(rebuild = false) {
   const mode = tileMode(p.id);
   d.querySelector('#dtag').textContent = { none: 'bez obrazu', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' }[mode];
   d.querySelector('#dmode').innerHTML = `Rodina povolila: <strong>${esc(sim.modeReason(p.id))}</strong>`;
-  d.querySelector('#ovl').disabled = !(mode === 'full' || mode === 'blur');
+  kresliOvl(d, mode);
   const g = s.grants[p.id], pending = s.requests.find((r) => r.patientId === p.id && r.state === 'čeká');
   const crit = openAlerts(p.id).some((e) => KINDS[e.kind].level === 'crit');
   const btns = [];

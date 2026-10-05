@@ -265,8 +265,8 @@ export class LiveAnalyzer {
 /* ---------- rendering (browser only; never called from tests) ---------- */
 
 export const DISPLAY_MODES = {
-  normal: "Normální",
-  blur: "Rozmazaný",
+  normal: "Plný obraz",
+  blur: "Rozostřený obraz",
   black: "Černé pozadí"
 };
 

@@ -345,10 +345,10 @@ ukazuje se v hlavičce hlavní aplikace, rodiny, dispečinku i provozu.
 Na `/proto/` jsou tři
 simulovaná prostředí podle zadání pro vývojáře: **rodina** (telefon:
 obraz normální, rozostřený nebo na černém pozadí, drátěný model jde
-zapnout k normálnímu i rozostřenému obrazu a na černém pozadí je vždy; tahle volba vlastního zobrazení je schovaná za
-tlačítkem Test obrazu a zavřením testu se vrátí ostrý obraz;
+zapnout k plnému i rozostřenému obrazu a na černém pozadí je vždy; tahle volba vlastního zobrazení je schovaná za
+tlačítkem Test obrazu a zavřením testu se vrátí plný obraz;
 notifikace, historie; karta **Přístup poskytovatele** říká, co
-poskytovatel vidí teď a proč, má rychlé přepnutí Ostrý / Rozmazaný /
+poskytovatel vidí teď a proč, má rychlé přepnutí Plný obraz / Rozostřený obraz /
 Drátěný model platné do další změny nebo do střídání den/noc, nastavení
 podle denní doby včetně časů, kdy den a noc začínají, a nouzový přístup;
 **Klid** na 2 hodiny, do rána, do večera, do vypnutí; žádost poskytovatele
@@ -547,7 +547,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.8) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.9) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

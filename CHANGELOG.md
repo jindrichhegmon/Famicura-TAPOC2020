@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.9 · 5. 10. 2026 · drátěný model v dispečinku, jednotná terminologie
+
+- **Drátěný model přes obraz v dispečinku je výrazné tlačítko a je po
+  spuštění zapnutý** (🦴 Drátěný model přes obraz: zapnuto/vypnuto, volba
+  se pamatuje v prohlížeči). Jde použít při plném a rozostřeném obrazu.
+- **Přes skutečný obraz z kamery se kreslí jen skutečná postava** spočítaná
+  modelem MediaPipe v prohlížeči (`public/proto/zdroj.js`). Ukázková
+  (vymyšlená) postava patří jen k náhradní scéně při nedostupné kameře a už
+  se nepřenese na živý obraz; dokud se model načítá nebo není k dispozici,
+  plátno to napíše a kostru nekreslí. Náhradní scéna má popisek „postava je
+  jen ukázková“.
+- **Jedna terminologie ve všech aplikacích:** plný obraz, rozostřený obraz
+  (rozostření), drátěný model, bez obrazu. Zmizelo „Ostrý“, „Normální“ a
+  „Rozmazaný“ (rodina, hlavní aplikace, rozcestník, README).
+
 ## 2.8 · 5. 10. 2026 · nahrávka jako drátěný model při rozostření
 
 - **Když rodina povolila jen rozostření nebo drátěný model, nahrávka po

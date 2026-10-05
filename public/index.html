@@ -311,8 +311,8 @@
           </label>
         </div>
         <div class="seg modes">
-          <button data-mode="normal" aria-pressed="true">Normální</button>
-          <button data-mode="blur" aria-pressed="false">Rozmazaný</button>
+          <button data-mode="normal" aria-pressed="true">Plný obraz</button>
+          <button data-mode="blur" aria-pressed="false">Rozostřený obraz</button>
           <button data-mode="black" aria-pressed="false">Černé pozadí</button>
         </div>
 
@@ -610,7 +610,7 @@ $('loadDevices').onclick = async () => {
 /*
  * Each open camera is a CameraView with its own connection, recording and
  * analysis. Four is where a phone starts to struggle: every one is a separate
- * video decode and, with a mode other than Normální, a canvas redrawn per frame.
+ * video decode and, with a mode other than Plný obraz, a canvas redrawn per frame.
  */
 const MAX_VIEWS = 4;
 const views = new Map();      // device id -> CameraView

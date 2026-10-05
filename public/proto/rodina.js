@@ -7,14 +7,14 @@ let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina
 let patientId = FAMILY[0];
 let src = null, panel = null, demo = false;
 const params = new URLSearchParams(location.search);
-// Zobrazení = podklad (normální, rozostření, černé pozadí) + drátěný model přes
-// něj. Model jde zapnout k normálnímu i rozostřenému obrazu; na černém pozadí je vždy.
+// Zobrazení = podklad (plný obraz, rozostřený obraz, černé pozadí) + drátěný model přes
+// něj. Model jde zapnout k plnému i rozostřenému obrazu; na černém pozadí je vždy.
 const REZIM = { full: ['full', false], normal: ['full', false], blur: ['blur', false], blurskel: ['blur', true],
   fullskel: ['full', true], model: ['full', true], skeleton: ['skeleton', true], black: ['skeleton', true] };
 const SKEL_KEY = 'famicura.proto.skel';
 const zRezimu = REZIM[params.get('rezim')];
 let baseMode = zRezimu ? zRezimu[0] : 'full';
-// Drátěný model je výchozí (rodina si ho může vypnout); k ostrému i rozmazanému obrazu jde kdykoli přidat.
+// Drátěný model je výchozí (rodina si ho může vypnout); k plnému i rozostřenému obrazu jde kdykoli přidat.
 let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) !== '0';
 const viewMode = () => baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
 let filter = 'all';
@@ -177,9 +177,9 @@ function renderModes() {
   const sw = $('skelSw');
   sw.disabled = baseMode === 'skeleton';
   sw.checked = baseMode === 'skeleton' || skel;
-  $('skelHint').textContent = baseMode === 'skeleton' ? 'na černém pozadí je drátěný model vždy' : 'kostra postavy přes normální i rozostřený obraz';
+  $('skelHint').textContent = baseMode === 'skeleton' ? 'na černém pozadí je drátěný model vždy' : 'kostra postavy přes plný i rozostřený obraz';
 }
-/* Test obrazu: rodina vidí vždy ostrý obraz; velkým tlačítkem si může vyzkoušet,
+/* Test obrazu: rodina vidí vždy plný obraz; velkým tlačítkem si může vyzkoušet,
  * jak vypadá rozostření, černé pozadí a drátěný model. Jen na tomhle telefonu,
  * poskytovateli se nic nemění (to je karta Přístup poskytovatele). */
 const testObrazu = (on) => { $('testObrazu').classList.toggle('hide', !on); $('testStart').classList.toggle('hide', on); };
@@ -285,7 +285,7 @@ function render() {
   $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁' }[heroKind];
   $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
   $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
-  $('modeTag').textContent = { full: 'normální obraz', blur: 'rozostření', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
+  $('modeTag').textContent = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
   const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
   setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
   const kontakty = describeKontakty(p);
