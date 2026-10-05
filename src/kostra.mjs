@@ -56,10 +56,19 @@ export async function vytvorDetektorMoveNet({ modelDir, log = console, fetchImpl
     log.log('[kostra] stahuji model MoveNet (jednou):', MODEL_URL);
     const r = await fetchImpl(MODEL_URL); if (!r.ok) throw new Error(`model MoveNet se nepodařilo stáhnout (${r.status}); nastavte KOSTRA_MODEL_URL nebo soubor ${cesta}`);
     const json = await r.json();
-    const zaklad = (r.url || MODEL_URL).replace(/\?.*$/, '').replace(/model\.json$/, '');
+    // Váhy stejně jako TensorFlow.js: z PŮVODNÍ adresy (složka model.json) + stejný dotaz (?tfjs-format=file u tfhub).
+    // Adresa po přesměrování (r.url) bývá podepsaná jen pro model.json, na váhy vrací 403; zkusí se až jako záloha.
+    const dotaz = MODEL_URL.includes('?') ? MODEL_URL.slice(MODEL_URL.indexOf('?')) : '';
+    const zaklady = [...new Set([MODEL_URL, r.url || MODEL_URL].map((u) => u.replace(/\?.*$/, '').replace(/[^/]*$/, '')))];
     const vahy = [];
     for (const m of json.weightsManifest) for (const pth of m.paths) {
-      const rr = await fetchImpl(zaklad + pth + (MODEL_URL.includes('tfjs-format=file') ? '?tfjs-format=file' : '')); if (!rr.ok) throw new Error(`váhy modelu ${pth}: ${rr.status}`);
+      let rr = null, posledni = '';
+      for (const z of zaklady) {
+        rr = await fetchImpl(z + pth + dotaz).catch((e) => ({ ok: false, status: e.message }));
+        if (rr.ok) break;
+        posledni = `${z}${pth}${dotaz} → ${rr.status}`;
+      }
+      if (!rr || !rr.ok) throw new Error(`váhy modelu ${pth} se nepodařilo stáhnout (${posledni}); nastavte KOSTRA_MODEL_URL, nebo na server nahrajte hotový soubor ${cesta}`);
       vahy.push(Buffer.from(await rr.arrayBuffer()));
     }
     model = { modelTopology: json.modelTopology, weightSpecs: json.weightsManifest.flatMap((m) => m.weights), weightData: Buffer.concat(vahy).toString('base64'), format: json.format, generatedBy: json.generatedBy, convertedBy: json.convertedBy };

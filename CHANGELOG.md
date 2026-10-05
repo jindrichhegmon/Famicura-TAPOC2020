@@ -16,6 +16,12 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   se nepřenese na živý obraz; dokud se model načítá nebo není k dispozici,
   plátno to napíše a kostru nekreslí. Náhradní scéna má popisek „postava je
   jen ukázková“.
+- **Oprava stažení modelu MoveNet na serveru** (`src/kostra.mjs`): váhy modelu
+  se stahují z původní adresy tfhub (s `?tfjs-format=file`) stejně jako to dělá
+  TensorFlow.js; z přesměrované podepsané adresy Kaggle šel jen `model.json`
+  a váhy vracely 403, takže nahrávka v režimu drátěného modelu skončila
+  „neuloženo: váhy modelu … 403“. Chybová hláška teď říká, co nastavit nebo
+  kam soubor nahrát ručně.
 - **Jedna terminologie ve všech aplikacích:** plný obraz, rozostřený obraz
   (rozostření), drátěný model, bez obrazu. Zmizelo „Ostrý“, „Normální“ a
   „Rozmazaný“ (rodina, hlavní aplikace, rozcestník, README).
