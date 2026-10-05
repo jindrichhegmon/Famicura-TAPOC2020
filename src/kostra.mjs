@@ -12,7 +12,8 @@
  * Model se při prvním použití stáhne do `modelDir` (DATA_DIR/modely) a dál
  * čte z disku. `detektor` jde podstrčit (testy, jiný model).
  */
-import { spawn } from 'node:child_process';
+import { spawn, fork } from 'node:child_process';
+import os from 'node:os';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -112,7 +113,64 @@ export async function vytvorDetektorMoveNet({ modelDir, log = console, fetchImpl
   };
 }
 
-export function createKostra({ modelDir = path.join(process.env.DATA_DIR || 'data', 'modely'), detektor = null, ffmpeg = process.env.FFMPEG_BIN || 'ffmpeg', fps = 5, log = console, now = Date.now } = {}) {
+/**
+ * Výpočet v samostatném procesu (src/kostra-proces.mjs): hlavní vlákno serveru zůstává volné pro obraz a API.
+ * Proces se spustí při priprav() nebo první nahrávce, model drží načtený; po pádu se spustí znovu při dalším použití.
+ */
+function createKostraProces({ modelDir, log, timeoutMs = 180000 }) {
+  let dite = null, pripraven = false, vypocetNazev = null, nid = 0;
+  const cekaji = new Map();
+  function start() {
+    if (dite) return dite;
+    const d = fork(new URL('./kostra-proces.mjs', import.meta.url), [], { env: { ...process.env, KOSTRA_MODEL_DIR: modelDir }, serialization: 'advanced', stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+    dite = d; pripraven = false;
+    d.on('message', (m) => {
+      if (!m) return;
+      if (m.log) { log.log(m.log); return; }
+      if (m.chybaLog) { log.error(m.chybaLog); return; }
+      const c = cekaji.get(m.id); if (c) { cekaji.delete(m.id); c(m); }
+    });
+    d.on('error', (e) => log.error('[kostra] proces:', e.message));
+    d.on('exit', (code, signal) => {
+      if (dite === d) { dite = null; pripraven = false; }
+      for (const c of cekaji.values()) c({ ok: false, chyba: `proces drátěného modelu skončil (${signal || code})`, status: 503 });
+      cekaji.clear();
+    });
+    try { os.setPriority(d.pid, 10); } catch { /* bez nižší priority */ }
+    return d;
+  }
+  function posli(zprava, ms) {
+    return new Promise((resolve) => {
+      const id = ++nid; const d = start();
+      const t = setTimeout(() => { cekaji.delete(id); resolve({ ok: false, chyba: `drátěný model: vypršel čas (${Math.round(ms / 1000)} s)`, status: 503 }); if (dite === d) d.kill(); }, ms);
+      cekaji.set(id, (m) => { clearTimeout(t); resolve(m); });
+      try { d.send({ ...zprava, id }); } catch (e) { clearTimeout(t); cekaji.delete(id); resolve({ ok: false, chyba: e.message, status: 503 }); }
+    });
+  }
+  const priprav = async () => {
+    if (pripraven) return true;
+    const r = await posli({ akce: 'priprav' }, 300000);
+    pripraven = !!r.ok; vypocetNazev = r.vypocet || null;
+    if (!r.ok) log.error('[kostra] model není k dispozici:', r.chyba || 'proces neodpověděl');
+    return pripraven;
+  };
+  return {
+    priprav,
+    get pripraveno() { return pripraven; },
+    async vypocet() { return vypocetNazev; },
+    async zKlipu(data, { delkaS = null } = {}) {
+      if (!(await priprav())) throw Object.assign(new Error('Drátěný model není na serveru k dispozici (ffmpeg a model MoveNet).'), { status: 503 });
+      const r = await posli({ akce: 'zKlipu', data, delkaS }, timeoutMs);
+      if (!r.ok) throw Object.assign(new Error(r.chyba || 'drátěný model se nepodařilo spočítat'), { status: r.status || 502 });
+      return Buffer.from(r.out);
+    },
+    /** Ukončí pomocný proces (testy, vypnutí serveru). */
+    stop() { if (dite) { const d = dite; dite = null; pripraven = false; d.kill(); } },
+  };
+}
+
+export function createKostra({ modelDir = path.join(process.env.DATA_DIR || 'data', 'modely'), detektor = null, ffmpeg = process.env.FFMPEG_BIN || 'ffmpeg', fps = 5, log = console, now = Date.now, proces = !detektor } = {}) {
+  if (proces) return createKostraProces({ modelDir, log });
   let detPromise = null;
   const det = () => { if (!detPromise) { detPromise = (detektor ? Promise.resolve(detektor) : vytvorDetektorMoveNet({ modelDir, log })).catch((e) => { detPromise = null; throw e; }); } return detPromise; };
   return {
@@ -134,5 +192,6 @@ export function createKostra({ modelDir = path.join(process.env.DATA_DIR || 'dat
       log.log(`[kostra] ${snimky.length} snímků, postava na ${sPostavou}, ${now() - t0} ms`);
       return Buffer.from(JSON.stringify(vysledek));
     },
+    stop() { /* v hlavním vlákně není co ukončit */ },
   };
 }

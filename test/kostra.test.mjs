@@ -57,3 +57,20 @@ test('nahrávka v režimu kostra: řádek s JSON, název _kostra.json, bez přev
   const v2 = await n2.porid(T, { kameraId: 'tapoc2020', delkaS: 5, predS: 0, rezim: 'kostra' });
   assert.match(v2.chyba, /Drátěný model není na serveru k dispozici/);
 });
+
+test('kostra v samostatném procesu: priprav, vypocet, zKlipu přes IPC, stop; hlavní vlákno není blokované', { skip: !maFfmpeg && 'ffmpeg není' }, async () => {
+  process.env.KOSTRA_DETEKTOR = 'fake';
+  const zpravy = [];
+  const k = createKostra({ modelDir: '/tmp/claude-0/kostra-test-modely', log: { log: (...a) => zpravy.push(a.join(' ')), error: (...a) => zpravy.push(a.join(' ')) } });
+  try {
+    assert.equal(k.pripraveno, false);
+    assert.equal(await k.priprav(), true); assert.equal(k.pripraveno, true); assert.equal(await k.vypocet(), 'fake17');
+    // během výpočtu v druhém procesu hlavní vlákno dál tiká
+    let tiky = 0; const iv = setInterval(() => tiky++, 20);
+    const out = await k.zKlipu(klip(2), { delkaS: 2 });
+    clearInterval(iv);
+    const j = JSON.parse(out.toString()); assert.equal(j.typ, 'kostra'); assert.equal(j.model, 'fake17'); assert.ok(j.snimky.length >= 9);
+    assert.ok(zpravy.some((z) => /\[kostra\] \d+ snímků/.test(z)), 'log z procesu dorazí do logu serveru');
+    assert.ok(tiky >= 2, 'hlavní vlákno tikalo: ' + tiky);
+  } finally { k.stop(); delete process.env.KOSTRA_DETEKTOR; }
+});

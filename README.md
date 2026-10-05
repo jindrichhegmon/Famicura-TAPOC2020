@@ -221,6 +221,8 @@ hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
   běží nativně přes `@tensorflow/tfjs-node` (volitelná závislost, libtensorflow
   si stáhne `npm install`), bez něj přes WebAssembly, nouzově čistý JavaScript
   (`KOSTRA_BACKEND` v `.env`; co běží, říká `/api/health` → `kostraVypocet`).
+  Počítá samostatný proces `src/kostra-proces.mjs` s nižší prioritou, aby
+  hlavní vlákno serveru dál obsluhovalo obraz a API.
   Při „žádný obraz“ se nenahrává nic a u události je důvod. Model se
   stáhne při startu do `data/modely`; ověření `node scripts/kostra-test.mjs`.
 - **Hlavní aplikace** pošle každou hotovou nahrávku (ruční, plán,

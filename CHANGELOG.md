@@ -22,6 +22,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   a váhy vracely 403, takže nahrávka v režimu drátěného modelu skončila
   „neuloženo: váhy modelu … 403“. Chybová hláška teď říká, co nastavit nebo
   kam soubor nahrát ručně.
+- **Výpočet drátěného modelu běží v samostatném procesu** (`src/kostra-proces.mjs`,
+  nižší priorita): TensorFlow počítá synchronně a v hlavním procesu po každé
+  události na sekundy (dřív přes minutu) zastavil obsluhu požadavků, takže
+  rodině vypadával obraz přes HTTPS/HLS a API neodpovídalo. Proces se spustí
+  při startu, model drží načtený, po pádu se spustí znovu při dalším použití.
 - **Drátěný model z nahrávky se počítá nativně** (`@tensorflow/tfjs-node`,
   volitelná závislost; bez ní WebAssembly, nouzově čistý JavaScript, který
   potřeboval asi sekundu na snímek). `KOSTRA_BACKEND` vynutí backend,

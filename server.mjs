@@ -91,7 +91,8 @@ if (zasobnik) setTimeout(() => zasobnik.start().catch((e) => console.error('[fam
 const { createRemux } = await import('./src/remux.mjs');
 // Nahrávka jako drátěný model (rozostření / drátěný model povolený rodinou): ffmpeg + MoveNet na serveru; model se stáhne při startu do DATA_DIR/modely.
 const { createKostra } = await import('./src/kostra.mjs');
-const kostra = pdp.nastaveno ? createKostra({ modelDir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'modely'), detektor: process.env.KOSTRA_DETEKTOR === 'fake' ? (await import('./src/kostra-fake.mjs')).fakeDetektor() : null }) : null;
+// Výpočet běží v samostatném procesu (src/kostra-proces.mjs), aby nedržel hlavní vlákno serveru; KOSTRA_DETEKTOR=fake čte proces sám.
+const kostra = pdp.nastaveno ? createKostra({ modelDir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'modely') }) : null;
 if (kostra) setTimeout(() => kostra.priprav(), 10000);
 const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik, remux: createRemux(), kostra }) : null;
 // Automatické mazání nahrávek na serveru po době uchování (⚙ dispečinku): každou hodinu, poprvé po startu.
