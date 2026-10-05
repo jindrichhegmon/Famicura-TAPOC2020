@@ -147,7 +147,8 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   /** Nahrávka N sekund z kamery (po události nebo ručně). Jedna na kameru najednou. */
   function porid(tenant, { kameraId, delkaS, predS = PRED_VYCHOZI, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
     const klic = tenant + ':' + kameraId;
-    if (bezi.has(klic)) return bezi.get(klic).then(() => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží' }));
+    // Druhá událost během nahrávky: nová se nespouští, událost spadá do té běžící (vrátí se po jejím dokončení).
+    if (bezi.has(klic)) return bezi.get(klic).then((n) => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží', nahravka: n || null }), () => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží', nahravka: null }));
     const d = normDelka(delkaS);
     const pred = Math.min(10, Math.max(0, Math.round(Number(predS)) || 0));
     const p = (async () => {
@@ -223,7 +224,8 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
       if (kameraId) kde.KameraID = kameraId; else if (Array.isArray(jen)) kde.KameraID = jen;
       if (!iSmazane) kde.SmazanoCas = null;
       const r = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde, razeni: [['Cas', 'DESC']], limit: Math.min(500, Math.max(1, limit)) });
-      return r.map(zRadku);
+      // řádky „právě běží“ z verzí 2.5–2.7 byly jen šum (událost spadá do běžící nahrávky) – neukazují se
+      return r.filter((x) => !(x.Chyba && /právě běží/.test(x.Chyba))).map(zRadku);
     },
     async podleId(tenant, id) {
       const r = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde: { Id: String(id || '') }, limit: 1 });

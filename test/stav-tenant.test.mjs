@@ -205,3 +205,28 @@ test('nahrávka po události: odmítnutí i chyba se zapíší jako řádek s d�
   const r5 = await s2.proved('emit', ['kam2', 'linecross']); await s2.hotovo();
   assert.match((await tb.vyber(T2, 'A_KAM_Nahravka', { kde: { UdalostId: r5.vysledek.id } }))[0].Chyba, /stream kam2 neběží/);
 });
+
+test('druhá událost během nahrávky: žádný řádek „právě běží“, událost patří k běžící nahrávce (i po novém načtení)', async () => {
+  const { createNahravky } = await import('../src/nahravky.mjs');
+  const tb = createMockTabulky();
+  let pust; const go2rtc = { async proxy() { await new Promise((r) => { pust = r; }); return new Response(Buffer.alloc(8192, 1), { status: 200 }); } };
+  const uloziste = { nastaveno: true, dir: '/tmp', async uloz(t, id, data) { return { soubor: id + '.enc', velikost: data.length }; }, async nacti() { return Buffer.alloc(0); }, async smaz() {} };
+  const T0 = Date.UTC(2023, 10, 15, 9, 0, 0);
+  const nahravky = createNahravky({ go2rtc, uloziste, tabulky: tb, kamery, log: ticho, now: () => T0 });
+  const { s, posun } = stav(tb, { t0: T0, nahravky });
+  await s.stav();
+  const r1 = await s.proved('emit', ['tapoc2020', 'linecross']);
+  posun(3000);
+  const r2 = await s.proved('emit', ['tapoc2020', 'linecross']);
+  await new Promise((r) => setTimeout(r, 20)); pust(); await s.hotovo();
+  const radky = await tb.vyber(T, 'A_KAM_Nahravka');
+  assert.equal(radky.length, 1, 'jen jedna nahrávka, žádný řádek „právě běží“'); assert.equal(radky[0].UdalostId, r1.vysledek.id);
+  const st = await s.stav();
+  const e2 = st.state.events.find((e) => e.id === r2.vysledek.id);
+  assert.equal(e2.nahravka.id, radky[0].Id, 'druhá událost ukazuje na tutéž nahrávku'); assert.equal(e2.nahravka.sdilena, true);
+  // po novém načtení ze serveru (restart) vazba drží podle času
+  const { s: s2 } = stav(tb, { t0: T0 + 60000, nahravky });
+  const st2 = await s2.stav();
+  assert.equal(st2.state.events.find((e) => e.id === r2.vysledek.id).nahravka?.id, radky[0].Id);
+  assert.equal((await nahravky.seznam(T)).length, 1);
+});

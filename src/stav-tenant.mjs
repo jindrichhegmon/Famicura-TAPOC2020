@@ -89,7 +89,14 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     if (nahravky) {
       const podleUdalosti = new Map();
       for (const n of await nahravky.seznam(tenant, { limit: 300 }).catch(() => [])) if (n.udalostId && !podleUdalosti.has(n.udalostId)) podleUdalosti.set(n.udalostId, n);
-      for (const e of events) { const n = podleUdalosti.get(e.id); if (n) e.nahravka = { id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste, smazano: !!n.smazanoCas }; }
+      const odkaz = (n, sdilena = false) => ({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste, smazano: !!n.smazanoCas, ...(sdilena ? { sdilena: true } : {}) });
+      const hotove = [...podleUdalosti.values()].filter((n) => !n.chyba);
+      for (const e of events) {
+        const n = podleUdalosti.get(e.id);
+        if (n) { e.nahravka = odkaz(n); continue; }
+        // událost během běžící nahrávky téže kamery (kamera hlásí opakovaně): patří k ní
+        if (e.rec && KINDS[e.kind]) { const k = hotove.find((x) => x.kameraId === e.patientId && e.at >= x.cas - 1000 && e.at <= x.cas + (x.delkaS || 0) * 1000 + 2000); if (k) e.nahravka = odkaz(k, true); }
+      }
     }
     const zad = await tabulky.vyber(tenant, 'A_KAM_Zadost', { razeni: [['Cas', 'DESC']], limit: ZADOSTI_MAX });
     const requests = zad.map(zadostZRadku);
@@ -195,6 +202,8 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     hlas(`nahrávám ${s.poskytovatel?.nahravkaS || ''} s (${smi.nouze ? 'kritická událost s nouzovým přístupem' : 'plný obraz'})`);
     const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, delkaS: s.poskytovatel?.nahravkaS, predS: s.poskytovatel?.nahravkaPredS, uloziste: s.poskytovatel?.nahravkyUloziste, disk: !!s.poskytovatel?.nahravkyDisk, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
       .then((n) => {
+        if (n && n.preskoceno && n.nahravka && !n.nahravka.chyba) { hlas(`spadá do běžící nahrávky ${n.nahravka.id}`); return zapis({ id: n.nahravka.id, url: n.nahravka.url, nazev: n.nahravka.nazev, delkaS: n.nahravka.delkaS, uloziste: n.nahravka.uloziste, sdilena: true }); }
+        if (n && n.preskoceno && n.nahravka) { hlas(`spadá do běžící nahrávky, která selhala: ${n.nahravka.chyba}`); return zapis({ chyba: n.nahravka.chyba }); }
         if (!n || n.preskoceno) return odmitni(`nenahráno: ${n?.duvod || 'nahrávka neproběhla'}`);
         hlas(n.chyba ? `chyba: ${n.chyba}` : `uloženo (${n.uloziste || 'disk'}, ${n.delkaS} s, ${Math.round((n.velikost || 0) / 1024)} kB)`);
         return zapis({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste });

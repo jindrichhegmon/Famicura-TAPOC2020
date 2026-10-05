@@ -22,6 +22,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   SMS, e-mail i nahrávka odcházejí hned, i když nikdo nemá dispečink
   otevřený. Dříve bez otevřené stránky nahrávka vznikla až při příštím
   otevření, tedy pozdě.
+- **Opakované hlášení kamery během nahrávky** (překročení čáry třikrát za
+  20 s) už nezapisuje řádky „neuloženo: nahrávka z téhle kamery právě
+  běží“: druhá a další událost patří k běžící nahrávce (v historii na ni
+  ukazují, i po restartu podle času), v Nahrávkách je jen jeden řádek.
+  Staré řádky s tímto důvodem se v seznamu neukazují.
 
 ## 2.6 · 4. 10. 2026 · hlídání místa na serveru (pojistka disku, limit poskytovatele, varování)
 
