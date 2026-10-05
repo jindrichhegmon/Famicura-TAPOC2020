@@ -5,6 +5,24 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.7 · 5. 10. 2026 · obraz před událostí na serveru, události kamer bez otevřené stránky
+
+- **Nahrávka po události začíná před ní.** Server drží pro každou kameru
+  s poskytovatelem posledních pár sekund obrazu z go2rtc v paměti
+  (`src/zasobnik.mjs`, fMP4 bez překódování; `NAHRAVKY_NABEH_S` v `.env`,
+  výchozí 12 s zásobníku, 0 = vypnuto). Nahrávka po překročení čáry, vstupu
+  do oblasti nebo tlačítkem Nahrát pak obsahuje nastavený náběh (⚙ Nastavení
+  → Obraz před událostí, 0–10 s, výchozí 5) od posledního klíčového snímku
+  před událostí, plus nastavené sekundy po ní; délka v Nahrávkách je součet.
+  Kamera, jejíž obraz zrovna nejde, zásobník nemá a nahrávka jde postaru
+  od chvíle spuštění. Čtení běží trvale (asi 1–2 Mbit/s na kameru přes
+  tunel); stav je v `/api/health` (`zasobnik`).
+- **Události kamer zpracovává server sám**, každé 2 sekundy
+  (`najemci.start`), ne až při dotazu otevřené stránky: zápis události,
+  SMS, e-mail i nahrávka odcházejí hned, i když nikdo nemá dispečink
+  otevřený. Dříve bez otevřené stránky nahrávka vznikla až při příštím
+  otevření, tedy pozdě.
+
 ## 2.6 · 4. 10. 2026 · hlídání místa na serveru (pojistka disku, limit poskytovatele, varování)
 
 - **Pojistka proti plnému disku**: když je na disku VPS volno méně než

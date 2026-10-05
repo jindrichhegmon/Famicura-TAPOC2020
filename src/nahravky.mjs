@@ -21,6 +21,7 @@ import { KINDS, efektivni } from '../public/proto/sim-core.js';
 
 export const DELKA_VYCHOZI = 15, DELKA_MIN = 5, DELKA_MAX = 60;
 export const DNY_VYCHOZI = 30;
+export const PRED_VYCHOZI = 5;          // náběh před událostí (s) ze zásobníku obrazu
 export const GB_VYCHOZI = 2;            // limit místa na poskytovatele (0 = bez limitu)
 export const MIN_VOLNE_GB_VYCHOZI = 5;  // pojistka: pod tolik volného místa na disku VPS se mažou nejstarší nahrávky napříč poskytovateli
 const GB = 1073741824;
@@ -47,7 +48,7 @@ export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna =
   return { ok: false, duvod: `rodina povolila jen „${m === 'none' ? 'žádný obraz' : m === 'blur' ? 'rozostření' : 'drátěný model'}“ – plný obraz se neukládá` };
 }
 
-export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console,
+export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console, zasobnik = null,
                                  minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null } = {}) {
   /** Volné a celkové místo na disku s nahrávkami → { volne, celkem } (null bez údaje). `mistoDisku` jde podstrčit v testech. */
   async function diskInfo() {
@@ -144,21 +145,30 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   }
 
   /** Nahrávka N sekund z kamery (po události nebo ručně). Jedna na kameru najednou. */
-  function porid(tenant, { kameraId, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
+  function porid(tenant, { kameraId, delkaS, predS = PRED_VYCHOZI, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
     const klic = tenant + ':' + kameraId;
     if (bezi.has(klic)) return bezi.get(klic).then(() => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží' }));
     const d = normDelka(delkaS);
+    const pred = Math.min(10, Math.max(0, Math.round(Number(predS)) || 0));
     const p = (async () => {
-      const cas = now();
-      let data;
-      try { cil(volba, kopie); data = await klip(kameraId, d); }
+      let cas = now();
+      let data, nabeh = 0;
+      try {
+        cil(volba, kopie);
+        // se zásobníkem: náběh před událostí + d sekund po ní; bez něj (kamera v zásobníku nejede) postaru od teď
+        if (pred > 0 && zasobnik && zasobnik.bezi(kameraId)) {
+          const k = await zasobnik.klip(kameraId, { predS: pred, poS: d, cekaniMs: (d + 20) * 1000 });
+          if (k.data.length > MAX_BYTES) throw chyba('Nahrávka je příliš velká (přes 64 MB).', 413);
+          data = k.data; cas = k.zacatek; nabeh = k.predS;
+        } else data = await klip(kameraId, d);
+      }
       catch (e) {
         const radek = { Id: nid(cas), KameraID: kameraId, Cas: cas, DelkaS: d, Velikost: 0, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj, Nazev: null, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: String(e.message || e).slice(0, 300), Uloziste: null, Soubor: null, Mime: null, SmazanoCas: null };
         await tabulky.vloz(tenant, 'A_KAM_Nahravka', radek).catch(() => {});
         log.error('[nahravky]', tenant, kameraId, 'nahrávka se nepořídila:', radek.Chyba);
         return zRadku(radek);
       }
-      return uloz(tenant, { kameraId, data, cas, delkaS: d, druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie });
+      return uloz(tenant, { kameraId, data, cas, delkaS: d + Math.round(nabeh), druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie });
     })().finally(() => bezi.delete(klic));
     bezi.set(klic, p);
     return p;

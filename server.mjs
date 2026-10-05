@@ -62,7 +62,7 @@ const nactiKamery = async () => {
 const udalosti = createCameraEvents({ store, dbs, kamery: nactiKamery });
 udalosti.start().catch((e) => console.error('[famicura-tapo] události kamer:', e.message));
 // pm2 stops with SIGINT: cancel the subscriptions, the camera keeps only a few.
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { udalosti.stop().finally(() => process.exit(0)); });
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { try { globalThis.__zasobnik?.stop(); } catch { /* nic */ } udalosti.stop().finally(() => process.exit(0)); });
 
 // Častá záměna při vps-env.sh: adresa asistenta v SMS_WEBHOOK_URL → SMS mlčky nedojdou. Řekni to hned při startu.
 if (process.env.SMS_WEBHOOK_URL && process.env.SMS_WEBHOOK_URL === process.env.ASISTENT_WEBHOOK_URL) {
@@ -82,13 +82,21 @@ if (!disk.nastaveno) console.error('[famicura-tapo] Nahrávky na Google Disk nej
 // Úložiště nahrávek na serveru: šifrované soubory v DATA_DIR/nahravky (klíč NAHRAVKY_KLIC). Pojistka disku: NAHRAVKY_MIN_VOLNE_GB (výchozí 5).
 const uloziste = createUloziste({ dir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'nahravky') });
 if (!uloziste.nastaveno) console.error('[famicura-tapo] Úložiště nahrávek na serveru není nastavené (NAHRAVKY_KLIC) – spusťte ./deploy/vps-env.sh.');
-const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row) }) : null;
+// Zásobník obrazu před událostí: server čte proud každé kamery s tenantem a drží posledních NAHRAVKY_NABEH_S sekund (0 = vypnuto).
+const { createZasobnik } = await import('./src/zasobnik.mjs');
+const NABEH_S = process.env.NAHRAVKY_NABEH_S === undefined ? 12 : Number(process.env.NAHRAVKY_NABEH_S) || 0;
+const zasobnik = pdp.nastaveno && NABEH_S > 0 ? createZasobnik({ go2rtc, kamery: kameryTenanty, maxS: NABEH_S }) : null;
+globalThis.__zasobnik = zasobnik;
+if (zasobnik) setTimeout(() => zasobnik.start().catch((e) => console.error('[famicura-tapo] zásobník obrazu:', e.message)), 5000);
+const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik }) : null;
 // Automatické mazání nahrávek na serveru po době uchování (⚙ dispečinku): každou hodinu, poprvé po startu.
 if (nahravky) { const promaz = () => nahravky.promaz().catch((e) => console.error('[famicura-tapo] mazání nahrávek:', e.message)); setTimeout(promaz, 60 * 1000); setInterval(promaz, 60 * 60 * 1000); }
 const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }), nahravky });
+// Události kamer zpracovává server sám každé 2 s (zápis, SMS, e-mail, nahrávka), i když nikdo nemá otevřený dispečink.
+if (pdp.nastaveno) najemci.start(2000);
 const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
 const ptz = createPtz({ kamery: nactiKamery });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

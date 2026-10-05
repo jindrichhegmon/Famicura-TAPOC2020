@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 /* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
 let JA = null;
 const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'];
+const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkaPredS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
@@ -197,7 +197,7 @@ $('hlForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.pre
 $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
-  const p = {}; for (const k of HL_POLE) p[k] = k === 'nahravkyDisk' ? hlPole(k).checked : (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny' || k === 'nahravkyGB') ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  const p = {}; for (const k of HL_POLE) p[k] = k === 'nahravkyDisk' ? hlPole(k).checked : (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkaPredS' || k === 'nahravkyDny' || k === 'nahravkyGB') ? Number(hlPole(k).value) : hlPole(k).value.trim();
   try {
     const r = await sim.setPoskytovatel(p);
     if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }

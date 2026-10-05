@@ -107,7 +107,7 @@ function verejnaAdresa(req) {
 }
 
 export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null,
-                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [] }) {
+                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
   pdp = pdp || createPdp();
@@ -140,7 +140,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     const m = req.method.toUpperCase();
 
     try {
-      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false } });
+      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), zasobnik: zasobnik ? zasobnik.stav() : null, uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false } });
 
       // Tenant pro přihlašovací stránku: jen název, aby uživatel viděl, že je u správného poskytovatele.
       if (m === 'GET' && path === '/api/tenant') {
@@ -444,7 +444,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           const p = s.state.patients.find((x) => x.id === kamera);
           const smi = nahravky.smiNahravat(s.state, p, 'state');
           if (!smi.ok) return json({ ok: false, error: `Nahrávka se nepořídí: ${smi.duvod}.` }, 403);
-          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, uloziste: s.state.poskytovatel?.nahravkyUloziste, disk: !!s.state.poskytovatel?.nahravkyDisk, zdroj: 'rucni', kdo: rodina ? rodina.jmeno : ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
+          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, predS: s.state.poskytovatel?.nahravkaPredS, uloziste: s.state.poskytovatel?.nahravkyUloziste, disk: !!s.state.poskytovatel?.nahravkyDisk, zdroj: 'rucni', kdo: rodina ? rodina.jmeno : ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
           if (n.preskoceno) return json({ ok: false, error: n.duvod }, 409);
           if (n.chyba) return json({ ok: false, nahravka: n, error: n.chyba }, 502);
           return json({ ok: true, nahravka: n });

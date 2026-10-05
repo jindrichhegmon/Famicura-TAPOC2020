@@ -79,7 +79,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     const t = now();
     const nastaveni = Object.fromEntries((await tabulky.vyber(tenant, 'A_KAM_Nastaveni')).map((r) => [r.Klic, r.Hodnota]));
     const poskytovatel = { ...POSKYTOVATEL_VYCHOZI, nazev: nazev || POSKYTOVATEL_VYCHOZI.nazev, telefon: '', email: '', dispecer: 'Dispečink', smena: '', zaloha: '', zalohaTelefon: '', vedouci: '', vedouciTelefon: '' };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (nastaveni['poskytovatel.' + k] !== undefined && nastaveni['poskytovatel.' + k] !== null) poskytovatel[k] = (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(nastaveni['poskytovatel.' + k]) || POSKYTOVATEL_VYCHOZI[k] : k === 'nahravkyGB' ? (Number.isFinite(Number(nastaveni['poskytovatel.' + k])) ? Number(nastaveni['poskytovatel.' + k]) : POSKYTOVATEL_VYCHOZI[k]) : k === 'nahravkyDisk' ? String(nastaveni['poskytovatel.' + k]) === 'true' : nastaveni['poskytovatel.' + k];
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (nastaveni['poskytovatel.' + k] !== undefined && nastaveni['poskytovatel.' + k] !== null) poskytovatel[k] = (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkyDny') ? Number(nastaveni['poskytovatel.' + k]) || POSKYTOVATEL_VYCHOZI[k] : k === 'nahravkaPredS' ? (Number.isInteger(Number(nastaveni['poskytovatel.' + k])) ? Number(nastaveni['poskytovatel.' + k]) : POSKYTOVATEL_VYCHOZI[k]) : k === 'nahravkyGB' ? (Number.isFinite(Number(nastaveni['poskytovatel.' + k])) ? Number(nastaveni['poskytovatel.' + k]) : POSKYTOVATEL_VYCHOZI[k]) : k === 'nahravkyDisk' ? String(nastaveni['poskytovatel.' + k]) === 'true' : nastaveni['poskytovatel.' + k];
     const kam = (await tabulky.vyber(tenant, 'A_KAM_Kamera', { razeni: [['Nazev', 'ASC']] })).filter((r) => r.Aktivni !== false);
     const patients = kam.map((r) => pacientZRadku(r, poskytovatel.nazev));
     const klid = {}; for (const r of kam) if (r.KlidDo && r.KlidDo > t) klid[r.KameraID] = r.KlidDo;
@@ -193,7 +193,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     const smi = smiNahravat(s, p, ev.kind, now(), { skutecna: !!ev.real });
     if (!smi.ok) { const pr = odmitni(`nenahráno: ${smi.duvod}`).finally(() => cekajici.delete(pr)); cekajici.add(pr); return; }
     hlas(`nahrávám ${s.poskytovatel?.nahravkaS || ''} s (${smi.nouze ? 'kritická událost s nouzovým přístupem' : 'plný obraz'})`);
-    const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, delkaS: s.poskytovatel?.nahravkaS, uloziste: s.poskytovatel?.nahravkyUloziste, disk: !!s.poskytovatel?.nahravkyDisk, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
+    const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, delkaS: s.poskytovatel?.nahravkaS, predS: s.poskytovatel?.nahravkaPredS, uloziste: s.poskytovatel?.nahravkyUloziste, disk: !!s.poskytovatel?.nahravkyDisk, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
       .then((n) => {
         if (!n || n.preskoceno) return odmitni(`nenahráno: ${n?.duvod || 'nahrávka neproběhla'}`);
         hlas(n.chyba ? `chyba: ${n.chyba}` : `uloženo (${n.uloziste || 'disk'}, ${n.delkaS} s, ${Math.round((n.velikost || 0) / 1024)} kB)`);
@@ -226,6 +226,8 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
 
   return {
     tenant,
+    /** Čas (ms) poslední zpracované události kamery – pro serverovou smyčku (najemci.krok). */
+    get posledniUdalost() { return realSince; },
     stav() {
       return serializovane(async () => { await nacti(); await udrzba(); return { v: data.v, state: data.state }; });
     },

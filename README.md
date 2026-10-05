@@ -200,7 +200,15 @@ hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
   velikost, událost, odkaz, chyba), odkaz 🎞 u události v historii
   a v seznamu Nahrávky v detailu (`GET /api/nahravky?kamera=`); tlačítko
   **Nahrát teď** (`POST /api/nahravky/rucni`). Jedna nahrávka na kameru
-  najednou; obraz před událostí server nemá.
+  najednou. Od 2.7 má server i obraz před událostí: `src/zasobnik.mjs`
+  čte trvale proud každé kamery s poskytovatelem (`stream.mp4?video=h264`,
+  fMP4) a drží posledních `NAHRAVKY_NABEH_S` sekund (výchozí 12) v paměti;
+  klip = inicializace + fragmenty od posledního klíčového snímku před
+  (teď − náběh) + dalších N sekund, časy tfdt přepsané od nuly. Náběh
+  nastavuje poskytovatel (⚙ Obraz před událostí, 0–10 s, výchozí 5). Bez
+  běžícího zásobníku (kamera nejede) jde klip postaru od spuštění.
+  Události kamer zpracovává server ve smyčce každé 2 s (`najemci.krok`),
+  takže nahrávka, SMS i e-mail odcházejí hned i bez otevřené stránky.
 - **Soukromí:** `smiNahravat` – jen při plném obrazu povoleném rodinou,
   nebo kritická událost (pád, SOS…) s povoleným nouzovým přístupem;
   jinak se nahrávka nepořídí a u události je důvod.
@@ -531,7 +539,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.6) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 2.7) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

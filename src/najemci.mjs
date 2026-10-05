@@ -37,6 +37,36 @@ export function createNajemci({ pdp, kamery = async () => [], udalosti = null, u
       return s;
     },
     kameryTenanta,
+    /**
+     * Jeden krok serverové smyčky: pro každého tenanta, který má kamery, zpracuje nové události kamer
+     * (zápis, upozornění, nahrávka) i bez otevřené stránky. Stav tenanta se založí při prvním kroku.
+     * Vrací počet tenantů, u kterých se stav obnovil.
+     */
+    async krok() {
+      if (!pdp || !pdp.nastaveno) return 0;
+      const tenanti = new Set((await kamery().catch(() => [])).map((k) => normTenant(k.tenant)).filter(Boolean));
+      let n = 0;
+      for (const t of tenanti) {
+        try {
+          const s = await this.pro(t);
+          // jen když přišla nová událost některé kamery tenanta (nedavne je levné), nebo jednou za minutu kvůli vypršení/eskalaci
+          const moje = new Set((await kameryTenanta(t)).map((k) => k.id));
+          const cerstve = udalosti ? udalosti.nedavne(s.posledniUdalost ?? now()).some((e) => moje.has(e.kameraId)) : false;
+          const tick = !s.posledniTick || now() - s.posledniTick > 60000;
+          if (!cerstve && !tick) continue;
+          await s.stav(); s.posledniTick = now(); n++;
+        } catch (e) { log.error('[najemci] smyčka', t, e.message); }
+      }
+      return n;
+    },
+    /** Spustí smyčku (každé `kazdychMs`, výchozí 2 s); kroky se nepřekrývají. */
+    start(kazdychMs = 2000) {
+      if (this._smycka) return;
+      let bezi = false;
+      this._smycka = setInterval(async () => { if (bezi) return; bezi = true; try { await this.krok(); } catch { /* zalogováno v kroku */ } bezi = false; }, kazdychMs);
+      if (this._smycka.unref) this._smycka.unref();
+    },
+    stop() { clearInterval(this._smycka); this._smycka = null; },
     /** Po změně cameras.json: každý načtený tenant si doplní kamery. */
     async obnovKamery() { for (const s of stavy.values()) await s.obnovKamery().catch((e) => log.error('[najemci] kamery', s.tenant, e.message)); },
     async hotovo() { for (const s of stavy.values()) await s.hotovo(); },
