@@ -49,7 +49,7 @@ export function defaultWatch() {
   return w;
 }
 export function describeWatch(w) {
-  const hodiny = (r) => (r.from ? ` ${r.from}–${r.to}` : '');
+  const hodiny = (r) => { const t = oknaText(r); return t ? ` ${t}` : ''; };
   const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : '') + (w[k].sms ? ' 📱' : '') + (w[k].mail ? ' ✉' : ''));
   return on.length ? on.join(', ') : 'nic';
 }
@@ -140,12 +140,23 @@ export function efektivni(s, p, now = Date.now(), nocSimulovana = false) {
   const mode = p.consent[noc ? 'noc' : 'den'];
   return { mode, proc: `${CONSENT[mode]} (${noc ? `noc do ${denOd}` : `den do ${nocOd}`}, nastavila rodina)`, zdroj: noc ? 'noc' : 'den' };
 }
+/** Časová okna události: až tři dvojice od–do (from/to, from2/to2, from3/to3); jen vyplněné obě strany. */
+export function okna(r) {
+  const out = [];
+  for (const [f, t] of [[r?.from, r?.to], [r?.from2, r?.to2], [r?.from3, r?.to3]]) if (f && t) out.push([f, t]);
+  return out;
+}
+export const oknaText = (r) => okna(r).map(([f, t]) => `${f}–${t}`).join(', ');
+/** Platí teď? Bez oken celý den; jinak když padne do kteréhokoli (okno přes půlnoc: 22:00–06:00). */
 export function withinHours(r, d = new Date()) {
-  if (!r.from || !r.to) return true;
+  const o = okna(r);
+  if (!o.length) return true;
   const m = minutaDne(d);
-  const [fh, fm] = r.from.split(':').map(Number), [th, tm] = r.to.split(':').map(Number);
-  const f = fh * 60 + fm, t = th * 60 + tm;
-  return f < t ? (m >= f && m < t) : (m >= f || m < t);
+  return o.some(([from, to]) => {
+    const [fh, fm] = from.split(':').map(Number), [th, tm] = to.split(':').map(Number);
+    const f = fh * 60 + fm, t = th * 60 + tm;
+    return f < t ? (m >= f && m < t) : (m >= f || m < t);
+  });
 }
 
 const FAKE = [
@@ -217,7 +228,7 @@ const akce = {
     const pw = p?.watch?.[kind];
     if (pw && (!pw.on || !withinHours(pw, new Date(now)))) {
       // dropped by the provider's settings; the panel says so, the history stays clean
-      s.lastDropped = { at: now, patientId, kind, reason: !pw.on ? 'poskytovatel událost vypnul' : `mimo hodiny ${pw.from}–${pw.to}` };
+      s.lastDropped = { at: now, patientId, kind, reason: !pw.on ? 'poskytovatel událost vypnul' : `mimo hodiny ${oknaText(pw)}` };
       return { vysledek: null };
     }
     const ev = { id: nid(s), at: now, patientId, kind, state: k.level === 'info' ? 'uzavřen' : 'nový', by: null, result: null, note: '', rec: !!pw?.rec };
@@ -259,8 +270,8 @@ const akce = {
     if ('rec' in patch) w.rec = bool(patch.rec);
     if ('sms' in patch) w.sms = bool(patch.sms);
     if ('mail' in patch) w.mail = bool(patch.mail);
-    if ('from' in patch) w.from = hodina(patch.from);
-    if ('to' in patch) w.to = hodina(patch.to);
+    for (const k of ['from', 'to', 'from2', 'to2', 'from3', 'to3']) if (k in patch) w[k] = hodina(patch[k]);
+    for (const [f, t] of [['from', 'to'], ['from2', 'to2'], ['from3', 'to3']]) if (!!w[f] !== !!w[t]) throw chyba('Vyplňte začátek i konec okna, nebo ani jedno.');
     p.watch[kind] = w;
     return {};
   },

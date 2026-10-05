@@ -230,3 +230,25 @@ test('druhá událost během nahrávky: žádný řádek „právě běží“, 
   assert.equal(st2.state.events.find((e) => e.id === r2.vysledek.id).nahravka?.id, radky[0].Id);
   assert.equal((await nahravky.seznam(T)).length, 1);
 });
+
+test('až tři časová okna na událost: hlídá se v kterémkoli, text oken, nevyplněný konec je chyba', async () => {
+  const { seed, proved, withinHours, oknaText, describeWatch } = await import('../public/proto/sim-core.js');
+  const s = seed(Date.UTC(2026, 9, 5, 5, 0, 0));
+  const p = s.patients.find((x) => x.real) || s.patients[0];
+  proved(s, 'setWatch', [p.id, 'linecross', { from: '07:00', to: '08:00', from2: '12:00', to2: '13:00', from3: '19:00', to3: '20:00' }], Date.UTC(2026, 9, 5, 5, 0, 0));
+  const w = s.patients.find((x) => x.id === p.id).watch.linecross;
+  assert.equal(oknaText(w), '07:00–08:00, 12:00–13:00, 19:00–20:00');
+  const praha = (h, m = 0) => Date.UTC(2026, 9, 5, h - 2, m);   // letní čas: Praha = UTC+2
+  assert.equal(withinHours(w, new Date(praha(7, 30))), true); assert.equal(withinHours(w, new Date(praha(12, 59))), true); assert.equal(withinHours(w, new Date(praha(19, 0))), true);
+  assert.equal(withinHours(w, new Date(praha(9, 0))), false); assert.equal(withinHours(w, new Date(praha(20, 0))), false);
+  assert.equal(proved(s, 'emit', [p.id, 'linecross'], praha(9, 0)).vysledek, null, 'mimo okna se zahodí');
+  assert.match(s.lastDropped.reason, /mimo hodiny 07:00–08:00, 12:00–13:00, 19:00–20:00/);
+  assert.ok(proved(s, 'emit', [p.id, 'linecross'], praha(12, 30)).vysledek, 'v druhém okně projde');
+  assert.match(describeWatch(s.patients.find((x) => x.id === p.id).watch), /překročení čáry 07:00–08:00, 12:00–13:00, 19:00–20:00/);
+  // druhé okno smazané → hlídá se jen v prvním a třetím; okno přes půlnoc
+  proved(s, 'setWatch', [p.id, 'linecross', { from2: '', to2: '', from3: '22:00', to3: '06:00' }], praha(9));
+  const w2 = s.patients.find((x) => x.id === p.id).watch.linecross;
+  assert.equal(oknaText(w2), '07:00–08:00, 22:00–06:00'); assert.equal(withinHours(w2, new Date(praha(23, 30))), true); assert.equal(withinHours(w2, new Date(praha(12, 30))), false);
+  assert.throws(() => proved(s, 'setWatch', [p.id, 'linecross', { from2: '12:00', to2: '' }], praha(9)), /začátek i konec okna/);
+  assert.throws(() => proved(s, 'setWatch', [p.id, 'linecross', { from3: '25:00', to3: '26:00' }], praha(9)), /HH:MM/);
+});

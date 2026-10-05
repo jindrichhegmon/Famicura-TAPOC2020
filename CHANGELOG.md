@@ -22,6 +22,9 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   SMS, e-mail i nahrávka odcházejí hned, i když nikdo nemá dispečink
   otevřený. Dříve bez otevřené stránky nahrávka vznikla až při příštím
   otevření, tedy pozdě.
+- **Až tři časová okna na událost** (Nastavení → Jen v hodinách, tlačítko +):
+  např. 07:00–08:00, 12:00–13:00 a 19:00–20:00; událost se hlídá, když
+  padne do kteréhokoli; rodina vidí všechna okna v „Co poskytovatel hlídá“.
 - **Opakované hlášení kamery během nahrávky** (překročení čáry třikrát za
   20 s) už nezapisuje řádky „neuloženo: nahrávka z téhle kamery právě
   běží“: druhá a další událost patří k běžící nahrávce (v historii na ni

@@ -465,7 +465,7 @@ function renderDetail(rebuild = false) {
       </div></section>
       <section class="dsec hide" data-sec="nastaveni">
         <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</p>
-        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS</th><th>E-mail</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td><input type="time" class="from"> – <input type="time" class="to"></td><td><input type="checkbox" class="rec"></td><td><input type="checkbox" class="sms"></td><td><input type="checkbox" class="mail"></td></tr>`).join('')}</tbody></table>
+        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS</th><th>E-mail</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno"><input type="time" class="from"> – <input type="time" class="to"> <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide"><input type="time" class="from2"> – <input type="time" class="to2"></div><div class="okno hide"><input type="time" class="from3"> – <input type="time" class="to3"></div></td><td><input type="checkbox" class="rec"></td><td><input type="checkbox" class="sms"></td><td><input type="checkbox" class="mail"></td></tr>`).join('')}</tbody></table>
         <p class="small muted" id="dwatchPozn"></p>
       </div></section>`;
     detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
@@ -479,6 +479,7 @@ function renderDetail(rebuild = false) {
         const k = tr.dataset.k, w = pp.watch?.[k] || { on: true, from: '', to: '', rec: false };
         if (document.activeElement && tr.contains(document.activeElement)) return;
         tr.querySelector('.on').checked = w.on; tr.querySelector('.from').value = w.from; tr.querySelector('.to').value = w.to; tr.querySelector('.rec').checked = w.rec;
+        for (const n of [2, 3]) { const f = tr.querySelector('.from' + n), t = tr.querySelector('.to' + n); f.value = w['from' + n] || ''; t.value = w['to' + n] || ''; if (f.value || t.value) f.closest('.okno').classList.remove('hide'); }
         const cs = tr.querySelector('.sms'), cm = tr.querySelector('.mail');
         cs.checked = w.sms ?? upozorneniVychozi(k); cm.checked = w.mail ?? upozorneniVychozi(k);
         cs.disabled = !kk.sms.length; cm.disabled = !kk.mail.length;
@@ -492,8 +493,10 @@ function renderDetail(rebuild = false) {
     naplnWatch();
     d.querySelectorAll('#dwatch tr').forEach((tr) => {
       const k = tr.dataset.k;
-      const push = () => sim.setWatch(p.id, k, { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, rec: tr.querySelector('.rec').checked, sms: tr.querySelector('.sms').checked, mail: tr.querySelector('.mail').checked });
+      const push = () => sim.setWatch(p.id, k, { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, from2: tr.querySelector('.from2').value, to2: tr.querySelector('.to2').value, from3: tr.querySelector('.from3').value, to3: tr.querySelector('.to3').value, rec: tr.querySelector('.rec').checked, sms: tr.querySelector('.sms').checked, mail: tr.querySelector('.mail').checked });
       tr.querySelectorAll('input').forEach((i) => { i.onchange = push; });
+      // + odkryje další okno (druhé, pak třetí); okna se zapisují jen vyplněná celá
+      tr.querySelector('.okno-dalsi').onclick = () => { const skryta = [...tr.querySelectorAll('.okno.hide')]; if (skryta.length) { skryta[0].classList.remove('hide'); skryta[0].querySelector('input').focus(); } if (skryta.length <= 1) tr.querySelector('.okno-dalsi').disabled = true; };
     });
     d.querySelector('#closeD').onclick = () => { selected = null; renderDetail(); renderTiles(); };
     renderUzivatele(p);

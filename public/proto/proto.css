@@ -276,6 +276,9 @@ body.app #notifs .banner,body.app #requests .banner{box-shadow:0 2px 10px rgba(2
 table.watch td,table.watch th{padding:5px 6px;font-size:.85rem}
 table.watch input[type=time]{min-height:30px;padding:2px 6px;font-size:.8rem;width:88px}
 table.watch input[type=checkbox]{width:18px;height:18px}
+table.watch td.hod{white-space:nowrap}
+table.watch .okno{display:flex;gap:4px;align-items:center;margin:2px 0}
+table.watch .okno-dalsi{min-height:26px;padding:0 8px;font-size:.9rem;line-height:1}
 .demo{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#e7f1fb;border:1px solid #c7ddf3;border-radius:14px;padding:12px 14px;margin-top:14px}
 .demo b{display:block;font-size:1rem}
 .demo span{font-size:.9rem;color:var(--muted)}
