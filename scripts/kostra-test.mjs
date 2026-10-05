@@ -17,7 +17,7 @@ const data = vstup ? await readFile(vstup) : execFileSync(process.env.FFMPEG_BIN
 const k = createKostra({ modelDir: path.join(process.env.DATA_DIR || 'data', 'modely') });
 const t0 = Date.now();
 console.log('připravuji model…'); if (!(await k.priprav())) process.exit(1);
-console.log(`model připraven za ${Date.now() - t0} ms; zpracovávám ${vstup || 'zkušební klip'} (${Math.round(data.length / 1024)} kB)…`);
+console.log(`model připraven za ${Date.now() - t0} ms (výpočet: ${await k.vypocet()}); zpracovávám ${vstup || 'zkušební klip'} (${Math.round(data.length / 1024)} kB)…`);
 const t1 = Date.now();
 const out = await k.zKlipu(data);
 const j = JSON.parse(out.toString());

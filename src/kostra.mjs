@@ -43,11 +43,29 @@ export function snimkyZKlipu(data, { ffmpeg = process.env.FFMPEG_BIN || 'ffmpeg'
   });
 }
 
-/** Detektor MoveNet přes TensorFlow.js (CPU). Model z disku (modelDir), při prvním použití stažený z MODEL_URL. */
+/**
+ * Nejrychlejší dostupný výpočet TensorFlow: nativní tfjs-node (libtensorflow, snímek za desítky ms),
+ * jinak WebAssembly (jednotky set ms), jinak čistý JavaScript (asi sekunda na snímek).
+ * KOSTRA_BACKEND=tensorflow|wasm|cpu vynutí jeden z nich. → název backendu
+ */
+export async function vyberBackend(tf, log = console) {
+  const chce = process.env.KOSTRA_BACKEND || '';
+  if (!process.env.TF_CPP_MIN_LOG_LEVEL) process.env.TF_CPP_MIN_LOG_LEVEL = '2';   // libtensorflow: jen varování a chyby
+  const pokusy = [];
+  if (!chce || chce === 'tensorflow') pokusy.push(['tensorflow', () => import('@tensorflow/tfjs-node')]);
+  if (!chce || chce === 'wasm') pokusy.push(['wasm', () => import('@tensorflow/tfjs-backend-wasm')]);
+  for (const [nazev, nacti] of pokusy) {
+    try { await nacti(); if (await tf.setBackend(nazev)) { await tf.ready(); return nazev; } }
+    catch (e) { log.log(`[kostra] backend ${nazev} není k dispozici (${String(e.message || e).split('\n')[0].slice(0, 120)})`); }
+  }
+  await tf.setBackend('cpu'); await tf.ready(); return 'cpu';
+}
+
+/** Detektor MoveNet přes TensorFlow.js. Model z disku (modelDir), při prvním použití stažený z MODEL_URL. */
 export async function vytvorDetektorMoveNet({ modelDir, log = console, fetchImpl = fetch } = {}) {
   const tf = await import('@tensorflow/tfjs');
   const pd = await import('@tensorflow-models/pose-detection');
-  await tf.setBackend('cpu'); await tf.ready();
+  const backend = await vyberBackend(tf, log);
   await mkdir(modelDir, { recursive: true });
   const cesta = path.join(modelDir, 'movenet-lightning.json');
   let model;
@@ -78,8 +96,9 @@ export async function vytvorDetektorMoveNet({ modelDir, log = console, fetchImpl
   const vahyBuf = Buffer.from(model.weightData, 'base64');
   const io = { load: async () => ({ modelTopology: model.modelTopology, weightSpecs: model.weightSpecs, weightData: vahyBuf.buffer.slice(vahyBuf.byteOffset, vahyBuf.byteOffset + vahyBuf.byteLength), format: model.format, generatedBy: model.generatedBy, convertedBy: model.convertedBy }) };
   const det = await pd.createDetector(pd.SupportedModels.MoveNet, { modelType: pd.movenet.modelType.SINGLEPOSE_LIGHTNING, modelUrl: io });
+  log.log('[kostra] výpočet:', backend);
   return {
-    nazev: 'movenet17',
+    nazev: 'movenet17', backend,
     /** rgb (Buffer 320×180×3) → [[x, y, s] ×17] v 0–1, nebo null bez postavy */
     async body(rgb) {
       const img = tf.tensor3d(new Int32Array(rgb), [VYSKA, SIRKA, 3], 'int32');
@@ -100,6 +119,8 @@ export function createKostra({ modelDir = path.join(process.env.DATA_DIR || 'dat
     /** Připraví model dopředu (při startu serveru), aby první nahrávka nečekala na stažení. */
     async priprav() { try { await det(); return true; } catch (e) { log.error('[kostra] model není k dispozici:', e.message); return false; } },
     get pripraveno() { return !!detPromise; },
+    /** Název výpočtu (tensorflow | wasm | cpu | fake17…), až je model připravený; jinak null. */
+    async vypocet() { try { const d = await det(); return d.backend || d.nazev || null; } catch { return null; } },
     /** MP4 → data kostry (JSON jako Buffer) + statistika. Vyhodí chybu, když model nebo ffmpeg nejsou. */
     async zKlipu(data, { delkaS = null } = {}) {
       const t0 = now();

@@ -140,7 +140,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     const m = req.method.toUpperCase();
 
     try {
-      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), zasobnik: zasobnik ? zasobnik.stav() : null, kostra: kostra ? kostra.pripraveno : null, uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false } });
+      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), zasobnik: zasobnik ? zasobnik.stav() : null, kostra: kostra ? kostra.pripraveno : null, kostraVypocet: kostra && kostra.pripraveno ? await kostra.vypocet() : null, uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false } });
 
       // Tenant pro přihlašovací stránku: jen název, aby uživatel viděl, že je u správného poskytovatele.
       if (m === 'GET' && path === '/api/tenant') {

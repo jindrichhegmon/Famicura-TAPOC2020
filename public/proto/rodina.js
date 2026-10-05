@@ -178,6 +178,7 @@ function renderModes() {
   sw.disabled = baseMode === 'skeleton';
   sw.checked = baseMode === 'skeleton' || skel;
   $('skelHint').textContent = baseMode === 'skeleton' ? 'na černém pozadí je drátěný model vždy' : 'kostra postavy přes plný i rozostřený obraz';
+  const ch = $('skelChip'); ch.disabled = baseMode === 'skeleton'; ch.setAttribute('aria-pressed', String(sw.checked)); ch.textContent = `🦴 Drátěný model: ${sw.checked ? 'zapnuto' : 'vypnuto'}`;
 }
 /* Test obrazu: rodina vidí vždy plný obraz; velkým tlačítkem si může vyzkoušet,
  * jak vypadá rozostření, černé pozadí a drátěný model. Jen na tomhle telefonu,
@@ -188,6 +189,7 @@ $('testZavrit').onclick = () => { baseMode = 'full'; skel = true; localStorage.s
 if (zRezimu && (zRezimu[0] !== 'full' || zRezimu[1])) testObrazu(true);   // ?rezim= otevře test rovnou v tom zobrazení
 $('modes').querySelectorAll('button').forEach((b) => { b.onclick = () => { baseMode = b.dataset.mode; renderModes(); render(); }; });
 $('skelSw').onchange = () => { skel = $('skelSw').checked; localStorage.setItem(SKEL_KEY, skel ? '1' : '0'); renderModes(); render(); };
+$('skelChip').onclick = () => { skel = !skel; localStorage.setItem(SKEL_KEY, skel ? '1' : '0'); renderModes(); render(); };
 renderModes();
 $('cDen').onchange = () => sim.setConsent(patientId, { den: $('cDen').value });
 $('cNoc').onchange = () => sim.setConsent(patientId, { noc: $('cNoc').value });

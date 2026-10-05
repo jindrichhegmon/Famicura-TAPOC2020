@@ -216,8 +216,11 @@ hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
   povoleném rodinou, nebo u kritické události (pád, SOS…) s povoleným
   nouzovým přístupem. Při rozostření nebo drátěném modelu (od 2.8) vznikne
   nahrávka jen jako **drátěný model**: `src/kostra.mjs` vytáhne z klipu
-  snímky (ffmpeg, 5/s, 320×180), model MoveNet (TensorFlow.js na CPU, 17
-  bodů) najde postavu a uloží se jen souřadnice (JSON); obraz se zahodí.
+  snímky (ffmpeg, 5/s, 320×180), model MoveNet (TensorFlow.js, 17 bodů)
+  najde postavu a uloží se jen souřadnice (JSON); obraz se zahodí. Výpočet
+  běží nativně přes `@tensorflow/tfjs-node` (volitelná závislost, libtensorflow
+  si stáhne `npm install`), bez něj přes WebAssembly, nouzově čistý JavaScript
+  (`KOSTRA_BACKEND` v `.env`; co běží, říká `/api/health` → `kostraVypocet`).
   Při „žádný obraz“ se nenahrává nic a u události je důvod. Model se
   stáhne při startu do `data/modely`; ověření `node scripts/kostra-test.mjs`.
 - **Hlavní aplikace** pošle každou hotovou nahrávku (ruční, plán,
