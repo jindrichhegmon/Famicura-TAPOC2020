@@ -88,7 +88,8 @@ const NABEH_S = process.env.NAHRAVKY_NABEH_S === undefined ? 12 : Number(process
 const zasobnik = pdp.nastaveno && NABEH_S > 0 ? createZasobnik({ go2rtc, kamery: kameryTenanty, maxS: NABEH_S }) : null;
 globalThis.__zasobnik = zasobnik;
 if (zasobnik) setTimeout(() => zasobnik.start().catch((e) => console.error('[famicura-tapo] zásobník obrazu:', e.message)), 5000);
-const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik }) : null;
+const { createRemux } = await import('./src/remux.mjs');
+const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik, remux: createRemux() }) : null;
 // Automatické mazání nahrávek na serveru po době uchování (⚙ dispečinku): každou hodinu, poprvé po startu.
 if (nahravky) { const promaz = () => nahravky.promaz().catch((e) => console.error('[famicura-tapo] mazání nahrávek:', e.message)); setTimeout(promaz, 60 * 1000); setInterval(promaz, 60 * 60 * 1000); }
 const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }), nahravky });

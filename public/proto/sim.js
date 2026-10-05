@@ -122,6 +122,7 @@ export const sim = {
   setAlert(eventId, patch) { return run('setAlert', [eventId, patch]); },
   ackNotification(id) { return run('ackNotification', [id]); },
   ackAll(patientId) { return run('ackAll', [patientId]); },
+  closeAll(patientId, by, result) { return run('closeAll', [patientId, by, result]); },
   setWatch(patientId, kind, patch) { return run('setWatch', [patientId, kind, patch]); },
   setKontakty(patientId, kontakty, by) { return run('setKontakty', [patientId, kontakty, by]); },
   setConsent(patientId, consent) { return run('setConsent', [patientId, consent]); },

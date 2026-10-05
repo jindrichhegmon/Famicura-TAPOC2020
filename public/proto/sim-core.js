@@ -258,6 +258,18 @@ const akce = {
     Object.assign(e, p);
     return {};
   },
+  /** Hromadně uzavře otevřené alerty (varování i kritické): jedné kamery (patientId), nebo všech (''). Vrací { pocet }. */
+  closeAll(s, now, patientId, by, result) {
+    const jen = patientId ? pid(patientId) : null;
+    const kdo = str(by, 80, 'by') || 'dispečink', vysledek = str(result, 80, 'result') || 'hromadně uzavřeno';
+    let pocet = 0;
+    for (const e of s.events) {
+      if (e.state === 'uzavřen' || !KINDS[e.kind] || KINDS[e.kind].level === 'info') continue;
+      if (jen && e.patientId !== jen) continue;
+      e.state = 'uzavřen'; e.by = kdo; e.result = vysledek; e.closedAt = now; if (!e.takenAt) e.takenAt = now; pocet++;
+    }
+    return { vysledek: { pocet }, zmena: pocet > 0 };
+  },
   ackNotification(s, now, id) { const n = s.notifications.find((x) => x.id === str(id, 60, 'id')); if (!n) return { zmena: false }; n.ack = true; return {}; },
   ackAll(s, now, patientId) { patientId = pid(patientId); for (const n of s.notifications) if (n.patientId === patientId) n.ack = true; return {}; },
 

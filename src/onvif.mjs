@@ -254,7 +254,23 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
       const { url, profil } = await ptzPriprav();
       const r = Math.max(0.1, Math.min(1, Number(rychlost) || 0.5));
       const v = { left: [-r, 0], right: [r, 0], up: [0, r], down: [0, -r] }[smer];
-      if (smer === 'home') { await soap(url, { body: `<tptz:GotoHomePosition><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GotoHomePosition>` }); return { ok: true }; }
+      if (smer === 'home') {
+        // Výchozí poloha: GotoHomePosition; Tapo některé firmwary nemají, pak první uložená předvolba (GetPresets → GotoPreset),
+        // a nakonec AbsoluteMove do středu (0, 0). Když nejde nic, srozumitelná chyba místo kódu z kamery.
+        const pokusy = [
+          async () => soap(url, { body: `<tptz:GotoHomePosition><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GotoHomePosition>` }),
+          async () => {
+            const doc = await soap(url, { body: `<tptz:GetPresets><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GetPresets>` });
+            const preset = vsechny(doc, 'Preset')[0]; const token = preset?.attrs?.token;
+            if (!token) throw new OnvifError('kamera nemá uloženou předvolbu');
+            return soap(url, { body: `<tptz:GotoPreset><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PresetToken>${esc(token)}</tptz:PresetToken></tptz:GotoPreset>` });
+          },
+          async () => soap(url, { body: `<tptz:AbsoluteMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Position><tt:PanTilt x="0" y="0"/></tptz:Position></tptz:AbsoluteMove>` }),
+        ];
+        const chyby = [];
+        for (const pokus of pokusy) { try { await pokus(); return { ok: true }; } catch (e) { chyby.push(e.message); } }
+        throw new OnvifError('Kamera výchozí polohu nenabízí (zkusili jsme výchozí polohu, předvolbu i střed).', chyby.join(' | '));
+      }
       if (smer === 'stop' || !v) { await soap(url, { body: `<tptz:Stop><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PanTilt>true</tptz:PanTilt><tptz:Zoom>true</tptz:Zoom></tptz:Stop>` }); return { ok: true }; }
       await soap(url, { body: `<tptz:ContinuousMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Velocity><tt:PanTilt x="${v[0]}" y="${v[1]}"/></tptz:Velocity></tptz:ContinuousMove>` });
       await new Promise((res) => setTimeout(res, Math.max(100, Math.min(3000, Number(ms) || 400))));

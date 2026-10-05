@@ -22,6 +22,18 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   SMS, e-mail i nahrávka odcházejí hned, i když nikdo nemá dispečink
   otevřený. Dříve bez otevřené stránky nahrávka vznikla až při příštím
   otevření, tedy pozdě.
+- **Hromadné uzavření alertů**: tlačítko „✓ Uzavřít vše (N)“ v hlavičce
+  Fronty alertů a „✓ Uzavřít alerty (N)“ v liště pod obrazem kamery; zeptá se
+  na výsledek a zapíše ho ke každému (akce `closeAll`).
+- **Domeček (výchozí poloha kamery)**: když kamera GotoHomePosition nemá,
+  server zkusí první uloženou předvolbu a pak střed (AbsoluteMove 0,0); když
+  nejde nic, srozumitelná hláška místo chyby 500.
+- **Přehrávání nahrávky v aplikaci rodiny (iPhone)**: klip z go2rtc se při
+  ukládání převede přes ffmpeg na obyčejný MP4 s hlavičkou napřed
+  (`src/remux.mjs`, bez překódování), který Safari přehraje a má správnou
+  délku; přehrávač startuje ztlumený (nahrávka zvuk nemá, jinak iPhone
+  nespustí přehrávání) a přežije obnovu seznamu. Bez ffmpeg na serveru
+  zůstane původní soubor (log).
 - **Až tři časová okna na událost** (Nastavení → Jen v hodinách, tlačítko +):
   např. 07:00–08:00, 12:00–13:00 a 19:00–20:00; událost se hlídá, když
   padne do kteréhokoli; rodina vidí všechna okna v „Co poskytovatel hlídá“.

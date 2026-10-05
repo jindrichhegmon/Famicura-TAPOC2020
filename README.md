@@ -207,6 +207,9 @@ hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
   (teď − náběh) + dalších N sekund, časy tfdt přepsané od nuly. Náběh
   nastavuje poskytovatel (⚙ Obraz před událostí, 0–10 s, výchozí 5). Bez
   běžícího zásobníku (kamera nejede) jde klip postaru od spuštění.
+  Klip se při ukládání převede přes `ffmpeg -c copy -movflags +faststart`
+  (`src/remux.mjs`) na obyčejný MP4, který přehraje Safari na iPhonu; bez
+  ffmpeg na VPS (`apt install ffmpeg`) zůstane fragmentovaný.
   Události kamer zpracovává server ve smyčce každé 2 s (`najemci.krok`),
   takže nahrávka, SMS i e-mail odcházejí hned i bez otevřené stránky.
 - **Soukromí:** `smiNahravat` – jen při plném obrazu povoleném rodinou,

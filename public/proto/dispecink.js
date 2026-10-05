@@ -82,7 +82,7 @@ function prehravaniOvladani(el, pid) {
     const li = a.closest('li'); const stare = li.querySelector('video');
     if (stare) { stare.pause(); stare.remove(); return; }
     el.querySelectorAll('video').forEach((v) => { v.pause(); v.remove(); });
-    const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.playsInline = true; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
+    const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
     v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo prohlížeč formát neumí).', 'crit');
     li.append(v);
   }; });
@@ -405,6 +405,14 @@ function bindQueueButtons(root) {
   root.querySelectorAll('[data-call]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); const u = (rodinaUzivatele.get(b.dataset.call) || [])[0]; toast(u ? `Volám rodině: ${u.jmeno}, ${u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3')} (simulace hovoru)` : 'Volám rodině: Petr Novák, 777 123 456 (simulace, účet rodiny ještě není založený)'); }; });
 }
 
+async function uzavritVse(patientId, pocet) {
+  const kam = patientId ? `u kamery ${esc(sim.patient(patientId)?.name || '')}` : 'u všech kamer';
+  const vysledek = prompt(`Uzavřít ${pocet} otevřených alertů ${kam.replace(/<[^>]+>/g, '')}? Napište výsledek (zapíše se ke každému):`, 'planý poplach');
+  if (vysledek === null) return;
+  const r = await sim.closeAll(patientId || '', ME(), vysledek.trim() || 'hromadně uzavřeno');
+  toast(`Uzavřeno ${r?.pocet ?? pocet} alertů.`);
+}
+$('queueVse')?.addEventListener('click', () => { const n = sim.state.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {})).length; uzavritVse('', n); });
 function renderQueue() {
   if (!zobrazuj) return;
   const s = sim.state;
@@ -420,6 +428,8 @@ function renderQueue() {
       <div class="small">${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''} · <em>${esc(e.state)}</em>${e.by ? ' – ' + esc(e.by) : ''}${e.escalated ? ' · <span class="esc">eskalováno</span>' : ''}</div>
       <div class="row">${btn}<button class="sm sec" data-open="${e.patientId}">Otevřít</button></div></li>`;
   }).join('') || '<li class="muted">Žádný otevřený alert. Klid.</li>';
+  // hromadné uzavření: tlačítko v hlavičce fronty (jen když je co uzavřít)
+  const hlava = $('queueVse'); if (hlava) { hlava.classList.toggle('hide', !items.length); hlava.textContent = `✓ Uzavřít vše (${items.length})`; }
   if (setHtml($('queue'), queueHtml)) bindQueueButtons($('queue'));
   refreshAgo($('queue'));
 }
@@ -544,6 +554,8 @@ function renderDetail(rebuild = false) {
     btns.push(pending ? `<span class="badge warn">žádost čeká na rodinu (do ${fmtT(pending.until)})</span>` : `<button class="sm" id="askG">Požádat rodinu o plný obraz</button>`);
     btns.push(`<button class="sm bad" id="emerg" ${p.consent.nouze && crit ? '' : 'disabled'} title="${p.consent.nouze ? 'jen při otevřeném kritickém alertu' : 'rodina nouzový přístup nepovolila'}">Nouzový přístup 10 min</button>`);
   }
+  const otevrene = openAlerts(p.id).length;
+  if (otevrene) btns.push(`<button class="sm ok" id="closeAllCam" title="uzavře všechny otevřené alerty této kamery jedním výsledkem">✓ Uzavřít alerty (${otevrene})</button>`);
   if (sim.naServeru && p.real) btns.push(`<button class="sm sec" id="recNow" ${mode === 'full' ? '' : 'disabled'} title="${mode === 'full' ? 'server uloží obraz z kamery (na server nebo Google Disk podle Nastavení)' : 'jen při plném obrazu (rodina povolila ' + ({ none: 'žádný obraz', skeleton: 'drátěný model', blur: 'rozostření' }[mode] || mode) + ')'}">🎞 Nahrát teď (${s.poskytovatel?.nahravkaS || 15} s)</button>`);
   const changed = setHtml(d.querySelector('#dbtn'), btns.join(' '));
   if (changed) {
@@ -562,6 +574,7 @@ function renderDetail(rebuild = false) {
     d.querySelector('#emergNo')?.addEventListener('click', () => { emergOpen = false; renderDetail(); });
     d.querySelector('#emergYes')?.addEventListener('click', () => { emergOpen = false; sim.emergencyAccess(p.id, `Dispečerka ${ME()}`); });
     d.querySelector('#endG')?.addEventListener('click', () => sim.endGrant(p.id, `Dispečerka ${ME()}`));
+    d.querySelector('#closeAllCam')?.addEventListener('click', () => uzavritVse(p.id, openAlerts(p.id).length));
     d.querySelector('#recNow')?.addEventListener('click', async (ev) => {
       const b = ev.currentTarget; b.disabled = true; const puv = b.textContent; b.textContent = 'Nahrávám…';
       try {

@@ -252,3 +252,24 @@ test('až tři časová okna na událost: hlídá se v kterémkoli, text oken, n
   assert.throws(() => proved(s, 'setWatch', [p.id, 'linecross', { from2: '12:00', to2: '' }], praha(9)), /začátek i konec okna/);
   assert.throws(() => proved(s, 'setWatch', [p.id, 'linecross', { from3: '25:00', to3: '26:00' }], praha(9)), /HH:MM/);
 });
+
+test('hromadné uzavření alertů: jedné kamery nebo všech, info události a uzavřené se nemění', async () => {
+  const { seed, proved } = await import('../public/proto/sim-core.js');
+  const t = Date.UTC(2026, 9, 5, 8, 0, 0);
+  const s = seed(t);
+  const p1 = s.patients[0].id, p2 = s.patients[1].id;
+  proved(s, 'emit', [p1, 'fall'], t); proved(s, 'emit', [p1, 'tamper'], t); proved(s, 'emit', [p2, 'fall'], t); proved(s, 'emit', [p2, 'person'], t);
+  const pred = s.events.filter((e) => e.state !== 'uzavřen').length;
+  assert.ok(pred >= 3);
+  const r1 = proved(s, 'closeAll', [p1, 'Dispečerka Jana', 'planý poplach'], t + 1000);
+  assert.equal(r1.vysledek.pocet, s.events.filter((e) => e.patientId === p1 && e.closedAt === t + 1000).length, 'uzavřené právě teď');
+  assert.ok(r1.vysledek.pocet >= 2);
+  assert.ok(s.events.filter((e) => e.patientId === p1 && e.state !== 'uzavřen').length === 0, 'kamera 1 bez otevřených');
+  assert.ok(s.events.some((e) => e.patientId === p2 && e.state !== 'uzavřen'), 'kamera 2 nedotčená');
+  const zavrene = s.events.find((e) => e.patientId === p1 && e.kind === 'fall');
+  assert.equal(zavrene.by, 'Dispečerka Jana'); assert.equal(zavrene.closedAt, t + 1000); assert.equal(zavrene.takenAt, t + 1000);
+  const r2 = proved(s, 'closeAll', ['', 'Dispečink', ''], t + 2000);
+  assert.ok(r2.vysledek.pocet >= 1); assert.equal(s.events.filter((e) => e.state !== 'uzavřen').length, 0);
+  assert.equal(s.events.find((e) => e.patientId === p2 && e.kind === 'fall').result, 'hromadně uzavřeno');
+  assert.equal(proved(s, 'closeAll', ['', 'x', 'y'], t + 3000).vysledek.pocet, 0, 'podruhé nic');
+});

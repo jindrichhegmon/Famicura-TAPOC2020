@@ -49,7 +49,7 @@ export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna =
 }
 
 export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console, zasobnik = null,
-                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null } = {}) {
+                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null, remux = null } = {}) {
   /** Volné a celkové místo na disku s nahrávkami → { volne, celkem } (null bez údaje). `mistoDisku` jde podstrčit v testech. */
   async function diskInfo() {
     if (mistoDisku) return mistoDisku();
@@ -114,6 +114,8 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   /** Uloží hotový soubor (ze serveru i z prohlížeče) a zapíše řádek; při chybě řádek s chybou. */
   async function uloz(tenant, { kameraId, data, mime = 'video/mp4', cas, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
     const t = cas || now();
+    // klip z go2rtc je fragmentovaný MP4: přes ffmpeg na obyčejný MP4 (Safari na iPhonu, správná délka); bez ffmpeg zůstane
+    if (remux && mime === 'video/mp4') { const r = await remux(data).catch(() => null); if (r && r.prevedeno) data = r.data; }
     const info = await kameraInfo(kameraId);
     const label = druh && KINDS[druh] ? KINDS[druh].label : (zdroj === 'rucni' ? 'rucni' : zdroj);
     const nazev = `${bezpecnyNazev(info.name || kameraId)}_${casDoNazvu(t)}_${bezpecnyNazev(label)}.${mime.includes('webm') ? 'webm' : 'mp4'}`;

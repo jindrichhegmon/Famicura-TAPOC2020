@@ -371,14 +371,19 @@ async function nactiNahravky(vynutit = false) {
     html = j.nahravky.filter((n) => !n.chyba).map((n) => {
       const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
       const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
-      return `<li class="info"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}</span></li>`;
+      return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka.</li>';
   } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
   if (html !== nahravkyCache.html) nahravkyCache.ver = Date.now();
   nahravkyCache.html = html;
   card.classList.remove('hide');
   const el = $('nahravkySeznam');
-  if (el.dataset.ver !== String(nahravkyCache.ver)) { el.innerHTML = html; el.dataset.ver = String(nahravkyCache.ver); prehravaniOvladani(el); }
+  if (el.dataset.ver !== String(nahravkyCache.ver)) {
+    // běžící přehrávač přežije překreslení seznamu (vrátí se do řádku své nahrávky)
+    const bezici = el.querySelector('video.prehravac'); const radek = bezici?.closest('li')?.dataset.nahravka;
+    el.innerHTML = html; el.dataset.ver = String(nahravkyCache.ver); prehravaniOvladani(el);
+    if (bezici && radek) { const li = el.querySelector(`li[data-nahravka="${CSS.escape(radek)}"]`); if (li) li.append(bezici); }
+  }
 }
 function prehravaniOvladani(el) {
   el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = (ev) => {
@@ -386,8 +391,9 @@ function prehravaniOvladani(el) {
     const li = a.closest('li'); const stare = li.querySelector('video');
     if (stare) { stare.pause(); stare.remove(); return; }
     document.querySelectorAll('video.prehravac').forEach((v) => { v.pause(); v.remove(); });
-    const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.playsInline = true; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
-    v.onerror = () => toast('Nahrávku se nepodařilo přehrát.', 'crit');
+    // nahrávka je bez zvuku; muted je nutné, aby iPhone spustil přehrávání sám (jinak jen černý obraz)
+    const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.preload = 'auto'; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
+    v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo telefon formát neumí).', 'crit');
     li.append(v);
   }; });
 }
