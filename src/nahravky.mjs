@@ -42,14 +42,16 @@ export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna =
   // „nedostupná“ je stav ze simulace; událost, kterou kamera právě sama nahlásila, se o to nezastaví (klip se zkusí)
   if (patient.offline && !skutecna) return { ok: false, duvod: 'kamera je nedostupná' };
   const m = efektivni(state, patient.offline ? { ...patient, offline: false } : patient, now, !!state.night).mode;
-  if (m === 'full') return { ok: true };
+  if (m === 'full') return { ok: true, rezim: 'full' };
   const k = KINDS[kind];
-  if (k && k.level === 'crit' && patient.consent?.nouze !== false) return { ok: true, nouze: true };
+  if (k && k.level === 'crit' && patient.consent?.nouze !== false) return { ok: true, nouze: true, rezim: 'full' };
+  // rozostření nebo drátěný model: nahrávka jen jako kostra postavy (server z klipu vytáhne souřadnice, obraz zahodí)
+  if (m === 'blur' || m === 'skeleton') return { ok: true, rezim: 'kostra', duvod: `rodina povolila jen „${m === 'blur' ? 'rozostření' : 'drátěný model'}“ – ukládá se jen drátěný model` };
   return { ok: false, duvod: `rodina povolila jen „${m === 'none' ? 'žádný obraz' : m === 'blur' ? 'rozostření' : 'drátěný model'}“ – plný obraz se neukládá` };
 }
 
 export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console, zasobnik = null,
-                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null, remux = null } = {}) {
+                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null, remux = null, kostra = null } = {}) {
   /** Volné a celkové místo na disku s nahrávkami → { volne, celkem } (null bez údaje). `mistoDisku` jde podstrčit v testech. */
   async function diskInfo() {
     if (mistoDisku) return mistoDisku();
@@ -118,7 +120,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
     if (remux && mime === 'video/mp4') { const r = await remux(data).catch(() => null); if (r && r.prevedeno) data = r.data; }
     const info = await kameraInfo(kameraId);
     const label = druh && KINDS[druh] ? KINDS[druh].label : (zdroj === 'rucni' ? 'rucni' : zdroj);
-    const nazev = `${bezpecnyNazev(info.name || kameraId)}_${casDoNazvu(t)}_${bezpecnyNazev(label)}.${mime.includes('webm') ? 'webm' : 'mp4'}`;
+    const nazev = `${bezpecnyNazev(info.name || kameraId)}_${casDoNazvu(t)}_${bezpecnyNazev(label)}${mime === 'application/json' ? '_kostra.json' : mime.includes('webm') ? '.webm' : '.mp4'}`;
     const radek = { Id: nid(t), KameraID: kameraId, Cas: t, DelkaS: delkaS || null, Velikost: data.length, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj,
       Nazev: nazev, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: null, Uloziste: null, Soubor: null, Mime: mime, SmazanoCas: null };
     let slozka = '';
@@ -147,7 +149,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   }
 
   /** Nahrávka N sekund z kamery (po události nebo ručně). Jedna na kameru najednou. */
-  function porid(tenant, { kameraId, delkaS, predS = PRED_VYCHOZI, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
+  function porid(tenant, { kameraId, delkaS, predS = PRED_VYCHOZI, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false, rezim = 'full' }) {
     const klic = tenant + ':' + kameraId;
     // Druhá událost během nahrávky: nová se nespouští, událost spadá do té běžící (vrátí se po jejím dokončení).
     if (bezi.has(klic)) return bezi.get(klic).then((n) => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží', nahravka: n || null }), () => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží', nahravka: null }));
@@ -164,6 +166,11 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
           if (k.data.length > MAX_BYTES) throw chyba('Nahrávka je příliš velká (přes 64 MB).', 413);
           data = k.data; cas = k.zacatek; nabeh = k.predS;
         } else data = await klip(kameraId, d);
+        // drátěný model: z klipu jen souřadnice postavy (JSON), obraz se zahodí
+        if (rezim === 'kostra') {
+          if (!kostra) throw chyba('Drátěný model není na serveru k dispozici (ffmpeg a model MoveNet).', 503);
+          data = await kostra.zKlipu(data, { delkaS: d + Math.round(nabeh) });
+        }
       }
       catch (e) {
         const radek = { Id: nid(cas), KameraID: kameraId, Cas: cas, DelkaS: d, Velikost: 0, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj, Nazev: null, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: String(e.message || e).slice(0, 300), Uloziste: null, Soubor: null, Mime: null, SmazanoCas: null };
@@ -171,7 +178,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
         log.error('[nahravky]', tenant, kameraId, 'nahrávka se nepořídila:', radek.Chyba);
         return zRadku(radek);
       }
-      return uloz(tenant, { kameraId, data, cas, delkaS: d + Math.round(nabeh), druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie });
+      return uloz(tenant, { kameraId, data, mime: rezim === 'kostra' ? 'application/json' : 'video/mp4', cas, delkaS: d + Math.round(nabeh), druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie });
     })().finally(() => bezi.delete(klic));
     bezi.set(klic, p);
     return p;
@@ -308,5 +315,5 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
 export function zRadku(r) {
   return { id: r.Id, kameraId: r.KameraID, cas: Number(r.Cas) || 0, delkaS: r.DelkaS == null ? null : Number(r.DelkaS), velikost: Number(r.Velikost) || 0, udalostId: r.UdalostId || null,
     druh: r.Druh || null, zdroj: r.Zdroj || 'udalost', nazev: r.Nazev || null, souborId: r.SouborID || null, url: r.Url || null, email: r.Email || null, kdo: r.Kdo || null, chyba: r.Chyba || null,
-    uloziste: r.Uloziste || (r.Url ? 'disk' : null), soubor: r.Soubor || null, mime: r.Mime || null, smazanoCas: r.SmazanoCas == null ? null : Number(r.SmazanoCas) };
+    uloziste: r.Uloziste || (r.Url ? 'disk' : null), soubor: r.Soubor || null, mime: r.Mime || null, typ: r.Mime === 'application/json' ? 'kostra' : 'video', smazanoCas: r.SmazanoCas == null ? null : Number(r.SmazanoCas) };
 }

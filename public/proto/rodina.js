@@ -1,4 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
+import { prehrajKostru } from '/proto/kostra.js';
 import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -335,7 +336,7 @@ function render() {
     const k = KINDS[e.kind];
     const badge = e.kind === 'consent' ? '<span class="badge">souhlas</span>' : `<span class="badge ${levelClass(k.level)}">${esc(k.source)}</span>`;
     const tail = e.state && e.state !== 'uzavřen' && k ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : '';
-    const rec = e.nahravka && e.nahravka.url ? ` · <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" class="small">🎞 nahrávka</a>` : e.nahravka && e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` · <a href="#" class="small" data-prehrat="${esc(e.nahravka.id)}">🎞 nahrávka${e.nahravka.delkaS ? ' ' + e.nahravka.delkaS + ' s' : ''}</a>` : '';
+    const rec = e.nahravka && e.nahravka.url ? ` · <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" class="small">🎞 nahrávka</a>` : e.nahravka && e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` · <a href="#" class="small" data-prehrat="${esc(e.nahravka.id)}" data-typ="${e.nahravka.typ === 'kostra' ? 'kostra' : 'video'}">${e.nahravka.typ === 'kostra' ? '🦴 drátěný model' : '🎞 nahrávka'}${e.nahravka.delkaS ? ' ' + e.nahravka.delkaS + ' s' : ''}</a>` : '';
     const cls = e.kind === 'consent' ? 'consent' : k.level;
     return `<li class="${cls}"><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge} ${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''}${tail}${rec}</span></li>`;
   }).join('') || '<li class="muted">Zatím nic.</li>');
@@ -370,7 +371,7 @@ async function nactiNahravky(vynutit = false) {
     const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
     html = j.nahravky.filter((n) => !n.chyba).map((n) => {
       const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
-      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
+      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}" data-typ="${n.typ === 'kostra' ? 'kostra' : 'video'}">${n.typ === 'kostra' ? '🦴 přehrát drátěný model' : '▶ přehrát'}</a>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
       return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka.</li>';
   } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
@@ -380,17 +381,24 @@ async function nactiNahravky(vynutit = false) {
   const el = $('nahravkySeznam');
   if (el.dataset.ver !== String(nahravkyCache.ver)) {
     // běžící přehrávač přežije překreslení seznamu (vrátí se do řádku své nahrávky)
-    const bezici = el.querySelector('video.prehravac'); const radek = bezici?.closest('li')?.dataset.nahravka;
+    const bezici = el.querySelector('video.prehravac'); const radek = bezici?.closest('li')?.dataset.nahravka;   // kostra se po překreslení nepřenáší (spustí se znovu klepnutím)
     el.innerHTML = html; el.dataset.ver = String(nahravkyCache.ver); prehravaniOvladani(el);
     if (bezici && radek) { const li = el.querySelector(`li[data-nahravka="${CSS.escape(radek)}"]`); if (li) li.append(bezici); }
   }
 }
 function prehravaniOvladani(el) {
-  el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = (ev) => {
+  el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = async (ev) => {
     ev.preventDefault();
-    const li = a.closest('li'); const stare = li.querySelector('video');
-    if (stare) { stare.pause(); stare.remove(); return; }
-    document.querySelectorAll('video.prehravac').forEach((v) => { v.pause(); v.remove(); });
+    const li = a.closest('li'); const stare = li.querySelector('video, canvas.kostra');
+    if (stare) { if (stare.pause) stare.pause(); stare.__kostra?.stop(); stare.remove(); li.querySelector('.kostra-lista')?.remove(); return; }
+    document.querySelectorAll('.prehravac').forEach((v) => { if (v.pause) v.pause(); v.__kostra?.stop(); v.remove(); }); document.querySelectorAll('.kostra-lista').forEach((x) => x.remove());
+    if (a.dataset.typ === 'kostra') {
+      try {
+        const r = await fetch(`/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`, { credentials: 'same-origin' }); if (!r.ok) throw new Error('HTTP ' + r.status);
+        const k = prehrajKostru(li, await r.json()); k.canvas.__kostra = k;
+      } catch (e) { toast('Drátěný model se nepodařilo načíst.', 'crit'); }
+      return;
+    }
     // nahrávka je bez zvuku; muted je nutné, aby iPhone spustil přehrávání sám (jinak jen černý obraz)
     const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.preload = 'auto'; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
     v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo telefon formát neumí).', 'crit');

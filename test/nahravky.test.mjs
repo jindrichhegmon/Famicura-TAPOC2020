@@ -58,8 +58,8 @@ test('soukromí: nahrává se jen při plném obrazu, nebo kritická událost s 
   const s = seed(Date.UTC(2026, 9, 4, 8, 0, 0));
   const p = s.patients.find((x) => x.real) || s.patients[0];
   proved(s, 'setConsent', [p.id, { den: 'blur', noc: 'none', nouze: true }], Date.UTC(2026, 9, 4, 8, 0, 0));
-  assert.equal(smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)).ok, false, 'rozostření → běžná událost se nenahrává');
-  assert.equal(smiNahravat(s, p, 'fall', Date.UTC(2026, 9, 4, 8, 0, 0)).ok, true, 'pád s nouzovým přístupem ano');
+  assert.equal(smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)).rezim, 'kostra', 'rozostření → běžná událost jen jako drátěný model');
+  assert.equal(smiNahravat(s, p, 'fall', Date.UTC(2026, 9, 4, 8, 0, 0)).rezim, 'full', 'pád s nouzovým přístupem = plný obraz');
   proved(s, 'setConsent', [p.id, { den: 'full', noc: 'full', nouze: false }], Date.UTC(2026, 9, 4, 8, 0, 0));
   assert.equal(smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)).ok, true);
   proved(s, 'setConsent', [p.id, { den: 'none', noc: 'none', nouze: false }], Date.UTC(2026, 9, 4, 8, 0, 0));
@@ -85,10 +85,16 @@ test('stav tenanta: událost s Nahrávat dostane odkaz na nahrávku; po restartu
   const r2 = await s.proved('emit', ['tapoc2020', 'motion']);
   await s.hotovo();
   assert.equal((await s.stav()).state.events.find((x) => x.id === r2.vysledek.id).nahravka, undefined, 'bez Nahrávat se nenahrává');
-  await s.proved('setConsent', ['tapoc2020', { den: 'skeleton', noc: 'skeleton', nouze: false }]);
+  await s.proved('setConsent', ['tapoc2020', { den: 'none', noc: 'none', nouze: false }]);
   const r3 = await s.proved('emit', ['tapoc2020', 'fall']);
   await s.hotovo();
   assert.match((await s.stav()).state.events.find((x) => x.id === r3.vysledek.id).nahravka.chyba, /nenahráno: rodina povolila jen/);
+  assert.equal(nahrane.length, 1);
+  // drátěný model bez modulu kostry (tento test): řádek s chybou, soubor se neuloží
+  await s.proved('setConsent', ['tapoc2020', { den: 'skeleton', noc: 'skeleton', nouze: false }]);
+  const r4 = await s.proved('emit', ['tapoc2020', 'fall']);
+  await s.hotovo();
+  assert.match((await s.stav()).state.events.find((x) => x.id === r4.vysledek.id).nahravka.chyba, /Drátěný model není na serveru k dispozici/);
   assert.equal(nahrane.length, 1);
   const s2 = mk();
   const e2 = (await s2.stav()).state.events.find((x) => x.id === r.vysledek.id);

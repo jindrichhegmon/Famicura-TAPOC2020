@@ -169,25 +169,32 @@ test('nahrávka po události: odmítnutí i chyba se zapíší jako řádek s d�
   const T0 = Date.UTC(2023, 10, 15, 9, 0, 0);   // 10:00 pražského času: překročení čáry se hlídá 07:00–20:00
   const { s, posun } = stav(tb, { t0: T0, nahravky, log, udalosti: { nedavne: (od) => prijate.filter((e) => e.prijato > od) } });
   await s.stav();
-  // 1) rodina povolila jen rozostření → překročení čáry (varování) se nenahrává; důvod je v A_KAM_Nahravka i u události
-  await s.proved('setConsent', ['tapoc2020', { den: 'blur', noc: 'blur', nouze: true }]);
+  // 1) rodina nepovolila žádný obraz → překročení čáry (varování) se nenahrává; důvod je v A_KAM_Nahravka i u události
+  await s.proved('setConsent', ['tapoc2020', { den: 'none', noc: 'none', nouze: true }]);
   const r1 = await s.proved('emit', ['tapoc2020', 'linecross']);
   await s.hotovo();
   let radky = await tb.vyber(T, 'A_KAM_Nahravka');
-  assert.equal(radky.length, 1); assert.equal(radky[0].UdalostId, r1.vysledek.id); assert.match(radky[0].Chyba, /^nenahráno: rodina povolila jen „rozostření“/); assert.equal(radky[0].Velikost, 0);
-  assert.match((await s.stav()).state.events.find((e) => e.id === r1.vysledek.id).nahravka.chyba, /rozostření/);
+  assert.equal(radky.length, 1); assert.equal(radky[0].UdalostId, r1.vysledek.id); assert.match(radky[0].Chyba, /^nenahráno: rodina povolila jen „žádný obraz“/); assert.equal(radky[0].Velikost, 0);
+  assert.match((await s.stav()).state.events.find((e) => e.id === r1.vysledek.id).nahravka.chyba, /žádný obraz/);
   assert.ok(zpravy.some((z) => /linecross: nenahráno: rodina povolila/.test(z)), 'důvod je v logu serveru');
+  // 1b) rozostření → jen drátěný model; bez modulu kostry (tento test) řádek s chybou 503 a zápis v logu
+  await s.proved('setConsent', ['tapoc2020', { den: 'blur', noc: 'blur', nouze: true }]);
+  const r1b = await s.proved('emit', ['tapoc2020', 'linecross']);
+  await s.hotovo();
+  radky = await tb.vyber(T, 'A_KAM_Nahravka', { kde: { UdalostId: r1b.vysledek.id } });
+  assert.equal(radky.length, 1); assert.match(radky[0].Chyba, /Drátěný model není na serveru k dispozici/); assert.equal(radky[0].Velikost, 0);
+  assert.ok(zpravy.some((z) => /linecross: nahrávám .*jen drátěný model/.test(z)), 'režim kostry je v logu serveru');
   // 2) plný obraz → klip se pořídí
   await s.proved('setConsent', ['tapoc2020', { den: 'full', noc: 'full', nouze: true }]);
   const r2 = await s.proved('emit', ['tapoc2020', 'linecross']);
   await s.hotovo();
   radky = await tb.vyber(T, 'A_KAM_Nahravka', { kde: { UdalostId: r2.vysledek.id } });
-  assert.equal(radky.length, 1); assert.equal(radky[0].Chyba, null); assert.equal(radky[0].Uloziste, 'server'); assert.equal(volani.length, 1);
+  assert.equal(radky.length, 1); assert.equal(radky[0].Chyba, null); assert.equal(radky[0].Uloziste, 'server'); assert.equal(volani.length, 2, 'klip z go2rtc: pokus o drátěný model + plný obraz');
   assert.ok(zpravy.some((z) => /linecross: nahrávám/.test(z)) && zpravy.some((z) => /linecross: uloženo \(server/.test(z)));
   // 3) událost bez zatrženého Nahrávat se nenahrává a nezapisuje
   await s.proved('setWatch', ['tapoc2020', 'motion', { on: true, rec: false }]);
   await s.proved('emit', ['tapoc2020', 'motion']); await s.hotovo();
-  assert.equal((await tb.vyber(T, 'A_KAM_Nahravka')).length, 2);
+  assert.equal((await tb.vyber(T, 'A_KAM_Nahravka')).length, 3);
   // 4) kamera označená jako nedostupná: simulovaná událost se nenahrává, skutečná z kamery ano (kamera ji právě nahlásila)
   (await s.stav()).state.patients.find((x) => x.id === 'tapoc2020').offline = true;
   const r4 = await s.proved('emit', ['tapoc2020', 'linecross']); await s.hotovo();
@@ -197,7 +204,7 @@ test('nahrávka po události: odmítnutí i chyba se zapíší jako řádek s d�
   const st = await s.stav(); await s.hotovo();
   const real = st.state.events.find((e) => e.real && e.kind === 'linecross');
   assert.ok(real, 'skutečná událost se zapsala');
-  assert.equal(volani.length, 2, 'klip se pořídil i u kamery označené jako nedostupná');
+  assert.equal(volani.length, 3, 'klip se pořídil i u kamery označené jako nedostupná');
   assert.equal((await tb.vyber(T, 'A_KAM_Nahravka', { kde: { UdalostId: real.id } }))[0].Chyba, null);
   // 5) chyba go2rtc u jiné kamery → řádek s chybou (porid ji zachytí) a důvod u události
   const { s: s2 } = stav(tb, { t0: T0, nahravky, log, tenant: T2 });

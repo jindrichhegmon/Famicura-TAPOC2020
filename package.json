@@ -9,6 +9,8 @@
     "start": "node server.mjs"
   },
   "dependencies": {
-    "mssql": "^11.0.1"
+    "mssql": "^11.0.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow-models/pose-detection": "^2.1.3"
   }
 }

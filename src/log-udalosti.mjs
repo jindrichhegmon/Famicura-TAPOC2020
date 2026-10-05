@@ -37,7 +37,7 @@ const upoz = (u, k) => u?.[k]?.prijemci ? `${u[k].odeslano}/${u[k].prijemci}${u[
 /** Jeden řádek logu (pro stránku i Excel). `nahravka` = záznam z A_KAM_Nahravka k události (nebo null). */
 export function radekLogu(e, kameraNazev, nahravka) {
   const n = nahravka;
-  const nahr = !e.rec && !n ? '' : n ? (n.chyba ? `ne – ${n.chyba}` : n.smazanoCas ? 'smazána (doba uchování)' : `ano (${n.uloziste === 'disk' ? 'Google Disk' : 'server'}${n.delkaS ? `, ${n.delkaS} s` : ''})`) : 'nepořízena';
+  const nahr = !e.rec && !n ? '' : n ? (n.chyba ? `ne – ${n.chyba}` : n.smazanoCas ? 'smazána (doba uchování)' : `ano (${n.uloziste === 'disk' ? 'Google Disk' : 'server'}${n.delkaS ? `, ${n.delkaS} s` : ''}${n.typ === 'kostra' ? ', drátěný model' : ''})`) : 'nepořízena';
   return {
     id: e.id, cas: e.at, datum: fmtDatum.format(new Date(e.at)), casText: fmtCas.format(new Date(e.at)), kameraId: e.patientId, kamera: kameraNazev || e.patientId,
     druh: druh(e), kind: e.kind, uroven: uroven(e), zdroj: zdroj(e), text: e.kind === 'consent' || e.kind === 'poznamka' ? (e.text || '') : (e.text || ''),

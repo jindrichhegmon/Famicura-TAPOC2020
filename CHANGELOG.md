@@ -5,6 +5,23 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 2.8 · 5. 10. 2026 · nahrávka jako drátěný model při rozostření
+
+- **Když rodina povolila jen rozostření nebo drátěný model, nahrávka po
+  události vznikne jako drátěný model** (`src/kostra.mjs`): server z klipu
+  vytáhne 5 snímků za sekundu (ffmpeg, 320×180), na každém najde postavu
+  modelem MoveNet (TensorFlow.js, 17 bodů) a uloží jen souřadnice kostry
+  (JSON, pár desítek kB) – plný obraz existuje jen pár sekund v paměti
+  serveru při zpracování. Dispečink i rodina ho přehrají jako animaci
+  („🦴 přehrát drátěný model“, `public/proto/kostra.js`); stažení dá
+  soubor `.json`. Při plném obrazu a u kritické události s nouzovým
+  přístupem zůstává plná nahrávka; při „žádný obraz“ se nenahrává nic.
+- Model se stáhne při prvním startu do `data/modely` (`KOSTRA_MODEL_URL`
+  pro jiný zdroj); ověření na serveru: `node scripts/kostra-test.mjs
+  klip.mp4`. Vývoj a testy bez modelu: `KOSTRA_DETEKTOR=fake`. Nové
+  závislosti `@tensorflow/tfjs` a `@tensorflow-models/pose-detection`
+  (nasazení je nainstaluje).
+
 ## 2.7 · 5. 10. 2026 · obraz před událostí na serveru, události kamer bez otevřené stránky
 
 - **Nahrávka po události začíná před ní.** Server drží pro každou kameru

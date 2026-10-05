@@ -89,7 +89,11 @@ const zasobnik = pdp.nastaveno && NABEH_S > 0 ? createZasobnik({ go2rtc, kamery:
 globalThis.__zasobnik = zasobnik;
 if (zasobnik) setTimeout(() => zasobnik.start().catch((e) => console.error('[famicura-tapo] zásobník obrazu:', e.message)), 5000);
 const { createRemux } = await import('./src/remux.mjs');
-const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik, remux: createRemux() }) : null;
+// Nahrávka jako drátěný model (rozostření / drátěný model povolený rodinou): ffmpeg + MoveNet na serveru; model se stáhne při startu do DATA_DIR/modely.
+const { createKostra } = await import('./src/kostra.mjs');
+const kostra = pdp.nastaveno ? createKostra({ modelDir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'modely'), detektor: process.env.KOSTRA_DETEKTOR === 'fake' ? (await import('./src/kostra-fake.mjs')).fakeDetektor() : null }) : null;
+if (kostra) setTimeout(() => kostra.priprav(), 10000);
+const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik, remux: createRemux(), kostra }) : null;
 // Automatické mazání nahrávek na serveru po době uchování (⚙ dispečinku): každou hodinu, poprvé po startu.
 if (nahravky) { const promaz = () => nahravky.promaz().catch((e) => console.error('[famicura-tapo] mazání nahrávek:', e.message)); setTimeout(promaz, 60 * 1000); setInterval(promaz, 60 * 60 * 1000); }
 const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }), nahravky });
@@ -97,7 +101,7 @@ const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: 
 if (pdp.nastaveno) najemci.start(2000);
 const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
 const ptz = createPtz({ kamery: nactiKamery });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik, kostra });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.
