@@ -20,6 +20,15 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   je na serveru málo místa, poskytovatel je přes 90 % limitu, nebo ho
   překročil; stránka se ptá každých 5 minut (`misto.varovani` v
   `GET /api/nahravky/stav`).
+- **Nahrát 15 s v aplikaci rodiny nahrává doopravdy**: dřív jen zapsalo řádek do
+  historie; teď server pořídí klip z kamery a uloží ho podle Nastavení
+  poskytovatele (server / Google Disk), nahrávka je v kartě Nahrávky u
+  rodiny i v dispečinku (se jménem rodiny) a v historii je řádek „Ruční
+  nahrávka“ (nový druh `nahravka`, i u Nahrát teď v dispečinku). Platí
+  stejné pravidlo soukromí: jen při plném obrazu, nebo s nouzovým přístupem.
+- **Deník v aplikaci rodiny po 12 záznamech**: pod seznamem tlačítka
+  „Starších 12“ a „Novějších 12“ s počítadlem (1–12 z 37); změna filtru
+  vrátí na začátek.
 - **Filtr typu událostí v historii** (detail kamery → Historie), jako v
   aplikaci rodiny: Vše, Kritické, Varování, Kamera, Analýza, S nahrávkou,
   S upozorněním, Souhlasy, Poznámky. Platí pro posledních 12 i pro zvolené

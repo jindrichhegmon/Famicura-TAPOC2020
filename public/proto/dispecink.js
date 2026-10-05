@@ -566,6 +566,7 @@ function renderDetail(rebuild = false) {
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'nahrávka se nepodařila');
         toast(`Nahrávka uložena (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}, ${j.nahravka.delkaS} s).`); nahravkyCache.delete(p.id); nactiNahravky(p.id);
+        sim.emit(p.id, 'nahravka', { text: `${ME()} pořídil(a) ruční nahrávku ${j.nahravka.delkaS} s (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}).` });
       } catch (e) { toast(`Nahrávka se nepodařila: ${e.message}`, 'crit'); }
       b.textContent = puv; b.disabled = false;
     });

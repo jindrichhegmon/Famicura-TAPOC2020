@@ -23,6 +23,7 @@ export const KINDS = {
   motion:     { label: 'Pohyb',                        level: 'info', source: 'kamera' },
   vehicle:    { label: 'Vozidlo',                      level: 'info', source: 'kamera' },
   pet:        { label: 'Zvíře',                        level: 'info', source: 'kamera' },
+  nahravka:   { label: 'Ruční nahrávka',               level: 'info', source: 'ručně' },
   offline:    { label: 'Kamera nedostupná',            level: 'tech', source: 'systém' },
   online:     { label: 'Kamera opět dostupná',         level: 'tech', source: 'systém' },
   battery:    { label: 'Slabá baterie náramku',        level: 'tech', source: 'náramek' },

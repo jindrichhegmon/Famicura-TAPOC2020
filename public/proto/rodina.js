@@ -17,6 +17,7 @@ let baseMode = zRezimu ? zRezimu[0] : 'full';
 let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) !== '0';
 const viewMode = () => baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
 let filter = 'all';
+let histStrana = 0;   // stránka deníku (po 12), při změně filtru zpět na začátek
 const seen = new Set(sim.state.notifications.map((n) => n.id));
 
 /* ---------- brána: přihlášení rodiny, aktivace pozvánky, ukázka ----------
@@ -198,9 +199,23 @@ $('cNocOd').onchange = ulozCas('nocOd', $('cNocOd'));
 $('rychle').querySelectorAll('button').forEach((b) => { b.onclick = () => { const p = sim.patient(patientId); const aktivni = p?.docasne && p.docasne.until > Date.now() && p.docasne.mode === b.dataset.r; sim.rychle(patientId, aktivni ? null : b.dataset.r); }; });
 $('rychleZrusit').onclick = () => sim.rychle(patientId, null);
 document.querySelectorAll('[data-klid]').forEach((b) => { b.onclick = () => sim.klidDo(patientId, b.dataset.klid); });
-$('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('on', o === b); }); render(); }; });
+$('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; histStrana = 0; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('on', o === b); }); render(); }; });
 $('ackAll').onclick = () => sim.ackAll(patientId);
-$('rec').onclick = () => { sim.emit(patientId, 'state', { text: 'Ruční nahrávka 15 s (uložena do historie).' }); toast('Nahrávám 15 s…'); };
+/* Nahrát: server pořídí klip z kamery a uloží ho podle Nastavení poskytovatele (server / Google Disk); do historie jde řádek
+ * „Ruční nahrávka“. Bez stavu na serveru (ukázka) jen řádek v historii. */
+$('rec').onclick = async () => {
+  const b = $('rec');
+  if (!sim.naServeru) { sim.emit(patientId, 'nahravka', { text: 'Ruční nahrávka 15 s (ukázka, bez serveru).' }); toast('Nahrávám 15 s…'); return; }
+  b.disabled = true; toast('Nahrávám…');
+  try {
+    const r = await fetch('/api/nahravky/rucni', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: patientId }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'nahrávka se nepodařila');
+    await sim.emit(patientId, 'nahravka', { text: `Rodina pořídila ruční nahrávku ${j.nahravka.delkaS} s (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}).` });
+    toast(`Nahrávka uložena (${j.nahravka.delkaS} s). Najdete ji v kartě Nahrávky.`); nactiNahravky(true);
+  } catch (e) { toast(`Nahrávka se nepodařila: ${e.message}`, 'crit'); }
+  b.disabled = false;
+};
 $('sound').onclick = () => { const ic = $('sound').querySelector('.ic'); ic.textContent = ic.textContent === '🔇' ? '🔊' : '🔇'; };
 
 function levelClass(l) { return l === 'crit' ? 'crit' : l === 'warn' ? 'warn' : l === 'tech' ? 'tech' : 'info'; }
@@ -307,8 +322,16 @@ function render() {
     if (filter === 'consent') return e.kind === 'consent';
     if (filter === 'crit') return KINDS[e.kind]?.level === 'crit';
     return KINDS[e.kind]?.source === filter;
-  }).slice(0, 40);
-  setHtml($('history'), rows.map((e) => {
+  });
+  // deník po 12: stránka histStrana (0 = nejnovější), tlačítka Starší / Novější pod seznamem
+  const STRANA = 12;
+  const stran = Math.max(1, Math.ceil(rows.length / STRANA));
+  if (histStrana > stran - 1) histStrana = stran - 1;
+  const od = histStrana * STRANA;
+  const strankaRows = rows.slice(od, od + STRANA);
+  setHtml($('historyPaging'), rows.length > STRANA ? `<button class="sm sec" data-hist="novejsi" ${histStrana === 0 ? 'disabled' : ''}>◀ Novějších 12</button><span class="small muted">${od + 1}–${Math.min(od + STRANA, rows.length)} z ${rows.length}</span><button class="sm sec" data-hist="starsi" ${histStrana >= stran - 1 ? 'disabled' : ''}>Starších 12 ▶</button>` : '');
+  $('historyPaging').querySelectorAll('[data-hist]').forEach((b) => { b.onclick = () => { histStrana += b.dataset.hist === 'starsi' ? 1 : -1; render(); $('historie').scrollIntoView({ block: 'start', behavior: 'smooth' }); }; });
+  setHtml($('history'), strankaRows.map((e) => {
     const k = KINDS[e.kind];
     const badge = e.kind === 'consent' ? '<span class="badge">souhlas</span>' : `<span class="badge ${levelClass(k.level)}">${esc(k.source)}</span>`;
     const tail = e.state && e.state !== 'uzavřen' && k ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : '';
@@ -336,10 +359,10 @@ $('ptz')?.querySelectorAll('[data-ptz]').forEach((b) => { b.onclick = async () =
 
 /* Nahrávky kamery rodiny: seznam ze serveru (jen své kamery), přehrání v aplikaci (jde do auditu poskytovatele). */
 let nahravkyCache = { cas: 0, pocet: -1, html: '', ver: 0 };
-async function nactiNahravky() {
+async function nactiNahravky(vynutit = false) {
   const card = $('nahravky'); if (!card || !sim.naServeru) return;
   const pocet = sim.state.events.filter((e) => e.patientId === patientId && e.nahravka).length;
-  if (nahravkyCache.pocet === pocet && Date.now() - nahravkyCache.cas < 60000) return;
+  if (!vynutit && nahravkyCache.pocet === pocet && Date.now() - nahravkyCache.cas < 60000) return;
   nahravkyCache = { cas: Date.now(), pocet, html: nahravkyCache.html };
   let html;
   try {

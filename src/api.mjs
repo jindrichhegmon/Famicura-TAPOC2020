@@ -24,7 +24,7 @@
  *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
  *   DELETE /api/nahravky/:id        smazání (poskytovatel)
  *   POST /api/ptz               { kamera, smer: left|right|up|down|home|stop } otočení kamery (ONVIF PTZ; rodina jen svou)
- *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery a uloží na Disk
+ *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery (dispečink; rodina u své kamery) a uloží podle Nastavení
  *   POST /api/nahravky?kamera=&cas=&delkaS=&zdroj=&text=   tělo = soubor (video/mp4 | video/webm) z hlavní aplikace
  *
  * Tenant (poskytovatel) jako v Péče doma plus: dispečink a rodina pracují
@@ -434,6 +434,21 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (!t) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
           return json({ ok: true, nahravky: await nahravky.seznam(t, { kameraId: k, kamery: await mojeKamery(), limit: Number(url.searchParams.get('limit')) || 50 }) });
         }
+        // Ruční nahrávka: dispečink, a rodina u své kamery (smiKameruId) – proto ještě před zábranou pro rodinu.
+        if (m === 'POST' && path === '/api/nahravky/rucni') {
+          if (!nahravky) return nejsou();
+          const { kamera, delkaS } = await telo(req);
+          if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+          const st = await stavTenanta();
+          const s = await st.stav();
+          const p = s.state.patients.find((x) => x.id === kamera);
+          const smi = nahravky.smiNahravat(s.state, p, 'state');
+          if (!smi.ok) return json({ ok: false, error: `Nahrávka se nepořídí: ${smi.duvod}.` }, 403);
+          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, uloziste: s.state.poskytovatel?.nahravkyUloziste, disk: !!s.state.poskytovatel?.nahravkyDisk, zdroj: 'rucni', kdo: rodina ? rodina.jmeno : ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
+          if (n.preskoceno) return json({ ok: false, error: n.duvod }, 409);
+          if (n.chyba) return json({ ok: false, nahravka: n, error: n.chyba }, 502);
+          return json({ ok: true, nahravka: n });
+        }
         if (rodina) return jenPoskytovatel();
         if (m === 'GET' && path === '/api/nahravky/stav') {
           if (!nahravky) return json({ ok: true, nastaveno: false, uloziste: { server: false, disk: false }, error: 'Nahrávky nejsou na serveru nastavené (NAHRAVKY_KLIC, nebo JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC – ./deploy/vps-env.sh).' });
@@ -464,19 +479,6 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (bezDisku) return nejsou();
           const s = await disk.odpojSlozku((await stavTenanta()).tenant);
           return json({ ok: true, google: s.google, slozka: s.slozka, zprava: s.zprava || '' });
-        }
-        if (m === 'POST' && path === '/api/nahravky/rucni') {
-          const { kamera, delkaS } = await telo(req);
-          if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
-          const st = await stavTenanta();
-          const s = await st.stav();
-          const p = s.state.patients.find((x) => x.id === kamera);
-          const smi = nahravky.smiNahravat(s.state, p, 'state');
-          if (!smi.ok) return json({ ok: false, error: `Nahrávka se nepořídí: ${smi.duvod}.` }, 403);
-          const n = await nahravky.porid(st.tenant, { kameraId: kamera, delkaS: delkaS || s.state.poskytovatel?.nahravkaS, uloziste: s.state.poskytovatel?.nahravkyUloziste, disk: !!s.state.poskytovatel?.nahravkyDisk, zdroj: 'rucni', kdo: ja.jmeno || 'Správce', text: 'Ruční nahrávka z dispečinku.' });
-          if (n.preskoceno) return json({ ok: false, error: n.duvod }, 409);
-          if (n.chyba) return json({ ok: false, nahravka: n, error: n.chyba }, 502);
-          return json({ ok: true, nahravka: n });
         }
         if (m === 'POST' && path === '/api/nahravky') {
           const k = url.searchParams.get('kamera') || '';
