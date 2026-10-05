@@ -203,7 +203,6 @@ $('rychle').querySelectorAll('button').forEach((b) => { b.onclick = () => { cons
 $('rychleZrusit').onclick = () => sim.rychle(patientId, null);
 document.querySelectorAll('[data-klid]').forEach((b) => { b.onclick = () => sim.klidDo(patientId, b.dataset.klid); });
 $('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { filter = b.dataset.f; histStrana = 0; $('filters').querySelectorAll('button').forEach((o) => { o.setAttribute('aria-pressed', String(o === b)); o.classList.toggle('on', o === b); }); render(); }; });
-$('ackAll').onclick = () => sim.ackAll(patientId);
 /* Nahrát: server pořídí klip z kamery a uloží ho podle Nastavení poskytovatele (server / Google Disk); do historie jde řádek
  * „Ruční nahrávka“. Bez stavu na serveru (ukázka) jen řádek v historii. */
 $('rec').onclick = async () => {
@@ -303,13 +302,13 @@ function render() {
   $('klidState').textContent = klidAktivni ? (k >= KLID_NAVZDY ? 'klid do vypnutí' : `klid do ${fmtT(k)}`) : 'klid vypnutý';
   document.querySelectorAll('[data-klid]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.klid === 'vypnout' ? !klidAktivni : false)));
 
-  // notifications (unacked)
-  const notifs = s.notifications.filter((n) => n.patientId === patientId && !n.ack && n.kind !== 'request');
-  const notifHtml = notifs.slice(0, 4).map((n) => {
-    const text = n.kind === 'emergency' ? `${n.who} otevřel nouzový přístup k plnému obrazu (10 min).` : `${KINDS[n.kind]?.label || n.kind} · ${fmtT(n.at)}`;
-    return `<div class="banner ${levelClass(n.level)} ${n.level === 'crit' ? 'pulse' : ''}"><span class="badge ${levelClass(n.level)}">${esc(LEVEL_LABEL[n.level] || n.level)}</span><span class="grow">${esc(text)}</span><button class="sm" data-ack="${n.id}">${n.level === 'crit' ? 'Řeším' : 'V pořádku'}</button></div>`;
-  }).join('');
-  if (setHtml($('notifs'), notifHtml)) $('notifs').querySelectorAll('[data-ack]').forEach((b) => { b.onclick = () => sim.ackNotification(b.dataset.ack); });
+  // otevřené alerty: jen počet – řeší a uzavírá je dispečink poskytovatele, podrobnosti má rodina v historii
+  const krit = open.filter((e) => KINDS[e.kind].level === 'crit').length, varov = open.filter((e) => KINDS[e.kind].level === 'warn').length;
+  const alertu = krit + varov;
+  const sklon = (n, j, m, v) => `${n} ${n === 1 ? j : n < 5 ? m : v}`;
+  const casti = [krit ? sklon(krit, 'kritický', 'kritické', 'kritických') : '', varov ? sklon(varov, 'varování', 'varování', 'varování') : ''].filter(Boolean).join(', ');
+  const notifHtml = alertu ? `<div class="banner ${krit ? 'crit' : 'warn'}"><span class="grow"><strong>${esc(sklon(alertu, 'otevřený alert', 'otevřené alerty', 'otevřených alertů'))}</strong> (${esc(casti)}) · řeší a uzavírá dispečink poskytovatele, podrobnosti jsou v Historii.</span><button type="button" class="sm sec" data-hist>Historie</button></div>` : '';
+  if (setHtml($('notifs'), notifHtml)) $('notifs').querySelectorAll('[data-hist]').forEach((b) => { b.onclick = () => { location.hash = '#historie'; $('historie').scrollIntoView({ behavior: 'smooth', block: 'start' }); }; });
 
   // requests for full picture (přes celou obrazovku + proužek v aplikaci)
   renderZadost();

@@ -31,6 +31,10 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   volitelná závislost; bez ní WebAssembly, nouzově čistý JavaScript, který
   potřeboval asi sekundu na snímek). `KOSTRA_BACKEND` vynutí backend,
   `/api/health` ukazuje `kostraVypocet`, `scripts/kostra-test.mjs` ho vypíše.
+- **Rodina: místo seznamu upozornění jen počet otevřených alertů** (např.
+  „2 otevřené alerty (1 kritický, 1 varování) · řeší a uzavírá dispečink“
+  s tlačítkem do Historie). Podrobnosti jsou v historii, alerty uzavírá
+  dispečink; tlačítko „Vše v pořádku“ u náhledu zmizelo.
 - **Rodina má u náhledu tlačítko „🦴 Drátěný model: zapnuto/vypnuto“**,
   už není jen v Testu obrazu. Volba se pamatuje v telefonu.
 - **Jedna terminologie ve všech aplikacích:** plný obraz, rozostřený obraz
