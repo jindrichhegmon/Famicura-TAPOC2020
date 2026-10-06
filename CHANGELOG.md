@@ -5,6 +5,29 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.0 · 6. 10. 2026 · nahrávka vždy v plném obrazu, při rozostření uzamčená pro poskytovatele
+
+- **Nahrávka po události i tlačítkem Nahrát se pořizuje vždy v plném obrazu.**
+  Když má rodina v tu chvíli nastavený rozostřený obraz nebo drátěný model,
+  nahrávka vznikne, ale je **uzamčená**: rodina ji ve své aplikaci vidí
+  a přehraje, poskytovatel (dispečink i správce) ji nepřehraje ani nestáhne
+  (HTTP 423), dokud ji rodina tlačítkem **Odemknout** neodemkne. Odemknutí se
+  zapíše (kdo, kdy – sloupce `Zamek`, `OdemklKdo`, `OdemklCas` v
+  `A_KAM_Nahravka`) a do historie jde řádek „Rodina (jméno) odemkla
+  poskytovateli nahrávku z …“. Kritická událost s nouzovým přístupem se dál
+  nahrává volně, při „žádný obraz“ se nenahrává nic.
+- Dispečink: v Nahrávkách „🔒 nahrávka uzamčena · odemkne rodina“, v historii
+  „🔒 nahrávka uzamčena“, po odemknutí „odemkla rodina (jméno)“; Nahrát teď
+  při rozostření upozorní, že nahrávka bude uzamčená. Log období a Excel:
+  „uzamčená – odemkne rodina“ / „odemkla rodina (jméno)“.
+- Rodina: u nahrávky „🔒 nahrávka uzamčena · poskytovatel ji neuvidí, dokud ji
+  neodemknete“ a tlačítko Odemknout (s potvrzením); v historii 🔒 u odkazu.
+- **Drátěný model z nahrávek (2.8–2.9) je zrušen**: pryč je `src/kostra.mjs`,
+  pomocný proces, model MoveNet i balíky TensorFlow (`npm install` je
+  o stovky MB menší), `KOSTRA_*` v `.env` a `kostra` v `/api/health`. Starší
+  záznamy drátěného modelu v Nahrávkách jdou už jen stáhnout. Živý drátěný
+  model v prohlížeči (dispečink i rodina) zůstává beze změny.
+
 ## 2.9 · 5. 10. 2026 · drátěný model v dispečinku, jednotná terminologie
 
 - **Drátěný model přes obraz v dispečinku je výrazné tlačítko a je po

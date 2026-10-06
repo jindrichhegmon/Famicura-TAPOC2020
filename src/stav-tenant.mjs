@@ -89,7 +89,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     if (nahravky) {
       const podleUdalosti = new Map();
       for (const n of await nahravky.seznam(tenant, { limit: 300 }).catch(() => [])) if (n.udalostId && !podleUdalosti.has(n.udalostId)) podleUdalosti.set(n.udalostId, n);
-      const odkaz = (n, sdilena = false) => ({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste, typ: n.typ, smazano: !!n.smazanoCas, ...(sdilena ? { sdilena: true } : {}) });
+      const odkaz = (n, sdilena = false) => ({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste, typ: n.typ, zamek: !!n.zamek, odemklKdo: n.odemklKdo || null, smazano: !!n.smazanoCas, ...(sdilena ? { sdilena: true } : {}) });
       const hotove = [...podleUdalosti.values()].filter((n) => !n.chyba);
       for (const e of events) {
         const n = podleUdalosti.get(e.id);
@@ -199,14 +199,14 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
       .then((n) => zapis({ id: n?.id, chyba: n?.chyba || duvod }), () => zapis({ chyba: duvod })); };
     const smi = smiNahravat(s, p, ev.kind, now(), { skutecna: !!ev.real });
     if (!smi.ok) { const pr = odmitni(`nenahráno: ${smi.duvod}`).finally(() => cekajici.delete(pr)); cekajici.add(pr); return; }
-    hlas(`nahrávám ${s.poskytovatel?.nahravkaS || ''} s (${smi.rezim === 'kostra' ? 'jen drátěný model: ' + smi.duvod : smi.nouze ? 'kritická událost s nouzovým přístupem' : 'plný obraz'})`);
-    const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, rezim: smi.rezim || 'full', delkaS: s.poskytovatel?.nahravkaS, predS: s.poskytovatel?.nahravkaPredS, uloziste: s.poskytovatel?.nahravkyUloziste, disk: !!s.poskytovatel?.nahravkyDisk, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
+    hlas(`nahrávám ${s.poskytovatel?.nahravkaS || ''} s (${smi.zamek ? 'uzamčená pro poskytovatele: ' + smi.duvod : smi.nouze ? 'kritická událost s nouzovým přístupem' : 'plný obraz'})`);
+    const pr = Promise.resolve().then(() => nahravky.porid(tenant, { kameraId: ev.patientId, zamek: !!smi.zamek, delkaS: s.poskytovatel?.nahravkaS, predS: s.poskytovatel?.nahravkaPredS, uloziste: s.poskytovatel?.nahravkyUloziste, disk: !!s.poskytovatel?.nahravkyDisk, druh: ev.kind, udalostId: ev.id, zdroj: 'udalost', kdo, text: ev.text || '' }))
       .then((n) => {
-        if (n && n.preskoceno && n.nahravka && !n.nahravka.chyba) { hlas(`spadá do běžící nahrávky ${n.nahravka.id}`); return zapis({ id: n.nahravka.id, url: n.nahravka.url, nazev: n.nahravka.nazev, delkaS: n.nahravka.delkaS, uloziste: n.nahravka.uloziste, typ: n.nahravka.typ, sdilena: true }); }
+        if (n && n.preskoceno && n.nahravka && !n.nahravka.chyba) { hlas(`spadá do běžící nahrávky ${n.nahravka.id}`); return zapis({ id: n.nahravka.id, url: n.nahravka.url, nazev: n.nahravka.nazev, delkaS: n.nahravka.delkaS, uloziste: n.nahravka.uloziste, typ: n.nahravka.typ, zamek: !!n.nahravka.zamek, sdilena: true }); }
         if (n && n.preskoceno && n.nahravka) { hlas(`spadá do běžící nahrávky, která selhala: ${n.nahravka.chyba}`); return zapis({ chyba: n.nahravka.chyba }); }
         if (!n || n.preskoceno) return odmitni(`nenahráno: ${n?.duvod || 'nahrávka neproběhla'}`);
-        hlas(n.chyba ? `chyba: ${n.chyba}` : `uloženo (${n.uloziste || 'disk'}, ${n.delkaS} s, ${Math.round((n.velikost || 0) / 1024)} kB)`);
-        return zapis({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste, typ: n.typ });
+        hlas(n.chyba ? `chyba: ${n.chyba}` : `uloženo (${n.uloziste || 'disk'}, ${n.delkaS} s, ${Math.round((n.velikost || 0) / 1024)} kB${n.zamek ? ', uzamčená' : ''})`);
+        return zapis({ id: n.id, url: n.url, nazev: n.nazev, delkaS: n.delkaS, chyba: n.chyba, uloziste: n.uloziste, typ: n.typ, zamek: !!n.zamek });
       })
       .catch((e) => { if (log && log.error) log.error('[nahravky]', tenant, ev.patientId, 'nahrávka po události selhala:', e.message); return odmitni(`nenahráno: ${e.message}`); })
       .finally(() => cekajici.delete(pr));
@@ -258,6 +258,23 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
       });
     },
     /**
+     * Rodina odemkla uzamčenou nahrávku: u události v paměti zmizí zámek a do historie jde řádek „souhlas“
+     * (není to akce z prohlížeče – jde jen přes POST /api/nahravky/:id/odemknout, které ověří, že je to rodina kamery).
+     */
+    odemknutiNahravky({ id, kameraId, cas, delkaS, kdo }) {
+      return serializovane(async () => {
+        await nacti();
+        const s = data.state;
+        for (const e of s.events) if (e.nahravka && e.nahravka.id === id) { e.nahravka = { ...e.nahravka, zamek: false, odemklKdo: kdo || 'rodina' }; }
+        const t = now();
+        const kdy = new Date(cas || t).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+        s.events.unshift({ id: 'n' + (s.seq++) + t.toString(36), at: t, patientId: kameraId, kind: 'consent', state: 'uzavřen', by: 'rodina', text: `Rodina (${kdo || 'rodina'}) odemkla poskytovateli nahrávku z ${kdy}${delkaS ? ` (${delkaS} s)` : ''}.` });
+        if (s.events.length > 400) s.events.length = 400;
+        data.v++; await uloz();
+        return { v: data.v };
+      });
+    },
+    /**
      * Log událostí za období (ms od–do včetně) přímo z databáze, ne jen posledních pár set v paměti:
      * jedna kamera nebo všechny; nejnovější první. Řádky jsou hotové pro stránku i Excel (radekLogu).
      */
@@ -270,7 +287,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
         const nahr = new Map();
         if (nahravky && ud.length) {
           const n = await tabulky.vyber(tenant, 'A_KAM_Nahravka', { kde: { Cas: { od: kde.Cas.od, do: Math.min(kde.Cas.do + 3600000, Number.MAX_SAFE_INTEGER) }, ...(kameraId ? { KameraID: kameraId } : {}) }, razeni: [['Cas', 'ASC']], limit: 10000 }).catch(() => []);
-          for (const r of n) if (r.UdalostId && !nahr.has(r.UdalostId)) nahr.set(r.UdalostId, { chyba: r.Chyba || null, uloziste: r.Uloziste || (r.Url ? 'disk' : null), delkaS: r.DelkaS, smazanoCas: r.SmazanoCas || null, url: r.Url || null, id: r.Id, typ: r.Mime === 'application/json' ? 'kostra' : 'video' });
+          for (const r of n) if (r.UdalostId && !nahr.has(r.UdalostId)) nahr.set(r.UdalostId, { chyba: r.Chyba || null, uloziste: r.Uloziste || (r.Url ? 'disk' : null), delkaS: r.DelkaS, smazanoCas: r.SmazanoCas || null, url: r.Url || null, id: r.Id, typ: r.Mime === 'application/json' ? 'kostra' : 'video', zamek: Number(r.Zamek) === 1, odemklKdo: r.OdemklKdo || null });
         }
         const jmena = new Map(data.state.patients.map((p) => [p.id, p.name]));
         return ud.map((r) => { const e = udalostZRadku(r); return radekLogu(e, jmena.get(e.patientId), nahr.get(e.id) || null); });

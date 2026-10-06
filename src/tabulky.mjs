@@ -48,7 +48,9 @@ export const SCHEMA = {
     klic: ['Id'],
     sloupce: { Id: ['c', 40], KameraID: ['c', 40], Cas: ['i'], DelkaS: ['i'], Velikost: ['i'], UdalostId: ['c', 40], Druh: ['c', 20], Zdroj: ['c', 20],
       Nazev: ['s', 200], SouborID: ['s', 120], Url: ['s', 400], Email: ['s', 120], Kdo: ['s', 80], Chyba: ['s', 300],
-      Uloziste: ['c', 10], Soubor: ['s', 200], Mime: ['c', 40], SmazanoCas: ['i'] },
+      Uloziste: ['c', 10], Soubor: ['s', 200], Mime: ['c', 40], SmazanoCas: ['i'],
+      // Zamek 1 = pořízeno při rozostření/drátěném modelu rodiny: poskytovatel nahrávku nepřehraje, dokud ji rodina neodemkne
+      Zamek: ['i'], OdemklKdo: ['s', 80], OdemklCas: ['i'] },
     indexy: [['Cas'], ['KameraID', 'Cas']],
   },
   A_KAM_Prehrani: {

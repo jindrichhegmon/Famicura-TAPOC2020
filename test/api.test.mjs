@@ -629,35 +629,49 @@ test('nahrávky: stav účtu a adresář, ruční nahrávka ze serveru (jen při
   assert.equal(od.ok, true); assert.equal(od.slozka, null);
   const sl = await (await h(req('POST', '/api/nahravky/slozka', { cookies: cookie(), body: { nazev: 'Famicura Kamera – test' } }))).json();
   assert.equal(sl.slozka.id, 's2');
-  // rodina povolila jen drátěný model → ruční nahrávka jen jako kostra; bez modulu kostry (tento test) řádek s chybou
+  // rodina povolila jen drátěný model → ruční nahrávka se pořídí v plném obrazu, ale uzamčená (poskytovatel ji nedostane, dokud ji rodina neodemkne)
   await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setConsent', args: ['tapoc2020', { den: 'skeleton', noc: 'skeleton', nouze: true }] } }));
   let r = await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'tapoc2020', delkaS: 10 } }));
-  assert.equal(r.status, 502, 'ruční nahrávka při drátěném modelu bez modulu kostry'); assert.match((await r.json()).error, /Drátěný model není na serveru k dispozici/);
+  assert.equal(r.status, 200, 'ruční nahrávka při drátěném modelu'); const nZ = (await r.json()).nahravka; assert.equal(nZ.zamek, true, 'uzamčená'); assert.equal(nZ.mime, 'video/mp4');
+  assert.equal((await tabulky.vyber(T, 'A_KAM_Nahravka', { kde: { Id: nZ.id } }))[0].Zamek, 1);
   // žádný obraz → odmítnuto rovnou (403)
   await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setConsent', args: ['tapoc2020', { den: 'none', noc: 'none', nouze: false }] } }));
   r = await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'tapoc2020', delkaS: 10 } }));
   assert.equal(r.status, 403, 'ruční nahrávka bez obrazu'); assert.match((await r.json()).error, /rodina povolila jen/);
   await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full', noc: 'full', nouze: true }] } }));
   r = await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'tapoc2020', delkaS: 10 } }));
-  assert.equal(r.status, 200); const n1 = (await r.json()).nahravka; assert.equal(n1.url, 'https://drive/f1'); assert.equal(n1.zdroj, 'rucni'); assert.equal(n1.delkaS, 10);
+  assert.equal(r.status, 200); const n1 = (await r.json()).nahravka; assert.equal(n1.url, 'https://drive/f2'); assert.equal(n1.zdroj, 'rucni'); assert.equal(n1.delkaS, 10);
   assert.equal((await h(req('POST', '/api/nahravky/rucni', { cookies: cookie(), body: { kamera: 'cizi' } }))).status, 404, 'cizí kamera');
   // soubor z hlavní aplikace (správce bez tenanta: tenant podle kamery)
   const up = new Request('http://localhost/api/nahravky?kamera=tapoc2020&zdroj=plan&delkaS=30&text=Pl%C3%A1n', { method: 'POST', headers: { 'content-type': 'video/webm', cookie: cookieServer() }, body: Buffer.alloc(4096, 1) });
-  r = await h(up); assert.equal(r.status, 200); const n2 = (await r.json()).nahravka; assert.match(n2.nazev, /\.webm$/); assert.equal(n2.zdroj, 'plan'); assert.equal(disk.nahrane[1].mime, 'video/webm');
+  r = await h(up); assert.equal(r.status, 200); const n2 = (await r.json()).nahravka; assert.match(n2.nazev, /\.webm$/); assert.equal(n2.zdroj, 'plan'); assert.equal(disk.nahrane[2].mime, 'video/webm');
   assert.equal((await h(new Request('http://localhost/api/nahravky?kamera=tapoc2020', { method: 'POST', headers: { 'content-type': 'text/plain', cookie: cookie() }, body: 'x'.repeat(2000) }))).status, 415);
   const sez = await (await h(req('GET', '/api/nahravky?kamera=tapoc2020', { cookies: cookie() }))).json();
-  assert.equal(sez.nahravky.length, 3, 'dvě nahrávky + řádek s chybou drátěného modelu'); assert.equal(sez.nahravky[0].id, n2.id);
+  assert.equal(sez.nahravky.length, 3, 'uzamčená + ruční + z hlavní aplikace'); assert.equal(sez.nahravky[0].id, n2.id);
   // událost s Nahrávat → nahrávka u události
   const ev = await (await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'emit', args: ['tapoc2020', 'fall'] } }))).json();
   await (await (await h(req('GET', '/api/health'))).json(), nahravky.hotovo());
   const stav = await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json();
-  assert.equal(stav.state.events.find((e) => e.id === ev.vysledek.id).nahravka.url, 'https://drive/f3');
+  assert.equal(stav.state.events.find((e) => e.id === ev.vysledek.id).nahravka.url, 'https://drive/f4');
   // rodina: seznam jen svých kamer, nastavení a ruční nahrávka ne
   const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
   const rc = cookieRodina(T, rod.id).split(';')[0];
   const rs = await (await h(req('GET', '/api/nahravky', { cookies: rc }))).json();
   assert.equal(rs.ok, true); assert.ok(rs.nahravky.length >= 3 && rs.nahravky.every((x) => x.kameraId === 'tapoc2020'), 'rodina vidí nahrávky své kamery');
+  // uzamčená nahrávka: poskytovatel i správce dostanou 423 (přehrání i stažení), rodina ji přehraje; odemknout smí jen rodina
+  assert.equal((await h(req('GET', `/api/nahravky/${nZ.id}/soubor`, { cookies: cookie() }))).status, 423, 'poskytovatel: uzamčeno');
+  assert.equal((await h(req('GET', `/api/nahravky/${nZ.id}/soubor?stahnout=1`, { cookies: cookie() }))).status, 423, 'poskytovatel: ani stažení');
+  assert.equal((await h(req('GET', `/api/nahravky/${nZ.id}/soubor`, { cookies: rc }))).status, 302, 'rodina uzamčenou nahrávku přehraje (z Disku přesměrováním)');
+  assert.equal((await h(req('POST', `/api/nahravky/${nZ.id}/odemknout`, { cookies: cookie(), body: {} }))).status, 403, 'poskytovatel si ji neodemkne');
+  const odem = await (await h(req('POST', `/api/nahravky/${nZ.id}/odemknout`, { cookies: rc, body: {} }))).json();
+  assert.equal(odem.ok, true); assert.equal(odem.zmena, true); assert.equal(odem.nahravka.zamek, false); assert.equal(odem.nahravka.odemklKdo, 'Petr');
+  assert.equal((await h(req('GET', `/api/nahravky/${nZ.id}/soubor`, { cookies: cookie() }))).status, 302, 'po odemknutí poskytovatel přehraje');
+  const sez2 = await (await h(req('GET', '/api/nahravky?kamera=tapoc2020', { cookies: cookie() }))).json();
+  const nZ2 = sez2.nahravky.find((x) => x.id === nZ.id); assert.equal(nZ2.zamek, false); assert.equal(nZ2.odemklKdo, 'Petr'); assert.ok(nZ2.odemklCas > 0);
+  const hist = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.events;
+  assert.ok(hist.some((e) => e.kind === 'consent' && /Rodina \(Petr\) odemkla poskytovateli nahrávku/.test(e.text)), 'odemknutí je v historii');
+  assert.equal((await (await h(req('POST', `/api/nahravky/${nZ.id}/odemknout`, { cookies: rc, body: {} }))).json()).zmena, false, 'podruhé beze změny');
   assert.equal((await h(req('GET', '/api/nahravky?kamera=cizi', { cookies: rc }))).status, 404);
   assert.equal((await h(req('GET', '/api/nahravky/stav', { cookies: rc }))).status, 403, 'nastavení nahrávek jen poskytovatel');
   assert.equal((await h(req('POST', '/api/nahravky/slozka', { cookies: rc, body: {} }))).status, 403, 'rodina adresář nezakládá (ruční nahrávku u své kamery smí – test níže)');

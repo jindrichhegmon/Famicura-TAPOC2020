@@ -1,5 +1,4 @@
 import { createSource } from '/proto/zdroj.js';
-import { prehrajKostru } from '/proto/kostra.js';
 import { sim, KINDS, LEVEL_LABEL, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -214,7 +213,7 @@ $('rec').onclick = async () => {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || 'nahrávka se nepodařila');
     await sim.emit(patientId, 'nahravka', { text: `Rodina pořídila ruční nahrávku ${j.nahravka.delkaS} s (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}).` });
-    toast(`Nahrávka uložena (${j.nahravka.delkaS} s). Najdete ji v kartě Nahrávky.`); nactiNahravky(true);
+    toast(j.nahravka.zamek ? `Nahrávka uložena (${j.nahravka.delkaS} s). Máte nastavený rozostřený obraz, takže je pro poskytovatele uzamčená – odemknout ji můžete v kartě Nahrávky.` : `Nahrávka uložena (${j.nahravka.delkaS} s). Najdete ji v kartě Nahrávky.`); nactiNahravky(true);
   } catch (e) { toast(`Nahrávka se nepodařila: ${e.message}`, 'crit'); }
   b.disabled = false;
 };
@@ -337,7 +336,7 @@ function render() {
     const k = KINDS[e.kind];
     const badge = e.kind === 'consent' ? '<span class="badge">souhlas</span>' : `<span class="badge ${levelClass(k.level)}">${esc(k.source)}</span>`;
     const tail = e.state && e.state !== 'uzavřen' && k ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : '';
-    const rec = e.nahravka && e.nahravka.url ? ` · <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" class="small">🎞 nahrávka</a>` : e.nahravka && e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` · <a href="#" class="small" data-prehrat="${esc(e.nahravka.id)}" data-typ="${e.nahravka.typ === 'kostra' ? 'kostra' : 'video'}">${e.nahravka.typ === 'kostra' ? '🦴 drátěný model' : '🎞 nahrávka'}${e.nahravka.delkaS ? ' ' + e.nahravka.delkaS + ' s' : ''}</a>` : '';
+    const rec = e.nahravka && e.nahravka.url ? ` · <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" class="small">🎞 nahrávka</a>` : e.nahravka && e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` · <a href="#" class="small" data-prehrat="${esc(e.nahravka.id)}">🎞 nahrávka${e.nahravka.delkaS ? ' ' + e.nahravka.delkaS + ' s' : ''}${e.nahravka.zamek ? ' 🔒' : ''}</a>` : '';
     const cls = e.kind === 'consent' ? 'consent' : k.level;
     return `<li class="${cls}"><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge} ${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''}${tail}${rec}</span></li>`;
   }).join('') || '<li class="muted">Zatím nic.</li>');
@@ -363,17 +362,21 @@ $('ptz')?.querySelectorAll('[data-ptz]').forEach((b) => { b.onclick = async () =
 let nahravkyCache = { cas: 0, pocet: -1, html: '', ver: 0 };
 async function nactiNahravky(vynutit = false) {
   const card = $('nahravky'); if (!card || !sim.naServeru) return;
-  const pocet = sim.state.events.filter((e) => e.patientId === patientId && e.nahravka).length;
+  const sN = sim.state.events.filter((e) => e.patientId === patientId && e.nahravka);
+  const odemknuti = sim.state.events.filter((e) => e.patientId === patientId && e.kind === 'consent' && /odemkla poskytovateli nahrávku/.test(e.text || '')).length;
+  const pocet = odemknuti * 1000000 + sN.length * 1000 + sN.filter((e) => e.nahravka.zamek).length;   // i uzamčené a odemknutí: po odemknutí se seznam načte znovu
   if (!vynutit && nahravkyCache.pocet === pocet && Date.now() - nahravkyCache.cas < 60000) return;
   nahravkyCache = { cas: Date.now(), pocet, html: nahravkyCache.html };
   let html;
   try {
     const r = await fetch('/api/nahravky?kamera=' + encodeURIComponent(patientId) + '&limit=20', { credentials: 'same-origin' });
     const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
-    html = j.nahravky.filter((n) => !n.chyba).map((n) => {
+    html = j.nahravky.filter((n) => !n.chyba && n.typ !== 'kostra').map((n) => {
       const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
-      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}" data-typ="${n.typ === 'kostra' ? 'kostra' : 'video'}">${n.typ === 'kostra' ? '🦴 přehrát drátěný model' : '▶ přehrát'}</a>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
-      return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}</span></li>`;
+      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
+      // uzamčená = pořízená, když jste měli nastavený rozostřený obraz: vy ji vidíte, poskytovatel až po odemknutí
+      const zamek = n.zamek ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">poskytovatel ji neuvidí, dokud ji neodemknete</span><button type="button" class="sm" data-odemknout="${esc(n.id)}">Odemknout</button></div>` : n.odemklKdo ? `<div class="small muted">odemčeno pro poskytovatele${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}</div>` : '';
+      return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}${zamek}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka.</li>';
   } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
   if (html !== nahravkyCache.html) nahravkyCache.ver = Date.now();
@@ -382,7 +385,7 @@ async function nactiNahravky(vynutit = false) {
   const el = $('nahravkySeznam');
   if (el.dataset.ver !== String(nahravkyCache.ver)) {
     // běžící přehrávač přežije překreslení seznamu (vrátí se do řádku své nahrávky)
-    const bezici = el.querySelector('video.prehravac'); const radek = bezici?.closest('li')?.dataset.nahravka;   // kostra se po překreslení nepřenáší (spustí se znovu klepnutím)
+    const bezici = el.querySelector('video.prehravac'); const radek = bezici?.closest('li')?.dataset.nahravka;
     el.innerHTML = html; el.dataset.ver = String(nahravkyCache.ver); prehravaniOvladani(el);
     if (bezici && radek) { const li = el.querySelector(`li[data-nahravka="${CSS.escape(radek)}"]`); if (li) li.append(bezici); }
   }
@@ -390,20 +393,22 @@ async function nactiNahravky(vynutit = false) {
 function prehravaniOvladani(el) {
   el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = async (ev) => {
     ev.preventDefault();
-    const li = a.closest('li'); const stare = li.querySelector('video, canvas.kostra');
-    if (stare) { if (stare.pause) stare.pause(); stare.__kostra?.stop(); stare.remove(); li.querySelector('.kostra-lista')?.remove(); return; }
-    document.querySelectorAll('.prehravac').forEach((v) => { if (v.pause) v.pause(); v.__kostra?.stop(); v.remove(); }); document.querySelectorAll('.kostra-lista').forEach((x) => x.remove());
-    if (a.dataset.typ === 'kostra') {
-      try {
-        const r = await fetch(`/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`, { credentials: 'same-origin' }); if (!r.ok) throw new Error('HTTP ' + r.status);
-        const k = prehrajKostru(li, await r.json()); k.canvas.__kostra = k;
-      } catch (e) { toast('Drátěný model se nepodařilo načíst.', 'crit'); }
-      return;
-    }
+    const li = a.closest('li'); const stare = li.querySelector('video');
+    if (stare) { stare.pause(); stare.remove(); return; }
+    document.querySelectorAll('.prehravac').forEach((v) => { v.pause(); v.remove(); });
     // nahrávka je bez zvuku; muted je nutné, aby iPhone spustil přehrávání sám (jinak jen černý obraz)
     const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.preload = 'auto'; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
     v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo telefon formát neumí).', 'crit');
     li.append(v);
+  }; });
+  el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
+    if (!confirm('Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
+    b.disabled = true;
+    try {
+      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      toast('Nahrávka je odemčená, poskytovatel ji teď může přehrát.'); nactiNahravky(true);
+    } catch (e) { toast(`Odemknutí se nepodařilo: ${e.message}`, 'crit'); b.disabled = false; }
   }; });
 }
 

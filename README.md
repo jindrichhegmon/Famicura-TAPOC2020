@@ -212,19 +212,14 @@ hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
   ffmpeg na VPS (`apt install ffmpeg`) zůstane fragmentovaný.
   Události kamer zpracovává server ve smyčce každé 2 s (`najemci.krok`),
   takže nahrávka, SMS i e-mail odcházejí hned i bez otevřené stránky.
-- **Soukromí:** `smiNahravat` – plná nahrávka jen při plném obrazu
-  povoleném rodinou, nebo u kritické události (pád, SOS…) s povoleným
-  nouzovým přístupem. Při rozostření nebo drátěném modelu (od 2.8) vznikne
-  nahrávka jen jako **drátěný model**: `src/kostra.mjs` vytáhne z klipu
-  snímky (ffmpeg, 5/s, 320×180), model MoveNet (TensorFlow.js, 17 bodů)
-  najde postavu a uloží se jen souřadnice (JSON); obraz se zahodí. Výpočet
-  běží nativně přes `@tensorflow/tfjs-node` (volitelná závislost, libtensorflow
-  si stáhne `npm install`), bez něj přes WebAssembly, nouzově čistý JavaScript
-  (`KOSTRA_BACKEND` v `.env`; co běží, říká `/api/health` → `kostraVypocet`).
-  Počítá samostatný proces `src/kostra-proces.mjs` s nižší prioritou, aby
-  hlavní vlákno serveru dál obsluhovalo obraz a API.
-  Při „žádný obraz“ se nenahrává nic a u události je důvod. Model se
-  stáhne při startu do `data/modely`; ověření `node scripts/kostra-test.mjs`.
+- **Soukromí:** `smiNahravat` – nahrávka je vždy v plném obrazu. Při plném
+  obrazu povoleném rodinou (nebo u kritické události s nouzovým přístupem)
+  volně; při rozostření nebo drátěném modelu rodiny **uzamčená** (od 3.0):
+  řádek má `Zamek = 1`, rodina ji ve své aplikaci přehraje, poskytovatel
+  dostane na `/api/nahravky/:id/soubor` HTTP 423, dokud ji rodina
+  neodemkne (`POST /api/nahravky/:id/odemknout`, jen rodina kamery; zapíše
+  `OdemklKdo`, `OdemklCas` a řádek souhlasu do historie). Při „žádný obraz“
+  se nenahrává nic a u události je důvod.
 - **Hlavní aplikace** pošle každou hotovou nahrávku (ruční, plán,
   událost z analýzy) na `POST /api/nahravky?kamera=…` (tělo video/webm
   nebo mp4, až 64 MB) a server ji uloží na Disk poskytovatele kamery;
@@ -552,7 +547,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 2.9) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.0) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

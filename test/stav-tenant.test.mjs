@@ -177,19 +177,21 @@ test('nahrávka po události: odmítnutí i chyba se zapíší jako řádek s d�
   assert.equal(radky.length, 1); assert.equal(radky[0].UdalostId, r1.vysledek.id); assert.match(radky[0].Chyba, /^nenahráno: rodina povolila jen „žádný obraz“/); assert.equal(radky[0].Velikost, 0);
   assert.match((await s.stav()).state.events.find((e) => e.id === r1.vysledek.id).nahravka.chyba, /žádný obraz/);
   assert.ok(zpravy.some((z) => /linecross: nenahráno: rodina povolila/.test(z)), 'důvod je v logu serveru');
-  // 1b) rozostření → jen drátěný model; bez modulu kostry (tento test) řádek s chybou 503 a zápis v logu
+  // 1b) rozostření → plný obraz se nahraje, ale uzamčený pro poskytovatele (Zamek = 1); v logu serveru je důvod
   await s.proved('setConsent', ['tapoc2020', { den: 'blur', noc: 'blur', nouze: true }]);
   const r1b = await s.proved('emit', ['tapoc2020', 'linecross']);
   await s.hotovo();
   radky = await tb.vyber(T, 'A_KAM_Nahravka', { kde: { UdalostId: r1b.vysledek.id } });
-  assert.equal(radky.length, 1); assert.match(radky[0].Chyba, /Drátěný model není na serveru k dispozici/); assert.equal(radky[0].Velikost, 0);
-  assert.ok(zpravy.some((z) => /linecross: nahrávám .*jen drátěný model/.test(z)), 'režim kostry je v logu serveru');
+  assert.equal(radky.length, 1); assert.equal(radky[0].Chyba, null); assert.equal(radky[0].Zamek, 1); assert.equal(radky[0].Mime, 'video/mp4');
+  assert.equal((await s.stav()).state.events.find((e) => e.id === r1b.vysledek.id).nahravka.zamek, true, 'zámek u události');
+  assert.ok(zpravy.some((z) => /linecross: nahrávám .*uzamčená pro poskytovatele: rodina povolila jen „rozostření“/.test(z)), 'důvod zámku je v logu serveru');
+  assert.ok(zpravy.some((z) => /linecross: uloženo \(server.*uzamčená\)/.test(z)));
   // 2) plný obraz → klip se pořídí
   await s.proved('setConsent', ['tapoc2020', { den: 'full', noc: 'full', nouze: true }]);
   const r2 = await s.proved('emit', ['tapoc2020', 'linecross']);
   await s.hotovo();
   radky = await tb.vyber(T, 'A_KAM_Nahravka', { kde: { UdalostId: r2.vysledek.id } });
-  assert.equal(radky.length, 1); assert.equal(radky[0].Chyba, null); assert.equal(radky[0].Uloziste, 'server'); assert.equal(volani.length, 2, 'klip z go2rtc: pokus o drátěný model + plný obraz');
+  assert.equal(radky.length, 1); assert.equal(radky[0].Chyba, null); assert.equal(radky[0].Uloziste, 'server'); assert.equal(volani.length, 2, 'klip z go2rtc: uzamčená + plný obraz');
   assert.ok(zpravy.some((z) => /linecross: nahrávám/.test(z)) && zpravy.some((z) => /linecross: uloženo \(server/.test(z)));
   // 3) událost bez zatrženého Nahrávat se nenahrává a nezapisuje
   await s.proved('setWatch', ['tapoc2020', 'motion', { on: true, rec: false }]);

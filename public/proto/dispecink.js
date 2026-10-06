@@ -1,5 +1,4 @@
 import { createSource } from '/proto/zdroj.js';
-import { prehrajKostru } from '/proto/kostra.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -43,7 +42,10 @@ function otevriNastaveni() {
 const nahravkyCache = new Map();   // pid → { cas, html, pocet }
 async function nactiNahravky(pid) {
   const el = document.querySelector('#detail #dnahravky'); if (!el) return;
-  const pocet = sim.state.events.filter((e) => e.patientId === pid && e.nahravka).length;
+  // otisk: počet nahrávek u událostí + kolik je uzamčených (po odemknutí rodinou se seznam načte znovu)
+  const sN = sim.state.events.filter((e) => e.patientId === pid && e.nahravka);
+  const odemknuti = sim.state.events.filter((e) => e.patientId === pid && e.kind === 'consent' && /odemkla poskytovateli nahrávku/.test(e.text || '')).length;
+  const pocet = odemknuti * 1000000 + sN.length * 1000 + sN.filter((e) => e.nahravka.zamek).length;
   const c = nahravkyCache.get(pid);
   // seznam se přepíše jen při nové verzi (ne při každém překreslení – běžící přehrávač by zmizel)
   const ukaz = (html, ver) => { if (el.dataset.ver === String(ver)) return; el.innerHTML = html; el.dataset.ver = String(ver); prehravaniOvladani(el, pid); };
@@ -57,8 +59,10 @@ async function nactiNahravky(pid) {
     html = j.nahravky.map((n) => {
       const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
       const vel = n.velikost ? ` · ${(n.velikost / 1048576).toFixed(1)} MB` : '';
-      const kostra = n.typ === 'kostra';
-      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}" data-typ="${kostra ? 'kostra' : 'video'}" title="${kostra ? 'přehrát drátěný model (bez obrazu; přehrání jde do auditu)' : 'přehrát v aplikaci (přehrání jde do auditu)'}">${kostra ? '🦴 přehrát drátěný model' : '▶ přehrát'}</a> · <a href="/api/nahravky/${encodeURIComponent(n.id)}/soubor?stahnout=1" download title="stáhnout soubor ${esc(n.nazev || '')} do počítače (stažení jde do auditu)">⬇ stáhnout</a> · <span class="muted">na serveru${kostra ? ', jen kostra postavy' : ''}</span>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`;
+      const stary = n.typ === 'kostra';   // záznam drátěného modelu z verzí 2.8–2.9 (jen ke stažení)
+      const odemceno = n.odemklKdo ? ` · <span class="muted" title="rodina nahrávku odemkla${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}">odemkla rodina (${esc(n.odemklKdo)})</span>` : '';
+      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>`
+        : n.uloziste === 'server' ? `${stary ? '' : `<a href="#" data-prehrat="${esc(n.id)}" title="přehrát v aplikaci (přehrání jde do auditu)">▶ přehrát</a> · `}<a href="/api/nahravky/${encodeURIComponent(n.id)}/soubor?stahnout=1" download title="stáhnout soubor ${esc(n.nazev || '')} do počítače (stažení jde do auditu)">⬇ stáhnout</a> · <span class="muted">na serveru${stary ? ', starší záznam drátěného modelu' : ''}</span>${odemceno}` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`;
       return `<li data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${kde}${n.chyba ? '' : ` · <a href="#" class="muted" data-smazat="${esc(n.id)}" title="smazat nahrávku">smazat</a>`}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka. Nahrává se po události se zatrženým Nahrávat (sekce Nastavení) nebo tlačítkem Nahrát teď.</li>';
   } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
@@ -81,16 +85,9 @@ function ptzOvladani(box, pid) {
 function prehravaniOvladani(el, pid) {
   el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = async (ev) => {
     ev.preventDefault();
-    const li = a.closest('li'); const stare = li.querySelector('video, canvas.kostra');
-    if (stare) { if (stare.pause) stare.pause(); stare.__kostra?.stop(); stare.remove(); li.querySelector('.kostra-lista')?.remove(); return; }
-    el.querySelectorAll('video, canvas.kostra').forEach((v) => { if (v.pause) v.pause(); v.__kostra?.stop(); v.remove(); }); el.querySelectorAll('.kostra-lista').forEach((x) => x.remove());
-    if (a.dataset.typ === 'kostra') {
-      try {
-        const r = await fetch(`/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`, { credentials: 'same-origin' }); if (!r.ok) throw new Error('HTTP ' + r.status);
-        const data = await r.json(); const k = prehrajKostru(li, data); k.canvas.__kostra = k;
-      } catch (e) { toast(`Drátěný model se nepodařilo načíst: ${e.message}`, 'crit'); }
-      return;
-    }
+    const li = a.closest('li'); const stare = li.querySelector('video');
+    if (stare) { stare.pause(); stare.remove(); return; }
+    el.querySelectorAll('video').forEach((v) => { v.pause(); v.remove(); });
     const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
     v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo prohlížeč formát neumí).', 'crit');
     li.append(v);
@@ -599,7 +596,7 @@ function renderDetail(rebuild = false) {
         const r = await fetch('/api/nahravky/rucni', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: p.id }) });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'nahrávka se nepodařila');
-        toast(`Nahrávka uložena (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}, ${j.nahravka.delkaS} s).`); nahravkyCache.delete(p.id); nactiNahravky(p.id);
+        toast(j.nahravka.zamek ? `Nahrávka uložena (${j.nahravka.delkaS} s), ale je uzamčená: rodina má nastavený rozostřený obraz. Přehrát ji půjde, až ji rodina odemkne.` : `Nahrávka uložena (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}, ${j.nahravka.delkaS} s).`, j.nahravka.zamek ? 'warn' : undefined); nahravkyCache.delete(p.id); nactiNahravky(p.id);
         sim.emit(p.id, 'nahravka', { text: `${ME()} pořídil(a) ruční nahrávku ${j.nahravka.delkaS} s (${j.nahravka.uloziste === 'disk' ? 'Google Disk' : 'na serveru'}).` });
       } catch (e) { toast(`Nahrávka se nepodařila: ${e.message}`, 'crit'); }
       b.textContent = puv; b.disabled = false;
@@ -689,7 +686,7 @@ function renderHistorie(d, p, s) {
   const zive = s.events.filter((e) => e.patientId === p.id && filtrUdalosti(e)).slice(0, dfiltr === 'all' ? 12 : 40);
   setHtml(d.querySelector('#dhist'), zive.map((e) => {
     const k = KINDS[e.kind];
-    const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}${e.nahravka.typ === 'kostra' ? ', jen drátěný model' : ''} – přehrát v sekci Nahrávky">${e.nahravka.typ === 'kostra' ? '🦴 drátěný model' : '🎞 nahrávka'}</a>` : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || (e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky')).slice(0, 60))}</span>`) : '';
+    const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? (e.nahravka.zamek ? ` <a href="#dnahravky" class="muted" title="pořízeno při rozostřeném obrazu rodiny; přehrát půjde, až ji rodina odemkne">🔒 nahrávka uzamčena</a>` : ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}${e.nahravka.odemklKdo ? ', odemkla rodina' : ''} – přehrát v sekci Nahrávky">🎞 nahrávka</a>`) : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || (e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky')).slice(0, 60))}</span>`) : '';
     const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
     const u = e.upozorneni;
     const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';

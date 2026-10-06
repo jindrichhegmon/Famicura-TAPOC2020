@@ -54,16 +54,18 @@ test('délka 5–60 s, jedna nahrávka na kameru najednou, chyba Disku se zapí�
   assert.equal(n.normDelka(undefined), DELKA_VYCHOZI);
 });
 
-test('soukromí: nahrává se jen při plném obrazu, nebo kritická událost s nouzovým přístupem', () => {
+test('soukromí: plný obraz volně; rozostření/drátěný model = plný obraz uzamčený pro poskytovatele; kritická událost s nouzovým přístupem volně; žádný obraz nic', () => {
   const s = seed(Date.UTC(2026, 9, 4, 8, 0, 0));
   const p = s.patients.find((x) => x.real) || s.patients[0];
   proved(s, 'setConsent', [p.id, { den: 'blur', noc: 'none', nouze: true }], Date.UTC(2026, 9, 4, 8, 0, 0));
-  assert.equal(smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)).rezim, 'kostra', 'rozostření → běžná událost jen jako drátěný model');
-  assert.equal(smiNahravat(s, p, 'fall', Date.UTC(2026, 9, 4, 8, 0, 0)).rezim, 'full', 'pád s nouzovým přístupem = plný obraz');
+  const rb = smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)); assert.equal(rb.ok, true); assert.equal(rb.zamek, true, 'rozostření → nahrávka uzamčená'); assert.match(rb.duvod, /rozostření.*odemkne ji rodina/);
+  const rf = smiNahravat(s, p, 'fall', Date.UTC(2026, 9, 4, 8, 0, 0)); assert.equal(rf.ok, true); assert.equal(rf.nouze, true); assert.ok(!rf.zamek, 'pád s nouzovým přístupem = plný obraz bez zámku');
+  proved(s, 'setConsent', [p.id, { den: 'skeleton', noc: 'skeleton', nouze: true }], Date.UTC(2026, 9, 4, 8, 0, 0));
+  assert.equal(smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)).zamek, true, 'drátěný model → uzamčená');
   proved(s, 'setConsent', [p.id, { den: 'full', noc: 'full', nouze: false }], Date.UTC(2026, 9, 4, 8, 0, 0));
   assert.equal(smiNahravat(s, p, 'motion', Date.UTC(2026, 9, 4, 8, 0, 0)).ok, true);
   proved(s, 'setConsent', [p.id, { den: 'none', noc: 'none', nouze: false }], Date.UTC(2026, 9, 4, 8, 0, 0));
-  assert.equal(smiNahravat(s, p, 'fall', Date.UTC(2026, 9, 4, 8, 0, 0)).ok, false, 'bez nouzového přístupu ani pád');
+  const rn = smiNahravat(s, p, 'fall', Date.UTC(2026, 9, 4, 8, 0, 0)); assert.equal(rn.ok, false, 'bez nouzového přístupu ani pád'); assert.match(rn.duvod, /žádný obraz/);
   assert.equal(smiNahravat(s, null, 'fall').ok, false);
 });
 
@@ -90,12 +92,19 @@ test('stav tenanta: událost s Nahrávat dostane odkaz na nahrávku; po restartu
   await s.hotovo();
   assert.match((await s.stav()).state.events.find((x) => x.id === r3.vysledek.id).nahravka.chyba, /nenahráno: rodina povolila jen/);
   assert.equal(nahrane.length, 1);
-  // drátěný model bez modulu kostry (tento test): řádek s chybou, soubor se neuloží
+  // drátěný model: nahrávka se pořídí, ale uzamčená; u události je zámek
   await s.proved('setConsent', ['tapoc2020', { den: 'skeleton', noc: 'skeleton', nouze: false }]);
   const r4 = await s.proved('emit', ['tapoc2020', 'fall']);
   await s.hotovo();
-  assert.match((await s.stav()).state.events.find((x) => x.id === r4.vysledek.id).nahravka.chyba, /Drátěný model není na serveru k dispozici/);
-  assert.equal(nahrane.length, 1);
+  const e4 = (await s.stav()).state.events.find((x) => x.id === r4.vysledek.id).nahravka;
+  assert.ok(e4.id && !e4.chyba); assert.equal(e4.zamek, true, 'uzamčená pro poskytovatele');
+  assert.equal(nahrane.length, 2);
+  assert.equal((await tb.vyber(T, 'A_KAM_Nahravka', { kde: { Id: e4.id } }))[0].Zamek, 1);
+  // odemknutí rodinou: zámek zmizí i u události v paměti, do historie jde řádek souhlasu
+  await s.odemknutiNahravky({ id: e4.id, kameraId: 'tapoc2020', cas: t, delkaS: 15, kdo: 'Eva' });
+  const st4 = await s.stav();
+  assert.equal(st4.state.events.find((x) => x.id === r4.vysledek.id).nahravka.zamek, false);
+  assert.match(st4.state.events[0].text, /^Rodina \(Eva\) odemkla poskytovateli nahrávku z .* \(15 s\)\.$/); assert.equal(st4.state.events[0].kind, 'consent');
   const s2 = mk();
   const e2 = (await s2.stav()).state.events.find((x) => x.id === r.vysledek.id);
   assert.equal(e2.nahravka.url, e.nahravka.url, 'po restartu serveru je odkaz z A_KAM_Nahravka');

@@ -36,7 +36,11 @@ const casDoNazvu = (t) => {
 };
 const bezpecnyNazev = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'kamera';
 
-/** Smí se obraz téhle kamery teď uložit ze serveru? → { ok } nebo { ok: false, duvod }. */
+/**
+ * Smí se obraz téhle kamery teď uložit ze serveru? → { ok, zamek?, nouze?, duvod? } nebo { ok: false, duvod }.
+ * Plný obraz: nahrávka volně. Rozostření nebo drátěný model: nahrává se plný obraz, ale UZAMČENÝ – rodina ho vidí,
+ * poskytovatel až když ho rodina odemkne. Kritická událost s nouzovým přístupem: volně. Žádný obraz: nenahrává se.
+ */
 export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna = false } = {}) {
   if (!patient) return { ok: false, duvod: 'kamera není v datech poskytovatele' };
   // „nedostupná“ je stav ze simulace; událost, kterou kamera právě sama nahlásila, se o to nezastaví (klip se zkusí)
@@ -45,13 +49,12 @@ export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna =
   if (m === 'full') return { ok: true, rezim: 'full' };
   const k = KINDS[kind];
   if (k && k.level === 'crit' && patient.consent?.nouze !== false) return { ok: true, nouze: true, rezim: 'full' };
-  // rozostření nebo drátěný model: nahrávka jen jako kostra postavy (server z klipu vytáhne souřadnice, obraz zahodí)
-  if (m === 'blur' || m === 'skeleton') return { ok: true, rezim: 'kostra', duvod: `rodina povolila jen „${m === 'blur' ? 'rozostření' : 'drátěný model'}“ – ukládá se jen drátěný model` };
-  return { ok: false, duvod: `rodina povolila jen „${m === 'none' ? 'žádný obraz' : m === 'blur' ? 'rozostření' : 'drátěný model'}“ – plný obraz se neukládá` };
+  if (m === 'blur' || m === 'skeleton') return { ok: true, rezim: 'full', zamek: true, duvod: `rodina povolila jen „${m === 'blur' ? 'rozostření' : 'drátěný model'}“ – nahrávka je uzamčená, odemkne ji rodina` };
+  return { ok: false, duvod: 'rodina povolila jen „žádný obraz“ – nenahrává se' };
 }
 
 export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, kamery = async () => [], zapisClb = null, now = Date.now, log = console, zasobnik = null,
-                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null, remux = null, kostra = null } = {}) {
+                                 minVolneGB = Number(process.env.NAHRAVKY_MIN_VOLNE_GB) || MIN_VOLNE_GB_VYCHOZI, mistoDisku = null, remux = null } = {}) {
   /** Volné a celkové místo na disku s nahrávkami → { volne, celkem } (null bez údaje). `mistoDisku` jde podstrčit v testech. */
   async function diskInfo() {
     if (mistoDisku) return mistoDisku();
@@ -114,15 +117,15 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   }
 
   /** Uloží hotový soubor (ze serveru i z prohlížeče) a zapíše řádek; při chybě řádek s chybou. */
-  async function uloz(tenant, { kameraId, data, mime = 'video/mp4', cas, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false }) {
+  async function uloz(tenant, { kameraId, data, mime = 'video/mp4', cas, delkaS, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false, zamek = false }) {
     const t = cas || now();
     // klip z go2rtc je fragmentovaný MP4: přes ffmpeg na obyčejný MP4 (Safari na iPhonu, správná délka); bez ffmpeg zůstane
     if (remux && mime === 'video/mp4') { const r = await remux(data).catch(() => null); if (r && r.prevedeno) data = r.data; }
     const info = await kameraInfo(kameraId);
     const label = druh && KINDS[druh] ? KINDS[druh].label : (zdroj === 'rucni' ? 'rucni' : zdroj);
-    const nazev = `${bezpecnyNazev(info.name || kameraId)}_${casDoNazvu(t)}_${bezpecnyNazev(label)}${mime === 'application/json' ? '_kostra.json' : mime.includes('webm') ? '.webm' : '.mp4'}`;
+    const nazev = `${bezpecnyNazev(info.name || kameraId)}_${casDoNazvu(t)}_${bezpecnyNazev(label)}${mime.includes('webm') ? '.webm' : '.mp4'}`;
     const radek = { Id: nid(t), KameraID: kameraId, Cas: t, DelkaS: delkaS || null, Velikost: data.length, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj,
-      Nazev: nazev, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: null, Uloziste: null, Soubor: null, Mime: mime, SmazanoCas: null };
+      Nazev: nazev, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: null, Uloziste: null, Soubor: null, Mime: mime, SmazanoCas: null, Zamek: zamek ? 1 : 0, OdemklKdo: null, OdemklCas: null };
     let slozka = '';
     try {
       const kam = cil(volba, kopie);
@@ -149,7 +152,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
   }
 
   /** Nahrávka N sekund z kamery (po události nebo ručně). Jedna na kameru najednou. */
-  function porid(tenant, { kameraId, delkaS, predS = PRED_VYCHOZI, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false, rezim = 'full' }) {
+  function porid(tenant, { kameraId, delkaS, predS = PRED_VYCHOZI, druh = '', udalostId = '', zdroj = 'udalost', kdo = '', text = '', uloziste: volba = 'server', disk: kopie = false, zamek = false }) {
     const klic = tenant + ':' + kameraId;
     // Druhá událost během nahrávky: nová se nespouští, událost spadá do té běžící (vrátí se po jejím dokončení).
     if (bezi.has(klic)) return bezi.get(klic).then((n) => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží', nahravka: n || null }), () => ({ preskoceno: true, duvod: 'nahrávka z téhle kamery právě běží', nahravka: null }));
@@ -166,11 +169,6 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
           if (k.data.length > MAX_BYTES) throw chyba('Nahrávka je příliš velká (přes 64 MB).', 413);
           data = k.data; cas = k.zacatek; nabeh = k.predS;
         } else data = await klip(kameraId, d);
-        // drátěný model: z klipu jen souřadnice postavy (JSON), obraz se zahodí
-        if (rezim === 'kostra') {
-          if (!kostra) throw chyba('Drátěný model není na serveru k dispozici (ffmpeg a model MoveNet).', 503);
-          data = await kostra.zKlipu(data, { delkaS: d + Math.round(nabeh) });
-        }
       }
       catch (e) {
         const radek = { Id: nid(cas), KameraID: kameraId, Cas: cas, DelkaS: d, Velikost: 0, UdalostId: udalostId || null, Druh: druh || null, Zdroj: zdroj, Nazev: null, SouborID: null, Url: null, Email: null, Kdo: kdo || null, Chyba: String(e.message || e).slice(0, 300), Uloziste: null, Soubor: null, Mime: null, SmazanoCas: null };
@@ -178,7 +176,7 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
         log.error('[nahravky]', tenant, kameraId, 'nahrávka se nepořídila:', radek.Chyba);
         return zRadku(radek);
       }
-      return uloz(tenant, { kameraId, data, mime: rezim === 'kostra' ? 'application/json' : 'video/mp4', cas, delkaS: d + Math.round(nabeh), druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie });
+      return uloz(tenant, { kameraId, data, mime: 'video/mp4', cas, delkaS: d + Math.round(nabeh), druh, udalostId, zdroj, kdo, text, uloziste: volba, disk: kopie, zamek });
     })().finally(() => bezi.delete(klic));
     bezi.set(klic, p);
     return p;
@@ -254,6 +252,15 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
     async prehraniSeznam(tenant, nahravkaId, limit = 50) {
       return (await tabulky.vyber(tenant, 'A_KAM_Prehrani', { kde: { NahravkaId: nahravkaId }, razeni: [['Cas', 'DESC']], limit })).map((r) => ({ id: r.Id, cas: Number(r.Cas), kdo: r.Kdo, role: r.Role, adresa: r.Adresa }));
     },
+    /** Rodina odemkla uzamčenou nahrávku pro poskytovatele (zapíše se kdo a kdy). → upravený záznam */
+    async odemkni(tenant, n, { kdo = '' } = {}) {
+      if (!n) throw chyba('Nahrávka neexistuje.', 404);
+      if (!n.zamek) return n;
+      const t = now();
+      await tabulky.uprav(tenant, 'A_KAM_Nahravka', { Id: n.id }, { Zamek: 0, OdemklKdo: String(kdo || 'rodina').slice(0, 80), OdemklCas: t });
+      log.log('[nahravky]', tenant, n.kameraId, `nahrávku ${n.id} odemkla rodina (${kdo || 'rodina'})`);
+      return { ...n, zamek: false, odemklKdo: String(kdo || 'rodina').slice(0, 80), odemklCas: t };
+    },
     /** Smaže soubor na serveru a řádek označí (zůstane v evidenci). Nahrávku na Disku jen označí. */
     async smaz(tenant, n) {
       if (!n) return false;
@@ -315,5 +322,6 @@ export function createNahravky({ go2rtc, disk = null, uloziste = null, tabulky, 
 export function zRadku(r) {
   return { id: r.Id, kameraId: r.KameraID, cas: Number(r.Cas) || 0, delkaS: r.DelkaS == null ? null : Number(r.DelkaS), velikost: Number(r.Velikost) || 0, udalostId: r.UdalostId || null,
     druh: r.Druh || null, zdroj: r.Zdroj || 'udalost', nazev: r.Nazev || null, souborId: r.SouborID || null, url: r.Url || null, email: r.Email || null, kdo: r.Kdo || null, chyba: r.Chyba || null,
-    uloziste: r.Uloziste || (r.Url ? 'disk' : null), soubor: r.Soubor || null, mime: r.Mime || null, typ: r.Mime === 'application/json' ? 'kostra' : 'video', smazanoCas: r.SmazanoCas == null ? null : Number(r.SmazanoCas) };
+    uloziste: r.Uloziste || (r.Url ? 'disk' : null), soubor: r.Soubor || null, mime: r.Mime || null, typ: r.Mime === 'application/json' ? 'kostra' : 'video', smazanoCas: r.SmazanoCas == null ? null : Number(r.SmazanoCas),
+    zamek: Number(r.Zamek) === 1, odemklKdo: r.OdemklKdo || null, odemklCas: r.OdemklCas == null ? null : Number(r.OdemklCas) };
 }
