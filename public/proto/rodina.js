@@ -4,7 +4,7 @@ import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fm
 const $ = (id) => document.getElementById(id);
 let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina dostane své kamery ze serveru
 let patientId = FAMILY[0];
-let src = null, panel = null, demo = false;
+let src = null, panel = null, demo = false, JA = {};
 const params = new URLSearchParams(location.search);
 // Zobrazení = podklad (plný obraz, rozostřený obraz, černé pozadí) + drátěný model přes
 // něj. Model jde zapnout k plnému i rozostřenému obrazu; na černém pozadí je vždy.
@@ -15,7 +15,7 @@ const zRezimu = REZIM[params.get('rezim')];
 let baseMode = zRezimu ? zRezimu[0] : 'full';
 // Drátěný model je výchozí (rodina si ho může vypnout); k plnému i rozostřenému obrazu jde kdykoli přidat.
 let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) !== '0';
-const viewMode = () => baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
+const viewMode = () => (sim.patient?.(patientId)?.deaktivace ? 'deaktivace' : baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode);
 let filter = 'all';
 let histStrana = 0;   // stránka deníku (po 12), při změně filtru zpět na začátek
 const seen = new Set(sim.state.notifications.map((n) => n.id));
@@ -50,6 +50,7 @@ function startSource(deviceId) {
     $('liveTag').classList.toggle('hide', s.status !== 'live');
     $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'Obraz z vaší kamery náhradní cestou přes HTTPS (bez zvuku, o pár sekund pozadu).' : 'Obraz z vaší kamery (WebRTC).')
       : s.status === 'connecting' ? 'Připojuji obraz z kamery…'
+      : sim.patient(patientId)?.deaktivace ? 'Kamera je deaktivovaná: obraz nejde nikomu, dokud ji neaktivujete.'
       : demo ? 'Ukázka bez přihlášení: náhradní scéna místo skutečné kamery.'
       : `Obraz z kamery teď nejde (${s.error || 'kamera nedostupná'}). Ukazuji náhradní scénu; poskytovatel o výpadku ví z diagnostiky.`;
   });
@@ -69,6 +70,7 @@ function setupPatients() {
 
 /** Přihlášený uživatel rodiny (nebo poskytovatel z hlavní aplikace). */
 function boot(ja) {
+  JA = ja || {};
   hideGate();
   sim.pripojit().then((ok) => { if (!ok && sim.chybaServeru) toast(`Data poskytovatele se nepodařilo načíst ze serveru: ${sim.chybaServeru}`, 'crit'); });   // po přihlášení: stav ze serveru, společný s dispečinkem
   const posk = ja.tenant ? (ja.tenant.nazev || ja.tenant.id) : '';
@@ -173,6 +175,7 @@ if (!naPlose) {
 
 /* Výběr kamery: dlaždice pod hlavičkou, jen když má rodina víc kamer (jedna kamera = nic navíc). */
 function vyberKameru(id) {
+  deaktZobrazeno = null;
   if (!FAMILY.includes(id) || id === patientId) return;
   patientId = id; $('patient').value = id; panel.select(patientId);
   nahravkyCache = { cas: 0, pocet: -1, html: '', ver: 0 }; $('nahravkySeznam').innerHTML = '';
@@ -230,6 +233,7 @@ $('filters').querySelectorAll('button').forEach((b) => { b.onclick = () => { fil
  * „Ruční nahrávka“. Bez stavu na serveru (ukázka) jen řádek v historii. */
 $('rec').onclick = async () => {
   const b = $('rec');
+  if (sim.patient(patientId)?.deaktivace) { toast('Kamera je deaktivovaná – nic se nenahrává. Nejdřív ji aktivujte.', 'crit'); return; }
   if (!sim.naServeru) { sim.emit(patientId, 'nahravka', { text: 'Ruční nahrávka 15 s (ukázka, bez serveru).' }); toast('Nahrávám 15 s…'); return; }
   b.disabled = true; toast('Nahrávám…');
   try {
@@ -242,6 +246,38 @@ $('rec').onclick = async () => {
   b.disabled = false;
 };
 $('sound').onclick = () => { const ic = $('sound').querySelector('.ic'); ic.textContent = ic.textContent === '🔇' ? '🔊' : '🔇'; };
+
+/* Deaktivace kamery rodinou: tlačítko a výrazný stav. Při deaktivaci server nedává obraz nikomu (ani rodině),
+ * nenahrává, nezapisuje události a kameru otočí do stropu; vlastní obraz tu proto zastavíme a kreslí se jen nápis. */
+let deaktZobrazeno = null;
+function kresliDeaktivaci(p) {
+  const card = $('deaktCard'); if (!card) return;
+  const ja = JA;
+  const smi = !sim.naServeru || ja.role === 'rodina';
+  const d = p.deaktivace;
+  if (d && deaktZobrazeno !== true) { deaktZobrazeno = true; src?.odpoj?.('kamera je deaktivovaná'); }
+  if (!d && deaktZobrazeno === true) { deaktZobrazeno = false; if (src) src.connect(); else startSource(patientId); }
+  if (!d && deaktZobrazeno === null) deaktZobrazeno = false;
+  card.classList.toggle('on', !!d);
+  card.classList.toggle('hide', !p.real && !d);
+  const otoceni = !d ? '' : d.otoceni === 'ok' ? 'Kamera je otočená do stropu.' : d.otoceni ? `Otočení do stropu se nepodařilo (${d.otoceni.replace(/^chyba: /, '')}) – obraz, nahrávky i události jsou přesto vypnuté.` : 'Kamera se otáčí do stropu…';
+  const html = d
+    ? `<div class="drow"><div class="dtxt"><strong>⏻ Kamera je deaktivovaná</strong><small>od ${fmtDT(d.od)}${d.kdo ? ' (' + esc(d.kdo) + ')' : ''}</small>
+        <ul><li>poskytovatel ani vy nemáte obraz</li><li>nic se nenahrává</li><li>události z kamery se nezapisují, nikdo není upozorněn</li><li>${esc(otoceni)}</li></ul></div>
+        ${smi ? `<button type="button" class="dbtn onb" id="deaktBtn" data-on="0">▶ Aktivovat kameru<small>obraz a hlídání podle nastavení</small></button>` : '<span class="small">Aktivovat ji může jen rodina.</span>'}</div>`
+    : `<div class="drow"><div class="dtxt"><strong>Kamera je aktivní</strong><small>Deaktivací přestane posílat obraz, nic se nenahrává, události se nezapisují a kamera se otočí do stropu. Kdykoli ji zase aktivujete.</small></div>
+        ${smi ? `<button type="button" class="dbtn off" id="deaktBtn" data-on="1">⏻ Deaktivovat kameru<small>bez obrazu, nahrávek a událostí</small></button>` : ''}</div>`;
+  if (setHtml(card, html)) {
+    const b = $('deaktBtn');
+    if (b) b.onclick = async () => {
+      const on = b.dataset.on === '1';
+      if (on && !confirm('Deaktivovat kameru?\n\nPoskytovatel ani vy neuvidíte obraz, nic se nenahraje, události se nezapíší a nikdo nebude upozorněn. Kamera se otočí do stropu. Aktivovat ji můžete kdykoli.')) return;
+      b.disabled = true;
+      try { await sim.deaktivace(patientId, on, ja.jmeno || 'rodina'); toast(on ? 'Kamera je deaktivovaná. Otáčí se do stropu.' : 'Kamera je aktivní, vrací se do výchozí polohy.'); }
+      catch (e) { toast(`Nepodařilo se: ${e.message}`, 'crit'); b.disabled = false; }
+    };
+  }
+}
 
 function levelClass(l) { return l === 'crit' ? 'crit' : l === 'warn' ? 'warn' : l === 'tech' ? 'tech' : 'info'; }
 
@@ -299,20 +335,21 @@ function render() {
   $('rychleHint').textContent = docasne ? `Platí do ${fmtT(docasne.until)} (střídání den/noc), nebo do další změny.` : `Platí do další změny nebo do střídání den/noc (${sim.isNight(patientId) ? 'ráno v ' + denOd : 'večer v ' + nocOd}).`;
   const open = s.events.filter((e) => e.patientId === patientId && e.state !== 'uzavřen' && KINDS[e.kind]);
   const worst = open.some((e) => KINDS[e.kind].level === 'crit') ? 'crit' : open.some((e) => KINDS[e.kind].level === 'warn') ? 'warn' : null;
-  $('pstatus').textContent = p.offline ? 'kamera nedostupná' : worst === 'crit' ? 'kritická událost' : worst === 'warn' ? 'varování' : 'klid';
-  $('pstatus').className = 'badge hide ' + (p.offline ? 'tech' : worst || 'ok');
+  $('pstatus').textContent = p.deaktivace ? 'kamera deaktivovaná' : p.offline ? 'kamera nedostupná' : worst === 'crit' ? 'kritická událost' : worst === 'warn' ? 'varování' : 'klid';
+  $('pstatus').className = 'badge hide ' + (p.deaktivace || p.offline ? 'tech' : worst || 'ok');
   $('avatar').textContent = p.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const hero = $('hero');
   const lastEv = s.events.find((e) => e.patientId === patientId && e.kind !== 'consent' && e.kind !== 'poznamka');
-  const heroKind = p.offline ? 'off' : worst || 'ok';
+  const heroKind = p.deaktivace ? 'deakt' : p.offline ? 'off' : worst || 'ok';
   hero.className = 'hero-' + heroKind;
-  $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁' }[heroKind];
-  $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
-  $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
+  $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁', deakt: '⏻' }[heroKind];
+  $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná', deakt: 'Kamera je deaktivovaná' }[heroKind];
+  $('heroS').textContent = p.deaktivace ? `Vypnuto od ${fmtDT(p.deaktivace.od)} · bez obrazu, nahrávek a událostí` : lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
+  kresliDeaktivaci(p);
   kresliKamVyber();
   $('modeTag').textContent = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
-  const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
-  setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
+  const efZdroj = { deaktivace: 'kameru jste deaktivovali', povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
+  setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.zdroj === 'deaktivace' ? 'nic, kamera je deaktivovaná' : ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
   const kontakty = describeKontakty(p);
   $('watchInfo').textContent = describeWatch(p.watch || {}) + (kontakty ? ` · upozornění poskytovatele jdou na ${kontakty}` : '');
 
@@ -374,7 +411,7 @@ function render() {
 function ptzUkaz() {
   const box = $('ptz'); if (!box) return;
   const p = sim.patient(patientId);
-  box.classList.toggle('hide', !(sim.naServeru && p && p.real));
+  box.classList.toggle('hide', !(sim.naServeru && p && p.real) || !!p.deaktivace);
 }
 $('ptz')?.querySelectorAll('[data-ptz]').forEach((b) => { b.onclick = async () => {
   const box = $('ptz'); box.classList.add('busy');

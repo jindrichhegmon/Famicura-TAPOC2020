@@ -134,6 +134,7 @@ export const sim = {
   setKlid(patientId, until) { return run('setKlid', [patientId, until]); },
   klidDo(patientId, volba) { return run('klidDo', [patientId, volba]); },
   rychle(patientId, mode) { return run('rychle', [patientId, mode]); },
+  deaktivace(patientId, on, by) { return run('deaktivace', [patientId, on, by]); },
   setNight(on) { return run('setNight', [on]); },
   reset() { return run('reset', []); },
 
@@ -217,6 +218,7 @@ export function mountAuthBanner(src) {
   check();
   src?.onChange((s) => {
     if (s.status === 'live') { hide(); return; }
+    if (s.status === 'offline' && /deaktivovan/.test(s.error || '')) { hide(); return; }   // kamera deaktivovaná rodinou: není to porucha, říká to dlaždice
     if (s.status === 'offline' && /přihlášeni/.test(s.error || '')) show('<b>Demo s reálnou kamerou:</b> přihlaste se v hlavní aplikaci (stejný prohlížeč), jinak vidíte jen náhradní scénu.', true);
     else if (s.status === 'offline') show(`<b>Obraz z kamery teď nejde:</b> ${esc(s.error || 'kamera nedostupná')} Přihlášení je v pořádku; podívejte se do Diagnostiky v hlavní aplikaci (kamera, tunel, go2rtc). Ukazuji náhradní scénu.`, false);
     else if (s.status === 'connecting' && s.path === 'https') show(`<b>Zkouším náhradní cestu HTTPS…</b> ${esc(s.error || '')}`, false);

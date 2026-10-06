@@ -25,14 +25,14 @@ const MAPA = { 'cam-linecross': 'linecross', 'cam-intrusion': 'intrusion', 'cam-
 const UDALOSTI_MAX = 400, ZADOSTI_MAX = 100;
 const ZAKAZANE = new Set(['reset']);   // ostrá data tenanta nikdo nevynuluje z prohlížeče
 // akce, jejichž první argument je kamera: musí patřit tenantovi (jinak by šlo zapsat událost cizí kameře)
-const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll']);
+const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace']);
 const json = (v) => { if (v === null || v === undefined || v === '') return null; try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 const otisk = (o) => JSON.stringify(o);
 
 /* ---------- řádky ↔ objekty stavu ---------- */
 function radekKamery(p, s) {
   return { KameraID: p.id, Nazev: p.name, Misto: p.place || '', Poznamka: p.note || '', Souhlas: p.consent, Sledovani: p.watch, Kontakty: p.kontakty || null,
-    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true };
+    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null };
 }
 function pacientZRadku(r, nazevPoskytovatele) {
   const consent = { den: 'skeleton', noc: 'skeleton', nouze: true, denOd: DEN_OD, nocOd: NOC_OD, ...(json(r.Souhlas) || {}) };
@@ -40,6 +40,7 @@ function pacientZRadku(r, nazevPoskytovatele) {
     watch: { ...defaultWatch(), ...(json(r.Sledovani) || {}) }, night: false, offline: !!r.Offline, note: r.Poznamka || '' };
   const k = json(r.Kontakty); if (k) p.kontakty = k;
   const d = json(r.Docasne); if (d) p.docasne = d;
+  const dz = json(r.Deaktivace); if (dz && dz.od) p.deaktivace = dz;
   return p;
 }
 function radekUdalosti(e, notif) {
@@ -264,6 +265,23 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
      * Rodina odemkla uzamčenou nahrávku: u události v paměti zmizí zámek a do historie jde řádek „souhlas“
      * (není to akce z prohlížeče – jde jen přes POST /api/nahravky/:id/odemknout, které ověří, že je to rodina kamery).
      */
+    /** Výsledek otočení kamery po (de)aktivaci rodinou: k deaktivaci se zapíše stav (rodina vidí, že kamera opravdu kouká do stropu), chyba jde i do historie. */
+    otoceniKamery({ kameraId, on, ok, chyba }) {
+      return serializovane(async () => {
+        await nacti();
+        const s = data.state;
+        const p = s.patients.find((x) => x.id === kameraId); if (!p) return { v: data.v };
+        if (on && p.deaktivace) p.deaktivace = { ...p.deaktivace, otoceni: ok ? 'ok' : `chyba: ${chyba || 'kamera neodpověděla'}` };
+        if (!ok) {
+          const t = now();
+          s.events.unshift({ id: 'n' + (s.seq++) + t.toString(36), at: t, patientId: kameraId, kind: 'consent', state: 'uzavřen', by: 'server',
+            text: `Kameru se nepodařilo otočit ${on ? 'do stropu' : 'do výchozí polohy'}: ${chyba || 'kamera neodpověděla'}. ${on ? 'Obraz, nahrávky a události jsou přesto vypnuté.' : ''}`.trim() });
+          if (s.events.length > 400) s.events.length = 400;
+        }
+        data.v++; await uloz();
+        return { v: data.v };
+      });
+    },
     odemknutiNahravky({ id, kameraId, cas, delkaS, kdo }) {
       return serializovane(async () => {
         await nacti();

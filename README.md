@@ -515,7 +515,8 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
    E-mail jde stejným webhookem jako SMS s `kanal: "mail"` (scénář má router:
    SMS → Twilio, e-mail → modul Microsoft 365 Email ze schránky Centrum LB);
    výsledek se zapíše k události (`upozorneni`) a dispečink ho vidí v historii.
-   Nic neodchází u události vypnuté nebo mimo hodiny (od 3.1 se skutečná
+   Nic neodchází u kamery deaktivované rodinou (od 3.2, viz CHANGELOG) ani
+   u události vypnuté nebo mimo hodiny (od 3.1 se skutečná
    událost z kamery mimo hodiny zapíše do deníku jako informační řádek
    „(mimo hlídané hodiny …)“, uzavřený, bez alertu a bez nahrávky).
 6. **Stejné přihlášení platí pro obraz a události** z hlavní aplikace: uživatel
@@ -549,7 +550,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 3.1) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.2) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

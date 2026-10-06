@@ -5,6 +5,27 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.2 · 6. 10. 2026 · rodina může kameru deaktivovat a aktivovat
+
+- **Rodina má v aplikaci tlačítko „⏻ Deaktivovat kameru“** (karta hned pod
+  stavem, s potvrzením) a u deaktivované kamery **„▶ Aktivovat kameru“**.
+  Deaktivovaná kamera: server nedá obraz nikomu (dispečink, rodina, hlavní
+  aplikace; `/api/stream*` odpoví 423), nepořizuje se žádná nahrávka (ani
+  ruční, ani po události, ani kritická s nouzovým přístupem), události
+  z kamery se nezapisují a nikdo není upozorněn, povolení plného obrazu
+  končí a otáčení kamery nejde. **Kamera se otočí do stropu** (ONVIF PTZ:
+  horní doraz) a po aktivaci zpět do výchozí polohy.
+- Rodina to pozná na první pohled: tmavý pruh „Kamera je deaktivovaná“ nahoře,
+  přes obraz nápis „⏻ KAMERA DEAKTIVOVANÁ“ a karta s výčtem, co je vypnuté,
+  včetně toho, zda se kamera opravdu otočila do stropu (výsledek otočení
+  server zapíše ke stavu, chyba jde i do historie).
+- Dispečink: dlaždice s nápisem „⏻ deaktivovaná rodinou“ a červeným rámem,
+  v detailu kdo a od kdy, bez tlačítek otáčení, Nahrát teď odmítne.
+  Deaktivaci a aktivaci může provést jen rodina (API 403 pro poskytovatele);
+  obojí je v historii („Rodina (jméno) deaktivovala kameru…“).
+- Databáze: sloupec `A_KAM_Kamera.Deaktivace` (JSON od/kdo/otoceni), server
+  si ho přidá sám při startu.
+
 ## 3.1 · 6. 10. 2026 · událost mimo hlídané hodiny jde do deníku jako informace
 
 - **Skutečná událost z kamery mimo nastavené hodiny se už nezahazuje.** Do

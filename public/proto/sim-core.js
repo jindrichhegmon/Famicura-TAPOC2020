@@ -132,6 +132,7 @@ export const RYCHLE = ['full', 'blur', 'skeleton'];
 /** Co poskytovatel vidí teď: povolení z žádosti > rychlé přepnutí rodiny > výpadek > nastavení podle denní doby. */
 export function efektivni(s, p, now = Date.now(), nocSimulovana = false) {
   if (!p) return { mode: 'none', proc: 'neznámý pacient' };
+  if (p.deaktivace) return { mode: 'none', proc: `kamera deaktivovaná rodinou od ${casText(p.deaktivace.od)} – bez obrazu, nahrávek a událostí`, zdroj: 'deaktivace', od: p.deaktivace.od };
   const g = s.grants[p.id];
   if (g && g.until > now) return { mode: g.mode, proc: grantText(g), do: g.until, zdroj: 'povoleni' };
   const r = p.docasne;
@@ -227,6 +228,13 @@ const akce = {
     const k = KINDS[kind]; if (!k) throw chyba('Neznámý druh události.');
     if (!extra || typeof extra !== 'object') extra = {};
     const p = najdi(s, patientId);
+    if (p?.deaktivace) {
+      // kamera deaktivovaná rodinou: nic se nezapisuje ani nehlásí (jen stav nedostupnosti se eviduje)
+      if (kind === 'offline') p.offline = true;
+      if (kind === 'online') p.offline = false;
+      s.lastDropped = { at: now, patientId, kind, reason: 'kamera je deaktivovaná rodinou' };
+      return { vysledek: null };
+    }
     const pw = p?.watch?.[kind];
     const real = bool(extra.real);
     // Mimo hlídané hodiny: skutečná událost z kamery se do deníku zapíše jako informační
@@ -392,6 +400,25 @@ const akce = {
     return {};
   },
   setWatching(s, now, patientId, who, on) { patientId = pid(patientId); if (bool(on)) s.watching[patientId] = { who: str(who, 80, 'who'), since: now }; else delete s.watching[patientId]; return {}; },
+  /** Deaktivace kamery rodinou: žádný obraz, nahrávky ani události, kamera se otočí do stropu (server). on=false = aktivovat. */
+  deaktivace(s, now, patientId, on, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    on = bool(on); const kdo = str(by, 80, 'by') || 'rodina';
+    if (on === !!p.deaktivace) return { zmena: false, vysledek: { patientId: p.id, on, zmena: false } };
+    if (on) {
+      p.deaktivace = { od: now, kdo };
+      delete s.grants[p.id]; delete s.watching[p.id];
+      s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina',
+        text: `Rodina (${kdo}) deaktivovala kameru: poskytovatel nemá obraz, nepořizují se nahrávky, události se nezapisují; kamera se otáčí do stropu.` });
+    } else {
+      const od = p.deaktivace.od;
+      delete p.deaktivace;
+      s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina',
+        text: `Rodina (${kdo}) aktivovala kameru (deaktivovaná byla od ${casText(od)}): obraz a hlídání opět podle nastavení; kamera se vrací do výchozí polohy.` });
+    }
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: { patientId: p.id, on, zmena: true } };
+  },
   setKlid(s, now, patientId, until) { patientId = pid(patientId); until = cas(until, 'until'); if (until) s.klid[patientId] = until; else delete s.klid[patientId]; return {}; },
   setNight(s, now, on) { s.night = bool(on); return {}; },
   /** Trvalá poznámka ke klientovi (zdravotní stav, co dělat při alertu): pod obrazem v detailu; změna se zapíše do logu. */

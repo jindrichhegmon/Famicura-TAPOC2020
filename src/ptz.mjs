@@ -7,6 +7,8 @@
 import { createOnvif } from './onvif.mjs';
 
 export const SMERY = ['left', 'right', 'up', 'down', 'home', 'stop'];
+/** Směry jen pro server (deaktivace kamery rodinou): 'strop' = horní doraz. */
+export const SMERY_SERVER = [...SMERY, 'strop'];
 
 export function createPtz({ kamery, onvif = createOnvif, now = Date.now, log = console } = {}) {
   const klienti = new Map();   // kameraId → klient ONVIF
@@ -15,7 +17,7 @@ export function createPtz({ kamery, onvif = createOnvif, now = Date.now, log = c
   return {
     /** Pohne kamerou → { ok }. 404 neznámá kamera, 409 když se právě hýbe, 502 když kamera neodpoví nebo PTZ nemá. */
     async pohni(kameraId, smer, { rychlost = 0.5, ms = 400 } = {}) {
-      if (!SMERY.includes(smer)) throw chyba('Směr: left, right, up, down, home nebo stop.', 400);
+      if (!SMERY_SERVER.includes(smer)) throw chyba('Směr: left, right, up, down, home nebo stop.', 400);
       const kam = (await kamery()).find((k) => k.id === kameraId);
       if (!kam) throw chyba('Neznámá kamera.', 404);
       if (bezi.has(kameraId)) throw chyba('Kamera se právě otáčí, chvilku počkejte.', 409);

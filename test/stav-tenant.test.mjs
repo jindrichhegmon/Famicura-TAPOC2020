@@ -334,3 +334,38 @@ test('hromadné uzavření alertů: jedné kamery nebo všech, info události a 
   assert.equal(s.events.find((e) => e.patientId === p2 && e.kind === 'fall').result, 'hromadně uzavřeno');
   assert.equal(proved(s, 'closeAll', ['', 'x', 'y'], t + 3000).vysledek.pocet, 0, 'podruhé nic');
 });
+
+test('deaktivace kamery: v jádru i po restartu – bez obrazu, událostí a nahrávek; aktivace vrátí hlídání', async () => {
+  const { seed, proved, efektivni } = await import('../public/proto/sim-core.js');
+  const { smiNahravat } = await import('../src/nahravky.mjs');
+  const t0 = Date.UTC(2026, 9, 5, 10, 0, 0);
+  const s = seed(t0);
+  const p = s.patients.find((x) => x.real) || s.patients[0];
+  proved(s, 'emergencyAccess', [p.id, 'Dispečer'], t0);
+  assert.ok(s.grants[p.id], 'nouzový přístup dal povolení');
+  const e0 = s.events.length;
+  const out = proved(s, 'deaktivace', [p.id, true, 'Eva'], t0 + 1000);
+  assert.deepEqual(out.vysledek, { patientId: p.id, on: true, zmena: true });
+  assert.equal(s.grants[p.id], undefined, 'povolení plného obrazu končí');
+  assert.equal(efektivni(s, p, t0 + 2000).mode, 'none'); assert.equal(efektivni(s, p, t0 + 2000).zdroj, 'deaktivace');
+  assert.equal(smiNahravat(s, p, 'fall', t0 + 2000).ok, false, 'ani kritická událost s nouzí se nenahrává');
+  assert.equal(proved(s, 'emit', [p.id, 'fall', { real: true }], t0 + 3000).vysledek, null);
+  assert.equal(s.lastDropped.reason, 'kamera je deaktivovaná rodinou');
+  assert.equal(s.events.length, e0 + 1, 'jen řádek o deaktivaci');
+  assert.equal(proved(s, 'deaktivace', [p.id, true, 'Eva'], t0 + 4000).vysledek.zmena, false);
+  // tenant: uloží se do A_KAM_Kamera a přežije restart
+  const tb = createMockTabulky();
+  const { s: st } = stav(tb, { t0 });
+  await st.stav();
+  await st.proved('deaktivace', ['tapoc2020', true, 'Eva']);
+  assert.match(tb.data[T].A_KAM_Kamera[0].Deaktivace, /"kdo":"Eva"/);
+  await st.otoceniKamery({ kameraId: 'tapoc2020', on: true, ok: true });
+  const { s: st2 } = stav(tb, { t0: t0 + 60000 });
+  const x = await st2.stav();
+  assert.equal(x.state.patients[0].deaktivace.kdo, 'Eva'); assert.equal(x.state.patients[0].deaktivace.otoceni, 'ok');
+  const ev = await st2.proved('emit', ['tapoc2020', 'linecross', { real: true }]);
+  assert.equal(ev.vysledek, null, 'po restartu dál nic nezapisuje');
+  await st2.proved('deaktivace', ['tapoc2020', false, 'Eva']);
+  assert.equal(tb.data[T].A_KAM_Kamera[0].Deaktivace, null);
+  assert.ok((await st2.proved('emit', ['tapoc2020', 'fall', { real: true }])).vysledek, 'po aktivaci se hlídá');
+});

@@ -43,6 +43,7 @@ const bezpecnyNazev = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g
  */
 export function smiNahravat(state, patient, kind, now = Date.now(), { skutecna = false } = {}) {
   if (!patient) return { ok: false, duvod: 'kamera není v datech poskytovatele' };
+  if (patient.deaktivace) return { ok: false, duvod: 'kamera je deaktivovaná rodinou – nenahrává se' };
   // „nedostupná“ je stav ze simulace; událost, kterou kamera právě sama nahlásila, se o to nezastaví (klip se zkusí)
   if (patient.offline && !skutecna) return { ok: false, duvod: 'kamera je nedostupná' };
   const m = efektivni(state, patient.offline ? { ...patient, offline: false } : patient, now, !!state.night).mode;

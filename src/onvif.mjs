@@ -249,7 +249,7 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
   }
 
   return {
-    /** Otáčení kamery: směr left|right|up|down (ContinuousMove rychlostí 0–1, po ms Stop), home (GotoHomePosition), stop. */
+    /** Otáčení kamery: směr left|right|up|down (ContinuousMove rychlostí 0–1, po ms Stop), home (GotoHomePosition), strop (horní doraz – deaktivace rodinou), stop. */
     async ptz(smer, { rychlost = 0.5, ms = 400 } = {}) {
       const { url, profil } = await ptzPriprav();
       const r = Math.max(0.1, Math.min(1, Number(rychlost) || 0.5));
@@ -270,6 +270,16 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
         const chyby = [];
         for (const pokus of pokusy) { try { await pokus(); return { ok: true }; } catch (e) { chyby.push(e.message); } }
         throw new OnvifError('Kamera výchozí polohu nenabízí (zkusili jsme výchozí polohu, předvolbu i střed).', chyby.join(' | '));
+      }
+      if (smer === 'strop') {
+        // Do stropu: AbsoluteMove na horní doraz (y = 1); když ho kamera nezná, ContinuousMove nahoru 8 s a Stop (na mechanickém dorazu se zastaví sama).
+        try { await soap(url, { body: `<tptz:AbsoluteMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Position><tt:PanTilt x="0" y="1"/></tptz:Position></tptz:AbsoluteMove>` }); }
+        catch {
+          await soap(url, { body: `<tptz:ContinuousMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Velocity><tt:PanTilt x="0" y="1"/></tptz:Velocity></tptz:ContinuousMove>` });
+          await new Promise((res) => setTimeout(res, 8000));
+          await soap(url, { body: `<tptz:Stop><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PanTilt>true</tptz:PanTilt><tptz:Zoom>false</tptz:Zoom></tptz:Stop>` });
+        }
+        return { ok: true };
       }
       if (smer === 'stop' || !v) { await soap(url, { body: `<tptz:Stop><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PanTilt>true</tptz:PanTilt><tptz:Zoom>true</tptz:Zoom></tptz:Stop>` }); return { ok: true }; }
       await soap(url, { body: `<tptz:ContinuousMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Velocity><tt:PanTilt x="${v[0]}" y="${v[1]}"/></tptz:Velocity></tptz:ContinuousMove>` });

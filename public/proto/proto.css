@@ -212,6 +212,12 @@ body.app .phone{max-width:460px;margin:0 auto;padding:0 12px 150px;background:#f
 #hero.hero-warn{background:var(--warnbg);border-color:#f0d9b5}#hero.hero-warn .hero-ic{background:#e0a03a}
 #hero.hero-crit{background:var(--badbg);border-color:#f1c7c7;animation:pulse 1.2s ease-in-out infinite}#hero.hero-crit .hero-ic{background:#d33}
 #hero.hero-off{background:#e8eef4;border-color:#d3dde6}#hero.hero-off .hero-ic{background:#7a8794}
+#hero.hero-deakt{background:#2b2b33;border-color:#2b2b33;color:#fff}#hero.hero-deakt .hero-ic{background:#c23b3b}#hero.hero-deakt .hero-s{color:rgba(255,255,255,.75)}
+.deakt{padding:12px 14px}.deakt .drow{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.deakt .dtxt{flex:1 1 220px;font-size:.9rem}.deakt .dtxt strong{display:block;font-size:1.02rem}.deakt .dtxt small{color:var(--muted);display:block;margin-top:2px}
+.deakt.on{background:#2b2b33;color:#fff;border-color:#2b2b33}.deakt.on .dtxt small{color:rgba(255,255,255,.75)}.deakt.on ul{margin:6px 0 0 18px;padding:0;font-size:.88rem}.deakt.on li{margin:2px 0}
+.deakt .dbtn{flex:0 0 auto;border:none;border-radius:12px;padding:12px 16px;font-weight:800;font-size:1rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:170px}
+.deakt .dbtn small{font-weight:500;font-size:.75rem;opacity:.9}.deakt .dbtn.off{background:#c23b3b;color:#fff}.deakt .dbtn.onb{background:#2d8a4e;color:#fff}.deakt .dbtn:disabled{opacity:.6;cursor:default}
+.tile.deakt .stage{outline:2px solid #c23b3b}
 .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:14px;margin:12px 0;box-shadow:0 2px 10px rgba(23,33,43,.04)}
 .card.pic{padding:10px}
 .card.pic .stage{border-radius:14px}

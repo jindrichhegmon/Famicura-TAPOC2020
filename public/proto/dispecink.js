@@ -334,10 +334,12 @@ if (rezim && ['full', 'blur', 'skeleton', 'none'].includes(rezim)) pripraveno.th
 
 /** What the tile of this patient may draw. */
 function tileMode(pid) {
+  if (sim.patient(pid)?.deaktivace) return 'deaktivace';
   const m = sim.effectiveMode(pid);
   if (m === 'offline') return 'none';
   return m;
 }
+const MODE_TAG = { none: 'bez obrazu', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz', deaktivace: '⏻ deaktivovaná rodinou' };
 /** Tlačítko drátěného modelu v detailu: stav zapnuto/vypnuto, mimo plný a rozostřený obraz nejde použít. */
 function kresliOvl(d, mode = null) {
   const b = d.querySelector('#ovl'); if (!b) return;
@@ -395,8 +397,11 @@ function renderTiles() {
   }
   box.querySelectorAll('.tile').forEach((t) => {
     const p = sim.patient(t.dataset.id); const st = statusOf(p);
-    t.className = 'tile ' + st + (selected === p.id ? ' sel' : '');
-    t.querySelector('.tag').textContent = p.offline ? 'kamera nedostupná' : { none: 'bez obrazu', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' }[tileMode(p.id)] || '';
+    // kamera deaktivovaná rodinou: obraz se odpojí (server ho stejně nedá), po aktivaci se připojí znovu
+    const z = zdroje.get(p.id);
+    if (z) { if (p.deaktivace && !z.deakt) { z.deakt = true; z.odpoj('kamera deaktivovaná rodinou'); } else if (!p.deaktivace && z.deakt) { z.deakt = false; z.connect(); } }
+    t.className = 'tile ' + st + (selected === p.id ? ' sel' : '') + (p.deaktivace ? ' deakt' : '');
+    t.querySelector('.tag').textContent = p.deaktivace ? MODE_TAG.deaktivace : p.offline ? 'kamera nedostupná' : MODE_TAG[tileMode(p.id)] || '';
     const b = t.querySelector('.st-badge'); b.textContent = { crit: 'kritické', warn: 'varování', off: 'offline', klid: 'klid' }[st]; b.className = 'badge st-badge ' + (st === 'klid' ? 'ok' : st === 'off' ? 'tech' : st);
     const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent' && e.kind !== 'poznamka');
     t.querySelector('.st').textContent = last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí';
@@ -554,8 +559,9 @@ function renderDetail(rebuild = false) {
   }
   const s = sim.state;
   const mode = tileMode(p.id);
-  d.querySelector('#dtag').textContent = { none: 'bez obrazu', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' }[mode];
-  d.querySelector('#dmode').innerHTML = `Rodina povolila: <strong>${esc(sim.modeReason(p.id))}</strong>`;
+  d.querySelector('#dtag').textContent = MODE_TAG[mode];
+  d.querySelector('#dmode').innerHTML = p.deaktivace ? `<strong>Kamera je deaktivovaná rodinou</strong> od ${fmtDT(p.deaktivace.od)} (${esc(p.deaktivace.kdo || 'rodina')}): bez obrazu, nahrávek a událostí, ${p.deaktivace.otoceni === 'ok' ? 'otočená do stropu' : p.deaktivace.otoceni ? 'otočení do stropu se nepodařilo (' + esc(p.deaktivace.otoceni) + ')' : 'otáčí se do stropu'}. Aktivovat ji může jen rodina ve své aplikaci.` : `Rodina povolila: <strong>${esc(sim.modeReason(p.id))}</strong>`;
+  d.querySelector('#dptz')?.classList.toggle('hide', !!p.deaktivace);
   kresliOvl(d, mode);
   const g = s.grants[p.id], pending = s.requests.find((r) => r.patientId === p.id && r.state === 'čeká');
   const crit = openAlerts(p.id).some((e) => KINDS[e.kind].level === 'crit');
@@ -571,7 +577,7 @@ function renderDetail(rebuild = false) {
   }
   const otevrene = openAlerts(p.id).length;
   if (otevrene) btns.push(`<button class="sm ok" id="closeAllCam" title="uzavře všechny otevřené alerty této kamery jedním výsledkem">✓ Uzavřít alerty (${otevrene})</button>`);
-  if (sim.naServeru && p.real) btns.push(`<button class="sm sec" id="recNow" ${mode === 'full' ? '' : 'disabled'} title="${mode === 'full' ? 'server uloží obraz z kamery (na server nebo Google Disk podle Nastavení)' : 'jen při plném obrazu (rodina povolila ' + ({ none: 'žádný obraz', skeleton: 'drátěný model', blur: 'rozostření' }[mode] || mode) + ')'}">🎞 Nahrát teď (${s.poskytovatel?.nahravkaS || 15} s)</button>`);
+  if (sim.naServeru && p.real) btns.push(`<button class="sm sec" id="recNow" ${mode === 'full' || mode === 'blur' || mode === 'skeleton' ? '' : 'disabled'} title="${mode === 'deaktivace' ? 'kamera je deaktivovaná rodinou – nenahrává se' : mode === 'full' ? 'server uloží obraz z kamery (na server nebo Google Disk podle Nastavení)' : mode === 'none' ? 'rodina povolila jen „žádný obraz“ – nenahrává se' : 'rodina má ' + ({ skeleton: 'drátěný model', blur: 'rozostřený obraz' }[mode] || mode) + ' – nahrávka bude uzamčená, odemkne ji rodina'}">🎞 Nahrát teď (${s.poskytovatel?.nahravkaS || 15} s)</button>`);
   const changed = setHtml(d.querySelector('#dbtn'), btns.join(' '));
   if (changed) {
     d.querySelector('#askG')?.addEventListener('click', () => { askOpen = true; renderDetail(); });

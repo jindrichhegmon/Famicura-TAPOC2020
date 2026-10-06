@@ -19,7 +19,7 @@ export const MODES = {
   full:     { label: 'Plný obraz',              short: 'plný obraz' },
   fullskel: { label: 'Plný obraz + model',      short: 'plný obraz s modelem' },
 };
-export const MODE_ORDER = ['none', 'skeleton', 'blur', 'full'];
+export const MODE_ORDER = ['none', 'skeleton', 'blur', 'full'];   // + 'deaktivace' (kamera vypnutá rodinou: jen nápis, nic se nepřipojuje)
 
 // MediaPipe body points used by the synthetic figure (the same indices as the real model).
 const P = { nose: 0, ls: 11, rs: 12, le: 13, re: 14, lw: 15, rw: 16, lh: 23, rh: 24, lk: 25, rk: 26, la: 27, ra: 28 };
@@ -200,11 +200,12 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
       const w = live ? (video.videoWidth || 640) : 640, h = live ? (video.videoHeight || 360) : 360;
       if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; t.small.width = 48; t.small.height = Math.max(24, Math.round(48 * h / w)); }
       const ctx = t.ctx;
-      if (mode === 'none') {
-        ctx.fillStyle = '#243040'; ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = `${Math.round(w / 26)}px sans-serif`; ctx.textAlign = 'center';
-        ctx.fillText('bez obrazu', w / 2, h / 2 - w / 60);
-        ctx.font = `${Math.round(w / 40)}px sans-serif`; ctx.fillText('rodina obraz nepovolila · jen události', w / 2, h / 2 + w / 32);
+      if (mode === 'none' || mode === 'deaktivace') {
+        const de = mode === 'deaktivace';
+        ctx.fillStyle = de ? '#3a2a2a' : '#243040'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `bold ${Math.round(w / (de ? 20 : 26))}px sans-serif`; ctx.textAlign = 'center';
+        ctx.fillText(de ? '⏻ KAMERA DEAKTIVOVANÁ' : 'bez obrazu', w / 2, h / 2 - w / 60);
+        ctx.font = `${Math.round(w / 40)}px sans-serif`; ctx.fillText(de ? 'rodina kameru vypnula · bez obrazu, nahrávek a událostí · otočená do stropu' : 'rodina obraz nepovolila · jen události', w / 2, h / 2 + w / 32);
         continue;
       }
       const wantSkel = mode === 'skeleton' || mode === 'blurskel' || mode === 'fullskel';
@@ -241,5 +242,7 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
     /** Synthetic scene only: force the figure's pose (standing, seated, lying) or null for its own rhythm. */
     setSyntheticPose(p) { st.syntheticPose = p; },
     stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); },
+    /** Odpojí obraz (WebRTC i HTTPS), ale dál kreslí – kamera deaktivovaná rodinou ukazuje jen nápis. connect() pak obraz zase připojí. */
+    odpoj(duvod) { clearTimeout(httpsTimer); pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); st.path = null; st.frames = 0; st.status = 'offline'; st.synthetic = true; st.error = duvod || null; notify(); },
   };
 }

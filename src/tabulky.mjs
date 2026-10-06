@@ -22,7 +22,7 @@ export const SCHEMA = {
   A_KAM_Kamera: {
     klic: ['KameraID'],
     sloupce: { KameraID: ['c', 40], Nazev: ['s', 80], Misto: ['s', 120], Poznamka: ['s', 300], Souhlas: ['s', 0], Sledovani: ['s', 0], Kontakty: ['s', 0],
-      Docasne: ['s', 0], KlidDo: ['i'], Offline: ['b'], Aktivni: ['b'], Zmeneno: ['i'] },
+      Docasne: ['s', 0], KlidDo: ['i'], Offline: ['b'], Aktivni: ['b'], Zmeneno: ['i'], Deaktivace: ['s', 0] },
   },
   A_KAM_Udalost: {
     klic: ['Id'],

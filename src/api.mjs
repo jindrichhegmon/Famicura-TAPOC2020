@@ -245,6 +245,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       const jenPoskytovatel = () => json({ ok: false, error: 'Tohle nastavuje poskytovatel.' }, 403);
       const uz = () => { if (!tenant) throw chyba('Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…', 400); return uzivatele.pro(tenant); };
       const stavTenanta = () => { if (!tenant) throw chyba('Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…', 400); return najemci.pro(tenant); };
+      // Kamera deaktivovaná rodinou: žádný obraz nikomu (ani rodině), dokud ji rodina zase neaktivuje.
+      const deaktivovana = async (id) => { if (!tenant || !najemci) return false; try { return !!(await (await stavTenanta()).stav()).state.patients.find((p) => p.id === id)?.deaktivace; } catch { return false; } };
+      const DEAKTIVOVANA = { ok: false, error: 'Kamera je deaktivovaná rodinou – bez obrazu, dokud ji rodina znovu neaktivuje.', deaktivace: true };
 
       if (m === 'GET' && path === '/api/rodina/ja') {
         const vse = await kamery();
@@ -311,6 +314,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!sdpOffer || typeof sdpOffer !== 'string' || sdpOffer.length > 100_000) {
           return json({ ok: false, error: 'Chybí SDP offer.' }, 400);
         }
+        if (await smiKameruId(deviceId) && await deaktivovana(deviceId)) return json(DEAKTIVOVANA, 423);
         // Only a stream go2rtc knows: the id goes into its URL.
         if (!(await go2rtc.streams()).includes(deviceId) || !(await smiKameruId(deviceId))) {
           console.error(`[famicura-tapo] obraz kamery ${deviceId} odmítnut: ${ja.role}${tenant ? ' ' + tenant : ''}${rodina ? ' uživatel ' + rodina.id : ''} – kamera není v go2rtc nebo nepatří tomuhle tenantovi / uživateli`);
@@ -325,6 +329,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'GET' && (path === '/api/stream.mp4' || path === '/api/stream.m3u8')) {
         const id = url.searchParams.get('deviceId') || '';
         if (!isDeviceId(id)) return json({ ok: false, error: 'Chybí nebo je neplatné deviceId.' }, 400);
+        if (await smiKameruId(id) && await deaktivovana(id)) return json(DEAKTIVOVANA, 423);
         if (!(await go2rtc.streams()).includes(id) || !(await smiKameruId(id))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         return go2rtc.proxy(`${path}?src=${encodeURIComponent(id)}&video=h264`, { signal: req.signal });
       }
@@ -368,9 +373,22 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         return json({ ok: true, v: s.v, zmena: true, state: s.state });
       }
       if (m === 'POST' && path === '/api/proto/akce') {
-        const { akce, args } = await telo(req);
+        const telo_ = await telo(req); const akce = telo_.akce; let args = telo_.args;
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
+        // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
+        if (akce === 'deaktivace') {
+          if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);
+          args = [args[0], args[1], rodina.jmeno];
+        }
         const vysledek = await (await stavTenanta()).proved(akce, args);
+        // (De)aktivace rodinou: kamera se otočí do stropu (deaktivace) nebo zpět do výchozí polohy; výsledek se zapíše ke stavu, ať rodina vidí, že kamera opravdu kouká do stropu.
+        if (akce === 'deaktivace' && vysledek.vysledek?.zmena) {
+          const { patientId: kam, on } = vysledek.vysledek;
+          const st = await stavTenanta();
+          const zapis = (ok, chyba) => st.otoceniKamery({ kameraId: kam, on, ok, chyba }).catch((e) => console.error('[famicura-tapo] zápis otočení kamery:', e.message));
+          if (!ptz) zapis(false, 'otáčení kamery není na serveru k dispozici');
+          else ptz.pohni(kam, on ? 'strop' : 'home').then(() => zapis(true), (e) => zapis(false, e.message));
+        }
         // Žádost dispečinku o plný obraz: rodině u té kamery odejde SMS, ať otevře aplikaci a rozhodne.
         if (akce === 'requestFull' && !rodina && vysledek.vysledek && typeof vysledek.vysledek === 'object') {
           const r = vysledek.vysledek;
@@ -393,6 +411,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const { kamera, smer, rychlost, ms } = await telo(req);
         if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         if (!ptz) return json({ ok: false, error: 'Otáčení kamery není na serveru k dispozici.' }, 503);
+        if (smer === 'strop') return json({ ok: false, error: 'Směr: left, right, up, down, home nebo stop.' }, 400);
+        if (await deaktivovana(kamera)) return json({ ok: false, error: 'Kamera je deaktivovaná rodinou a míří do stropu; otáčet půjde až po aktivaci.', deaktivace: true }, 423);
         await ptz.pohni(kamera, String(smer || ''), { rychlost: Number(rychlost) || 0.5, ms: Number(ms) || 400 });
         return json({ ok: true });
       }
