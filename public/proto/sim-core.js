@@ -28,6 +28,8 @@ export const KINDS = {
   online:     { label: 'Kamera opět dostupná',         level: 'tech', source: 'systém' },
   battery:    { label: 'Slabá baterie náramku',        level: 'tech', source: 'náramek' },
 };
+/** Úroveň události pro zobrazení: řádek „mimo hlídané hodiny“ je vždy informativní. */
+export const urovenUdalosti = (e) => e?.mimoHodiny ? 'info' : (KINDS[e?.kind]?.level || null);
 export const LEVEL_LABEL = { crit: 'kritická', warn: 'varování', info: 'informativní', tech: 'technická' };
 export const CONSENT = { none: 'žádný obraz (jen události)', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' };
 
@@ -81,7 +83,7 @@ export function describeKontakty(p) {
 /** Komu a jak má jít upozornění na tuhle událost; null = nikomu. */
 export const upozorneniVychozi = (kind) => KINDS[kind]?.level === 'crit';
 export function upozorneniPro(s, ev) {
-  if (!ev) return null;
+  if (!ev || ev.mimoHodiny) return null;
   const p = najdi(s, ev.patientId); if (!p) return null;
   const w = p.watch?.[ev.kind]; if (!w) return null;
   const k = kontaktyPro(p);
@@ -226,20 +228,26 @@ const akce = {
     if (!extra || typeof extra !== 'object') extra = {};
     const p = najdi(s, patientId);
     const pw = p?.watch?.[kind];
-    if (pw && (!pw.on || !withinHours(pw, new Date(now)))) {
+    const real = bool(extra.real);
+    // Mimo hlídané hodiny: skutečná událost z kamery se do deníku zapíše jako informační
+    // řádek (uzavřený, bez alertu, bez SMS/e-mailu, bez nahrávky); vypnutý druh a simulace se zahodí.
+    const mimoHodiny = !!(pw && pw.on && !withinHours(pw, new Date(now)));
+    if (pw && (!pw.on || (mimoHodiny && !real))) {
       // dropped by the provider's settings; the panel says so, the history stays clean
       s.lastDropped = { at: now, patientId, kind, reason: !pw.on ? 'poskytovatel událost vypnul' : `mimo hodiny ${oknaText(pw)}` };
       return { vysledek: null };
     }
-    const ev = { id: nid(s), at: now, patientId, kind, state: k.level === 'info' ? 'uzavřen' : 'nový', by: null, result: null, note: '', rec: !!pw?.rec };
-    const text = str(extra.text, 300, 'text'); if (text) ev.text = text;
-    if (bool(extra.real)) ev.real = true;
+    const ev = { id: nid(s), at: now, patientId, kind, state: k.level === 'info' || mimoHodiny ? 'uzavřen' : 'nový', by: null, result: null, note: '', rec: !!pw?.rec && !mimoHodiny };
+    let text = str(extra.text, 300, 'text');
+    if (mimoHodiny) { ev.mimoHodiny = true; text = `${(text || k.label).replace(/\.$/, '')} (mimo hlídané hodiny ${oknaText(pw)})`.slice(0, 300); }
+    if (text) ev.text = text;
+    if (real) ev.real = true;
     s.events.unshift(ev);
     if (s.events.length > 400) s.events.length = 400;
     if (kind === 'offline' && p) p.offline = true;
     if (kind === 'online' && p) p.offline = false;
     const quiet = s.klid[patientId] && s.klid[patientId] > now;
-    if (k.level === 'crit' || (!quiet && k.level !== 'info')) {
+    if (!mimoHodiny && (k.level === 'crit' || (!quiet && k.level !== 'info'))) {
       s.notifications.unshift({ id: nid(s), at: ev.at, patientId, eventId: ev.id, kind, level: k.level, ack: false });
       if (s.notifications.length > 100) s.notifications.length = 100;
     }

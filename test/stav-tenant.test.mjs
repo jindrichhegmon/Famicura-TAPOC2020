@@ -90,9 +90,15 @@ test('tenant: data jiného tenanta nejsou vidět, reset je zakázaný, skutečn�
   const a = stav(tb, { udalosti }), b = stav(tb, { tenant: T2, udalosti });
   await a.s.stav(); await b.s.stav();
   a.posun(1000); b.posun(1000);
-  // linecross jen 07:00–20:00 pražského času; 1_700_000_001_000 je 14. 11. 2023 23:13 → zahodí se; osoba u kam2 projde
+  // linecross jen 07:00–20:00 pražského času; 1_700_000_001_000 je 14. 11. 2023 23:13 → do deníku jen jako informační řádek; osoba u kam2 projde
   const sa = await a.s.stav(), sb = await b.s.stav();
-  assert.equal(sa.state.events.filter((e) => e.kind === 'linecross').length, 0, 'mimo hodiny');
+  const mimo = sa.state.events.filter((e) => e.kind === 'linecross');
+  assert.equal(mimo.length, 1, 'mimo hodiny se zapíše');
+  assert.equal(mimo[0].mimoHodiny, true); assert.equal(mimo[0].state, 'uzavřen'); assert.equal(mimo[0].rec, false);
+  assert.match(mimo[0].text, /překročení čáry \(mimo hlídané hodiny 07:00–20:00\)/);
+  assert.equal(sa.state.notifications.length, 0, 'bez alertu');
+  assert.equal(tb.data[T].A_KAM_Udalost.find((u) => u.Id === mimo[0].Id || u.Druh === 'linecross').Uroven, 'info', 'v databázi jako informativní');
+  assert.equal((await stav(tb, { t0: 1_700_000_002_000 }).s.stav()).state.events.find((e) => e.kind === 'linecross').mimoHodiny, true, 'po restartu zůstane informační');
   assert.equal(sb.state.events.filter((e) => e.kind === 'person').length, 1);
   assert.equal(sb.state.events[0].patientId, 'kam2');
   // všechny detekce Tapo mají v dispečinku svůj druh; vozidlo je ve výchozím nastavení vypnuté, neznámý druh z kamery do dispečinku nejde
@@ -121,6 +127,52 @@ test('tenant: upozornění po události odejde a zapíše se k události v datab
   assert.match(u.Upozorneni, /"odeslano":1/);
   const { s: s2 } = stav(tb, { t0: 1_700_000_001_000 });
   assert.deepEqual((await s2.stav()).state.events.find((e) => e.id === ev.id).upozorneni.sms, { prijemci: 1, odeslano: 1, chyba: null });
+});
+
+test('událost mimo hlídané hodiny: jen řádek v deníku – bez alertu, bez SMS a e-mailu, bez nahrávky; simulace a vypnutý druh se zahodí', async () => {
+  const { seed, proved, upozorneniPro } = await import('../public/proto/sim-core.js');
+  const praha = (h, m = 0) => Date.UTC(2026, 9, 5, h - 2, m);   // letní čas: Praha = UTC+2
+  const s = seed(praha(5));
+  const p = s.patients.find((x) => x.real) || s.patients[0];
+  proved(s, 'setKontakty', [p.id, { sms: ['602520069'], mail: [] }, 'Eva'], praha(5));
+  proved(s, 'setWatch', [p.id, 'linecross', { from: '07:00', to: '20:00', rec: true, sms: true }], praha(5));
+  const n0 = s.notifications.length, e0 = s.events.length;
+  // skutečná událost z kamery ve 03:00 → informační řádek
+  const { vysledek: ev } = proved(s, 'emit', [p.id, 'linecross', { real: true, text: 'Kamera hlásí: překročení čáry.' }], praha(3));
+  assert.ok(ev); assert.equal(ev.mimoHodiny, true); assert.equal(ev.state, 'uzavřen'); assert.equal(ev.rec, false); assert.equal(ev.real, true);
+  assert.equal(ev.text, 'Kamera hlásí: překročení čáry (mimo hlídané hodiny 07:00–20:00)');
+  assert.equal(s.events.length, e0 + 1); assert.equal(s.notifications.length, n0, 'bez alertu');
+  assert.equal(upozorneniPro(s, ev), null, 'bez SMS a e-mailu');
+  // stejná událost v hodinách → normální alert s upozorněním a nahrávkou
+  const { vysledek: ev2 } = proved(s, 'emit', [p.id, 'linecross', { real: true, text: 'Kamera hlásí: překročení čáry.' }], praha(9));
+  assert.equal(ev2.mimoHodiny, undefined); assert.equal(ev2.state, 'nový'); assert.equal(ev2.rec, true); assert.equal(s.notifications.length, n0 + 1);
+  assert.ok(upozorneniPro(s, ev2));
+  // simulovaná událost mimo hodiny se dál zahazuje; vypnutý druh se zahodí i z kamery
+  assert.equal(proved(s, 'emit', [p.id, 'linecross'], praha(3)).vysledek, null);
+  proved(s, 'setWatch', [p.id, 'linecross', { on: false }], praha(5));
+  assert.equal(proved(s, 'emit', [p.id, 'linecross', { real: true }], praha(3)).vysledek, null);
+  assert.equal(s.lastDropped.reason, 'poskytovatel událost vypnul');
+  // stav-tenant: upozornění se neposílá, nahrávka se nepořizuje, log serveru říká proč
+  const tb = createMockTabulky();
+  const posl = [];
+  const sms = { nastaveno: true, async posli(x) { posl.push(x); return { ok: true }; }, async posliMail(x) { posl.push(x); return { ok: true }; } };
+  let poridi = 0;
+  const nahravky = { async porid() { poridi++; return { id: 'n1' }; }, async zapisOdmitnuti() { return { id: 'o1' }; }, async hotove() { return []; }, async seznam() { return []; } };
+  const zpravy = [];
+  const prijate = [{ prijato: praha(3), kameraId: 'tapoc2020', kind: 'cam-linecross', text: 'Kamera hlásí: překročení čáry.' }];
+  const { s: st, posun } = stav(tb, { t0: praha(2, 59), udalosti: { nedavne: (od) => prijate.filter((e) => e.prijato > od) }, upozorni: createUpozorneni({ sms, log: ticho, odkaz: '' }), nahravky, log: { log: (...a) => zpravy.push(a.join(' ')), error() {} } });
+  await st.stav();
+  await st.proved('setKontakty', ['tapoc2020', { sms: ['602520069'], mail: [] }, 'Eva']);
+  await st.proved('setWatch', ['tapoc2020', 'linecross', { from: '07:00', to: '20:00', rec: true, sms: true }]);
+  posun(2000);
+  const x = await st.stav(); await st.hotovo();
+  const e = x.state.events.find((k) => k.kind === 'linecross');
+  assert.ok(e && e.mimoHodiny); assert.equal(posl.length, 0, 'bez SMS'); assert.equal(poridi, 0, 'bez nahrávky'); assert.equal(e.nahravka, undefined);
+  assert.ok(zpravy.some((z) => /mimo hlídané hodiny – jen zápis do deníku/.test(z)), 'log serveru');
+  // deník (log událostí) ho ukáže jako informativní bez stavu
+  const { radekLogu } = await import('../src/log-udalosti.mjs');
+  const r = radekLogu(e, 'Byt Novákovi', null);
+  assert.equal(r.uroven, 'informativní'); assert.equal(r.stav, ''); assert.match(r.text, /mimo hlídané hodiny/);
 });
 
 test('najemci: ověření tenanta přes Tenants, stav na tenanta, bez databáze chyba 503', async () => {

@@ -6,8 +6,8 @@
  * stav v tomhle prohlížeči: localStorage + BroadcastChannel mezi okny.
  * Data i akce jsou v sim-core.js, stejné pro prohlížeč i server.
  */
-import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim-core.js';
-export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail };
+import { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail, urovenUdalosti } from '/proto/sim-core.js';
+export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail, urovenUdalosti };
 
 const KEY = 'famicura.proto.v1';
 const CH = 'famicura-proto';

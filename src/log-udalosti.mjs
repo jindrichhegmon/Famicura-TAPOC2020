@@ -30,7 +30,7 @@ export function zacatekDne(iso) {
 export function konecDne(iso) { const z = zacatekDne(iso); if (z === null) return null; const dalsi = new Date(z + 36 * 3600000); const p = Object.fromEntries(casti.formatToParts(dalsi).map((x) => [x.type, x.value])); return zacatekDne(`${p.year}-${p.month}-${p.day}`) - 1; }
 
 const druh = (e) => e.kind === 'consent' ? 'souhlas / obraz' : e.kind === 'poznamka' ? 'poznámka' : (KINDS[e.kind]?.label || e.kind || '');
-const uroven = (e) => KINDS[e.kind] ? (LEVEL_LABEL[KINDS[e.kind].level] || KINDS[e.kind].level) : '';
+const uroven = (e) => e.mimoHodiny ? LEVEL_LABEL.info : KINDS[e.kind] ? (LEVEL_LABEL[KINDS[e.kind].level] || KINDS[e.kind].level) : '';
 const zdroj = (e) => e.kind === 'consent' ? (e.by || 'rodina') : e.kind === 'poznamka' ? 'dispečink' : KINDS[e.kind]?.source || '';
 const upoz = (u, k) => u?.[k]?.prijemci ? `${u[k].odeslano}/${u[k].prijemci}${u[k].chyba ? ` (${u[k].chyba})` : ''}` : '';
 
@@ -41,7 +41,7 @@ export function radekLogu(e, kameraNazev, nahravka) {
   return {
     id: e.id, cas: e.at, datum: fmtDatum.format(new Date(e.at)), casText: fmtCas.format(new Date(e.at)), kameraId: e.patientId, kamera: kameraNazev || e.patientId,
     druh: druh(e), kind: e.kind, uroven: uroven(e), zdroj: zdroj(e), text: e.kind === 'consent' || e.kind === 'poznamka' ? (e.text || '') : (e.text || ''),
-    stav: KINDS[e.kind] && KINDS[e.kind].level !== 'info' ? (e.state || '') : '', kdo: e.by || '', prevzato: e.takenAt ? fmtDT.format(new Date(e.takenAt)) : '',
+    stav: KINDS[e.kind] && KINDS[e.kind].level !== 'info' && !e.mimoHodiny ? (e.state || '') : '', kdo: e.by || '', prevzato: e.takenAt ? fmtDT.format(new Date(e.takenAt)) : '',
     uzavreno: e.closedAt ? fmtDT.format(new Date(e.closedAt)) : '', vysledek: e.result || '', poznamka: e.note || '', eskalovano: e.escalated ? 'ano' : '',
     sms: upoz(e.upozorneni, 'sms'), mail: upoz(e.upozorneni, 'mail'), nahravka: nahr, skutecna: e.real ? 'kamera' : 'simulace',
   };

@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.1 · 6. 10. 2026 · událost mimo hlídané hodiny jde do deníku jako informace
+
+- **Skutečná událost z kamery mimo nastavené hodiny se už nezahazuje.** Do
+  deníku (historie v dispečinku i u rodiny, log období, Excel) se zapíše jako
+  **informační řádek**: uzavřený, s textem „… (mimo hlídané hodiny 07:00–20:00)“,
+  v databázi `A_KAM_Udalost.Uroven = 'info'`. Nevzniká alert ve frontě, nejde
+  SMS ani e-mail, nepořizuje se nahrávka, dispečink nepípne ani neukáže
+  bublinu. V logu serveru je u ní „nenahrává se (událost mimo hlídané hodiny –
+  jen zápis do deníku)“.
+- Druh s vypnutým **Hlídat** se zahazuje dál (nic v deníku), stejně jako
+  simulovaná událost z panelu Simulace mimo hodiny (panel ukáže proč).
+
 ## 3.0 · 6. 10. 2026 · nahrávka vždy v plném obrazu, při rozostření uzamčená pro poskytovatele
 
 - **Nahrávka po události i tlačítkem Nahrát se pořizuje vždy v plném obrazu.**

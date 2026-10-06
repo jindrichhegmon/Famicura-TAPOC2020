@@ -45,13 +45,15 @@ function pacientZRadku(r, nazevPoskytovatele) {
 function radekUdalosti(e, notif) {
   return { Id: e.id, KameraID: e.patientId, Cas: e.at, Druh: e.kind, Stav: e.state || null, Kdo: e.by || null, Vysledek: e.result || null, Poznamka: e.note || null,
     Text: e.text || null, Skutecna: !!e.real, Nahravat: !!e.rec, PrevzatoCas: e.takenAt || null, UzavrenoCas: e.closedAt || null, Eskalovano: !!e.escalated,
-    Upozorneni: e.upozorneni || null, Notifikace: !!notif, Uroven: KINDS[e.kind]?.level || null, Potvrzeno: notif ? !!notif.ack : false };
+    Upozorneni: e.upozorneni || null, Notifikace: !!notif, Uroven: e.mimoHodiny ? 'info' : (KINDS[e.kind]?.level || null), Potvrzeno: notif ? !!notif.ack : false };
 }
 function udalostZRadku(r) {
   const e = { id: r.Id, at: r.Cas, patientId: r.KameraID, kind: r.Druh, state: r.Stav || 'uzavřen', by: r.Kdo, result: r.Vysledek, note: r.Poznamka || '' };
   if (r.Text) e.text = r.Text;
   if (r.Skutecna) e.real = true;
   if (r.Nahravat) e.rec = true;
+  // informační řádek z hlídané události = zapsaná mimo hlídané hodiny (Uroven 'info' u druhu, který info není)
+  if (r.Uroven === 'info' && KINDS[r.Druh] && KINDS[r.Druh].level !== 'info') e.mimoHodiny = true;
   if (r.PrevzatoCas) e.takenAt = r.PrevzatoCas;
   if (r.UzavrenoCas) e.closedAt = r.UzavrenoCas;
   if (r.Eskalovano) e.escalated = true;
@@ -192,6 +194,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     });
     // Každý krok do logu serveru (pm2 logs): proč se po události nahrávalo, nebo ne.
     const hlas = (text) => { if (log && log.log) log.log('[nahravky]', tenant, ev.patientId, `${ev.kind}:`, text); };
+    if (ev.mimoHodiny) { hlas('nenahrává se (událost mimo hlídané hodiny – jen zápis do deníku)'); return; }
     if (!ev.rec) { hlas('nenahrává se (u události není zatržené Nahrávat)'); return; }
     if (!nahravky) { hlas('nenahrává se (nahrávky nejsou na serveru nastavené)'); zapis({ chyba: 'nenahráno: nahrávky nejsou na serveru nastavené' }); return; }
     // Odmítnutí i chyba se zapíší jako řádek bez souboru (A_KAM_Nahravka), aby důvod byl vidět i po restartu serveru.

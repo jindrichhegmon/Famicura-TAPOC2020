@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -21,7 +21,7 @@ function renderHlavicka() {
 function renderSmena() {
   const h = sim.poskytovatel, s = sim.state;
   const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
-  const dnesni = s.events.filter((e) => e.at >= dnes.getTime() && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && e.kind !== 'consent');
+  const dnesni = s.events.filter((e) => e.at >= dnes.getTime() && KINDS[e.kind] && urovenUdalosti(e) !== 'info' && e.kind !== 'consent');
   const prevzate = dnesni.filter((e) => e.takenAt);
   const prum = prevzate.length ? Math.round(prevzate.reduce((a, e) => a + (e.takenAt - e.at), 0) / prevzate.length / 1000) : null;
   const uzavrene = dnesni.filter((e) => e.state === 'uzavřen' && e.result);
@@ -675,7 +675,7 @@ function renderHistorie(d, p, s) {
   if (dlog && dlog.radky) {
     setHtml(d.querySelector('#dhist'), dlog.radky.filter(filtrRadku).slice(0, 500).map((r) => {
       const k = KINDS[r.kind];
-      const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : r.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
+      const badge = k ? `<span class="badge ${urovenUdalosti(r)}">${esc(k.source)}</span> ` : r.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
       const kam = dlog.vse ? ` <span class="muted">· ${esc(r.kamera)}</span>` : '';
       const dalsi = [r.stav && r.stav !== 'uzavřen' ? `<em>${esc(r.stav)}</em>` : '', r.vysledek ? esc(r.vysledek) : '', r.sms ? `📱 ${esc(r.sms)}` : '', r.mail ? `✉ ${esc(r.mail)}` : '', r.nahravka ? `🎞 ${esc(r.nahravka)}` : ''].filter(Boolean).join(' · ');
       return `<li><span class="when">${esc(r.datum)} ${esc(r.casText.slice(0, 5))}</span><span class="grow">${badge}${esc(r.text || r.druh)}${kam}${dalsi ? ` · <span class="muted">${dalsi}</span>` : ''}</span></li>`;
@@ -687,7 +687,7 @@ function renderHistorie(d, p, s) {
   setHtml(d.querySelector('#dhist'), zive.map((e) => {
     const k = KINDS[e.kind];
     const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? (e.nahravka.zamek ? ` <a href="#dnahravky" class="muted" title="pořízeno při rozostřeném obrazu rodiny; přehrát půjde, až ji rodina odemkne">🔒 nahrávka uzamčena</a>` : ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}${e.nahravka.odemklKdo ? ', odemkla rodina' : ''} – přehrát v sekci Nahrávky">🎞 nahrávka</a>`) : ` <span class="muted" title="${esc(e.nahravka.chyba || '')}">🎞 ${esc((e.nahravka.chyba || (e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky')).slice(0, 60))}</span>`) : '';
-    const badge = k ? `<span class="badge ${k.level}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
+    const badge = k ? `<span class="badge ${urovenUdalosti(e)}">${esc(k.source)}</span> ` : e.kind === 'poznamka' ? `<span class="badge note">poznámka</span> ` : '<span class="badge">souhlas</span> ';
     const u = e.upozorneni;
     const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';
     const chyba = u && (u.sms?.chyba || u.mail?.chyba);
@@ -777,7 +777,7 @@ sim.subscribe((s, info) => {
     if (seen.has(e.id)) continue; seen.add(e.id);
     // celý stav odjinud (první načtení ze serveru): staré události nehlásit
     if (info?.nahrazeno) continue;
-    const k = KINDS[e.kind]; if (!k || k.level === 'info' || !visible(sim.patient(e.patientId) || {})) continue;
+    const k = KINDS[e.kind]; if (!k || urovenUdalosti(e) === 'info' || !visible(sim.patient(e.patientId) || {})) continue;
     if (k.level === 'crit') { beep(); toast(`🚨 ${sim.patient(e.patientId)?.name}: ${k.label}`, 'crit', () => { selected = e.patientId; renderDetail(true); renderTiles(); }); }
     else toast(`${sim.patient(e.patientId)?.name}: ${k.label}`);
   }
