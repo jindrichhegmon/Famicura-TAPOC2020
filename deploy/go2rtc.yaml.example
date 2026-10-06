@@ -9,9 +9,10 @@ api:
   listen: "127.0.0.1:1984"
 
 # Vlastní servery go2rtc jsou vypnuté: RTSP by vydal obraz komukoli, kdo zná
-# adresu, a nešifrovaně.
+# adresu, a nešifrovaně. Výjimka: RTSP jen na localhostu, přes něj go2rtc bere
+# obraz od záložního zdroje ffmpeg (kamery, které odmítají ověření go2rtc).
 rtsp:
-  listen: ""
+  listen: "127.0.0.1:8554"
 rtmp:
   listen: ""
 srtp:

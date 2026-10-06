@@ -70,8 +70,11 @@ export function cameraNamesLine(kamery) {
 
 export function go2rtcYaml(kamery, { publicIp = '95.216.201.2' } = {}) {
   if (!IPV4.test(publicIp)) throw new Error('PUBLIC_IP musí být IPv4 adresa VPS.');
+  // Dva zdroje na kameru: vlastní RTSP klient go2rtc, a když selže (např. Tapo C220 s firmwarem 1.3.x
+  // odmítá jeho ověření Digest hláškou „wrong user/pass“), ffmpeg – ten ověřuje jako VLC a go2rtc od něj
+  // bere obraz beze změny (#video=copy#audio=copy) přes vlastní RTSP server jen na localhostu.
   const streams = kamery.length
-    ? 'streams:\n' + kamery.map((k) => `  ${k.id}:\n    - "${rtspUrl(k)}"`).join('\n')
+    ? 'streams:\n' + kamery.map((k) => `  ${k.id}:\n    - "${rtspUrl(k)}"\n    - "ffmpeg:${rtspUrl(k)}#video=copy#audio=copy"`).join('\n')
     : 'streams: {}  # zatím žádná kamera – ./deploy/vps-kamera.sh';
   return `# VYGENEROVÁNO scripts/set-camera.mjs z cameras.json – needitovat ručně.
 # Šablona s vysvětlivkami: deploy/go2rtc.yaml.example
@@ -79,7 +82,7 @@ export function go2rtcYaml(kamery, { publicIp = '95.216.201.2' } = {}) {
 api:
   listen: "127.0.0.1:1984"
 rtsp:
-  listen: ""
+  listen: "127.0.0.1:8554"   # jen pro zdroj ffmpeg (localhost), zvenku nedostupné
 rtmp:
   listen: ""
 srtp:

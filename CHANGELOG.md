@@ -22,6 +22,13 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   „uzamčená – odemkne rodina“ / „odemkla rodina (jméno)“.
 - Rodina: u nahrávky „🔒 nahrávka uzamčena · poskytovatel ji neuvidí, dokud ji
   neodemknete“ a tlačítko Odemknout (s potvrzením); v historii 🔒 u odkazu.
+- **Záložní zdroj obrazu přes ffmpeg** (`src/kamery.mjs` → `go2rtc.yaml`): u každé
+  kamery jsou dva zdroje, vlastní RTSP klient go2rtc a za ním
+  `ffmpeg:rtsp://…#video=copy#audio=copy`. Tapo C220 s firmwarem 1.3.1 odmítá
+  ověření go2rtc („wrong user/pass“), ffmpeg ověřuje jako VLC a go2rtc od něj
+  bere obraz beze změny přes vlastní RTSP server jen na localhostu
+  (`rtsp.listen: 127.0.0.1:8554`). Ověřeno: při selhání prvního zdroje go2rtc
+  obraz vezme z druhého. Vyžaduje ffmpeg na VPS (od 2.7 už je).
 - **Drátěný model z nahrávek (2.8–2.9) je zrušen**: pryč je `src/kostra.mjs`,
   pomocný proces, model MoveNet i balíky TensorFlow (`npm install` je
   o stovky MB menší), `KOSTRA_*` v `.env` a `kostra` v `/api/health`. Starší

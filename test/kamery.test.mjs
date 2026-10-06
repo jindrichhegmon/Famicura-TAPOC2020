@@ -44,9 +44,10 @@ test('heslo se zvláštními znaky se v adrese zakóduje a nic nerozbije', () =>
 test('go2rtc.yaml: API jen na localhostu, vlastní servery vypnuté, kandidát je IP VPS', () => {
   const y = go2rtcYaml([normalizeCamera(ok).kamera]);
   assert.match(y, /api:\n  listen: "127\.0\.0\.1:1984"/);
-  for (const s of ['rtsp', 'rtmp', 'srtp']) assert.match(y, new RegExp(`${s}:\\n  listen: ""`));
+  for (const s of ['rtmp', 'srtp']) assert.match(y, new RegExp(`${s}:\\n  listen: ""`));
+  assert.match(y, /rtsp:\n  listen: "127\.0\.0\.1:8554"/, 'RTSP server go2rtc jen na localhostu (zdroj ffmpeg)');
   assert.match(y, /webrtc:\n  listen: ":8555"\n  candidates:\n    - 95\.216\.201\.2:8555/);
-  assert.match(y, /streams:\n  tapoc2020:\n    - "rtsp:\/\/famicura:tajne@192\.168\.1\.50:554\/stream1"/);
+  assert.match(y, /streams:\n  tapoc2020:\n    - "rtsp:\/\/famicura:tajne@192\.168\.1\.50:554\/stream1"\n    - "ffmpeg:rtsp:\/\/famicura:tajne@192\.168\.1\.50:554\/stream1#video=copy#audio=copy"/, 'záložní zdroj přes ffmpeg');
 });
 
 test('go2rtc.yaml bez kamer je platný a řekne, co dál', () => {
