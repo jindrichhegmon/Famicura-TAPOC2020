@@ -25,6 +25,12 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   obojí je v historii („Rodina (jméno) deaktivovala kameru…“).
 - Databáze: sloupec `A_KAM_Kamera.Deaktivace` (JSON od/kdo/otoceni), server
   si ho přidá sám při startu.
+- **Obraz náhradní cestou HTTPS se drží u živého bodu.** Přehrávač v rodině
+  i dispečinku (`public/proto/zdroj.js`) hlídá náskok vyrovnávací paměti:
+  nad 2 s hraje rychleji, nad 5 s skočí na konec, po návratu z pozadí
+  telefonu se připojí znovu. Dřív mohl obraz přes HTTPS zůstat desítky sekund
+  pozadu a kamera pak vypadala „jinak otočená“ než v dispečinku (WebRTC
+  živě). Pod obrazem je vidět, kterou cestou obraz jde a kolik je pozadu.
 
 ## 3.1 · 6. 10. 2026 · událost mimo hlídané hodiny jde do deníku jako informace
 

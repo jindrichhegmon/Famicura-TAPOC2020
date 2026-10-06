@@ -304,7 +304,7 @@ pripraveno.then((ok) => {
   srcHlavni = zdrojPro(prvniKamera());
   window.__zdroj = srcHlavni;
   mountAuthBanner(srcHlavni);
-  srcHlavni.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'obraz: skutečná kamera (HTTPS)' : 'obraz: skutečná kamera') : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
+  srcHlavni.onChange((s) => { $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? `obraz: skutečná kamera (HTTPS${s.zpozdeni > 1 ? ', ' + s.zpozdeni + ' s pozadu' : ''})` : 'obraz: skutečná kamera (živě)') : s.status === 'connecting' ? 'obraz: připojuji…' : 'obraz: náhradní scéna'; });
   if (!sim.naServeru) sim.startRealEvents(prvniKamera());
 });
 /* Přepínač zdroje: „Jen skutečné kamery“ ukáže jen kamery připojené k serveru

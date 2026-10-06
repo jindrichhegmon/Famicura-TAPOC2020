@@ -76,7 +76,7 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
   video.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:-10px;top:-10px';
   document.body.appendChild(video);
 
-  const st = { status: 'idle', error: null, landmarks: null, landmarksSynthetic: false, poseState: 'none', synthetic: true, syntheticPose: null, frames: 0, path: null, auth: null };
+  const st = { status: 'idle', error: null, landmarks: null, landmarksSynthetic: false, poseState: 'none', synthetic: true, syntheticPose: null, frames: 0, path: null, auth: null, zpozdeni: 0 };
   const tiles = new Set();          // { canvas, ctx, small, sctx, getMode }
   const listeners = new Set();
   let pc = null, landmarker = null, connections = SYN_CONNECTIONS, poseTried = false, lastDetect = 0, raf = null;
@@ -94,11 +94,36 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
    * or HLS (Safari). Video only, a few seconds behind, but it passes every
    * network that lets the page itself through.
    */
-  let httpsTimer = null;
+  let httpsTimer = null, lagTimer = null, skryto = 0;
+  /* Živý MP4 v <video> se nedotahuje sám: po zdržení sítě nebo po návratu z pozadí (telefon) by obraz zůstal
+   * desítky sekund pozadu a kamera by „byla jinak otočená“ než v dispečinku. Hlídá se tedy náskok vyrovnávací
+   * paměti: nad 2 s hraje rychleji, nad 5 s skočí k živému bodu; st.zpozdeni říká stránce, kolik to teď je. */
+  function hlidejZpozdeni() {
+    clearInterval(lagTimer);
+    lagTimer = setInterval(() => {
+      if (st.path !== 'https') { clearInterval(lagTimer); lagTimer = null; return; }
+      try {
+        if (video.paused && st.status === 'live') video.play().catch(() => {});
+        if (!video.buffered.length) return;
+        const konec = video.buffered.end(video.buffered.length - 1), lag = konec - video.currentTime;
+        if (lag > 5) { video.currentTime = Math.max(0, konec - 0.8); video.playbackRate = 1; }
+        else video.playbackRate = lag > 2 ? 1.15 : 1;
+        const z = Math.max(0, Math.round(Math.min(lag, 5)));
+        if (z !== st.zpozdeni) { st.zpozdeni = z; notify(); }
+      } catch { /* video bez dat */ }
+    }, 1000);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { skryto = Date.now(); return; }
+    // po delší době v pozadí HTTPS obraz znovu od živého bodu (spojení mohlo mezitím zemřít)
+    if (st.path === 'https' && skryto && Date.now() - skryto > 15000) { st.path = null; startHttps(null); }
+    skryto = 0;
+  });
   function startHttps(reason) {
     if (st.path === 'https') return;
     pc?.close(); pc = null;
-    st.path = 'https'; st.status = 'connecting'; st.error = reason || null; st.frames = 0; notify();
+    st.path = 'https'; st.status = 'connecting'; st.error = reason || null; st.frames = 0; st.zpozdeni = 0; notify();
+    hlidejZpozdeni();
     const hls = navigator.vendor === 'Apple Computer, Inc.';
     video.srcObject = null;
     video.src = `/api/stream.${hls ? 'm3u8' : 'mp4'}?deviceId=${encodeURIComponent(deviceId)}&t=${Date.now()}`;
@@ -241,8 +266,8 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
     onChange(f) { listeners.add(f); f(st); return () => listeners.delete(f); },
     /** Synthetic scene only: force the figure's pose (standing, seated, lying) or null for its own rhythm. */
     setSyntheticPose(p) { st.syntheticPose = p; },
-    stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); },
+    stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; clearInterval(lagTimer); lagTimer = null; pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); },
     /** Odpojí obraz (WebRTC i HTTPS), ale dál kreslí – kamera deaktivovaná rodinou ukazuje jen nápis. connect() pak obraz zase připojí. */
-    odpoj(duvod) { clearTimeout(httpsTimer); pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); st.path = null; st.frames = 0; st.status = 'offline'; st.synthetic = true; st.error = duvod || null; notify(); },
+    odpoj(duvod) { clearTimeout(httpsTimer); clearInterval(lagTimer); lagTimer = null; pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); st.path = null; st.frames = 0; st.status = 'offline'; st.synthetic = true; st.error = duvod || null; notify(); },
   };
 }

@@ -48,7 +48,7 @@ function startSource(deviceId) {
   src.connect();
   src.onChange((s) => {
     $('liveTag').classList.toggle('hide', s.status !== 'live');
-    $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? 'Obraz z vaší kamery náhradní cestou přes HTTPS (bez zvuku, o pár sekund pozadu).' : 'Obraz z vaší kamery (WebRTC).')
+    $('srcNote').textContent = s.status === 'live' ? (s.path === 'https' ? `Obraz z vaší kamery náhradní cestou přes HTTPS (bez zvuku, ${s.zpozdeni > 1 ? 'asi ' + s.zpozdeni + ' s' : 'o pár sekund'} pozadu – stejný záběr jako dispečink uvidíte s tímto zpožděním).` : 'Obraz z vaší kamery (WebRTC, živě).')
       : s.status === 'connecting' ? 'Připojuji obraz z kamery…'
       : sim.patient(patientId)?.deaktivace ? 'Kamera je deaktivovaná: obraz nejde nikomu, dokud ji neaktivujete.'
       : demo ? 'Ukázka bez přihlášení: náhradní scéna místo skutečné kamery.'
