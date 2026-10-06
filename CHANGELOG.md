@@ -22,6 +22,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   „uzamčená – odemkne rodina“ / „odemkla rodina (jméno)“.
 - Rodina: u nahrávky „🔒 nahrávka uzamčena · poskytovatel ji neuvidí, dokud ji
   neodemknete“ a tlačítko Odemknout (s potvrzením); v historii 🔒 u odkazu.
+- **Rodina: výběr kamery dlaždicemi pod hlavičkou** (jen když má rodina víc
+  kamer): název, místo a stav (v pořádku / otevřené alerty / nedostupná).
+  Přepnutí vymění obraz, deník, nahrávky i nastavení na vybranou kameru
+  (dřív rozbalovací seznam v hlavičce vyměnil jen texty, obraz zůstal
+  z první kamery).
 - **Jeden člen rodiny u více kamer:** když v dispečinku u další kamery zadáte
   telefon, který už účet má, kamera se k účtu přidá (žádná nová pozvánka,
   stejné heslo; v aplikaci rodiny přibude přepínač kamer). „Odebrat“ u kamery

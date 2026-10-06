@@ -62,8 +62,8 @@ function setupPatients() {
   const seSimulaci = demo || params.get('simulace') === '1';
   panel = seSimulaci ? mountPanel({ role: 'rodina', patientIds: FAMILY, onPatient: (id) => { patientId = id; render(); } }) : { select() {}, patient: () => patientId, refresh() {} };
   $('patient').innerHTML = FAMILY.map((id) => `<option value="${id}">${esc(sim.patient(id).name)}</option>`).join('');
-  $('patient').classList.toggle('hide', FAMILY.length < 2);
-  $('patient').onchange = () => { patientId = $('patient').value; panel.select(patientId); render(); };
+  $('patient').onchange = () => { vyberKameru($('patient').value); };
+  kresliKamVyber();
   render();
 }
 
@@ -171,6 +171,30 @@ if (!naPlose) {
 }
 
 
+/* Výběr kamery: dlaždice pod hlavičkou, jen když má rodina víc kamer (jedna kamera = nic navíc). */
+function vyberKameru(id) {
+  if (!FAMILY.includes(id) || id === patientId) return;
+  patientId = id; $('patient').value = id; panel.select(patientId);
+  nahravkyCache = { cas: 0, pocet: -1, html: '', ver: 0 }; $('nahravkySeznam').innerHTML = '';
+  histStrana = 0;   // deník i nahrávky jsou jen vybrané kamery, stránkování od začátku
+  // obraz: odpojit kameru, která běžela, a připojit vybranou (texty i obraz patří k téže kameře)
+  if (src) { try { src.stop(); src.video?.remove(); } catch { /* nic */ } }
+  startSource(id);
+  render(); kresliKamVyber();
+}
+function kresliKamVyber() {
+  const box = $('kamVyber');
+  box.classList.toggle('hide', FAMILY.length < 2);
+  if (FAMILY.length < 2) { box.innerHTML = ''; return; }
+  const html = FAMILY.map((id) => { const p = sim.patient(id); if (!p) return '';
+    const open = sim.state.events.filter((e) => e.patientId === id && e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info');
+    const krit = open.some((e) => KINDS[e.kind].level === 'crit');
+    const stav = p.offline ? '<span class="st off">nedostupná</span>' : open.length ? `<span class="st ${krit ? 'crit' : 'warn'}">${open.length} ${open.length === 1 ? 'otevřený alert' : open.length < 5 ? 'otevřené alerty' : 'otevřených alertů'}</span>` : '<span class="st ok">v pořádku</span>';
+    return `<button type="button" role="tab" data-kam="${esc(id)}" aria-pressed="${id === patientId}"><span class="ic">📷</span><span class="nm">${esc(p.name)}</span>${p.place ? `<span class="pl">${esc(p.place)}</span>` : ''}${stav}</button>`; }).join('');
+  if (box.dataset.html === html) return;   // překreslit jen při změně (stav alertů, vybraná kamera)
+  box.dataset.html = html; box.innerHTML = html;
+  box.querySelectorAll('[data-kam]').forEach((b) => { b.onclick = () => vyberKameru(b.dataset.kam); });
+}
 function renderModes() {
   $('modes').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === baseMode)));
   const sw = $('skelSw');
@@ -285,6 +309,7 @@ function render() {
   $('heroIc').textContent = { ok: '✓', warn: '!', crit: '!', off: '⌁' }[heroKind];
   $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná' }[heroKind];
   $('heroS').textContent = lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
+  kresliKamVyber();
   $('modeTag').textContent = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
   const efZdroj = { povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
   setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);

@@ -57,8 +57,10 @@
         <div class="s"><span id="whoami">Rodina</span> <span class="verze" data-verze></span></div>
       </div>
     </div>
-    <select id="patient" class="pill" aria-label="Pacient"></select>
+    <select id="patient" class="pill hide" aria-label="Pacient"></select>
   </header>
+  <!-- výběr kamery: samostatné dlaždice hned pod hlavičkou (jen když má rodina víc kamer) -->
+  <div class="kamvyber hide" id="kamVyber" role="tablist" aria-label="Kamery"></div>
 
   <div class="zadost hide" id="zadost" role="alertdialog" aria-live="assertive">
     <div class="zadostcard">
