@@ -102,3 +102,19 @@ test('text SMS je krátký a nese odkaz', () => {
   assert.ok(/prihlasite telefonem a heslem/.test(t), 'co dělat při dalším klepnutí');
   assert.ok(!/[ěščřžýáíéúůťďňĚŠČŘŽÝÁÍÉÚŮŤĎŇ]/.test(t), 'bez diakritiky (dělení SMS po 153 znacích místo 67)');
 });
+
+test('druhá kamera téhož člověka: podle telefonu se účtu kamera přidá, odebrání jedné kamery účet nechá, poslední ho smaže', async () => {
+  const tb = createMockTabulky();
+  const u = createUzivatele(tb).pro(T);
+  const { uzivatel } = await u.vytvor({ jmeno: 'Eva', telefon: '777 123 456', kamery: ['tapoc2020'] });
+  assert.equal((await u.podleTelefonu('+420777123456')).id, uzivatel.id);
+  assert.equal(await u.podleTelefonu('777999999'), null);
+  const p = await u.pridejKameru(uzivatel.id, 'famicura001');
+  assert.deepEqual(p.kamery, ['tapoc2020', 'famicura001']);
+  assert.deepEqual((await u.pridejKameru(uzivatel.id, 'famicura001')).kamery, ['tapoc2020', 'famicura001'], 'podruhé se nezdvojí');
+  await assert.rejects(u.pridejKameru(uzivatel.id, '../x'), /Neplatné ID/);
+  const o1 = await u.odeberKameru(uzivatel.id, 'tapoc2020');
+  assert.equal(o1.smazan, false); assert.deepEqual(o1.uzivatel.kamery, ['famicura001']);
+  const o2 = await u.odeberKameru(uzivatel.id, 'famicura001');
+  assert.equal(o2.smazan, true); assert.equal(await u.podleTelefonu('777123456'), null, 'bez poslední kamery účet zmizí');
+});

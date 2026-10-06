@@ -37,9 +37,10 @@
  *
  * Rodina (aplikace rodiny, src/uzivatele.mjs, tabulka tenanta):
  *   GET    /api/rodina/uzivatele                 seznam (poskytovatel)
- *   POST   /api/rodina/uzivatele                 { jmeno, telefon, kamery, poslatSms } → pozvánka (poskytovatel)
+ *   POST   /api/rodina/uzivatele                 { jmeno, telefon, kamery, poslatSms } → pozvánka (poskytovatel);
+ *                                                telefon, který už účet má → kamery se k němu přidají ({ pridano: true }, bez nové pozvánky)
  *   POST   /api/rodina/uzivatele/:id/pozvanka    { poslatSms } nová pozvánka = nové heslo (poskytovatel)
- *   DELETE /api/rodina/uzivatele/:id             (poskytovatel)
+ *   DELETE /api/rodina/uzivatele/:id[?kamera=ID]  (poskytovatel); s ?kamera= jen odebere tu kameru, účet smaže až bez poslední
  *   GET    /api/rodina/pozvanka?token=  platí ještě pozvánka? { platna, jmeno }
  *   POST   /api/rodina/aktivace   { token, heslo } odkaz z SMS → heslo → přihlášen
  *   POST   /api/rodina/login      { telefon, heslo } → cookie na 30 dní
@@ -278,13 +279,23 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         // jen kamery tenanta: účet rodiny u cizí kamery by jí otevřel cizí obraz
         const moje = (await kamery()).filter(smiKameru).map((c) => c.id);
         if (Array.isArray(k) && k.some((id) => !moje.includes(id))) return json({ ok: false, error: 'Kamera nepatří tomuto poskytovateli.' }, 403);
+        // stejný člověk u další kamery: telefon už účet má → kamery se k němu přidají, heslo i pozvánka zůstávají
+        const stavajici = await uz().podleTelefonu(telefon);
+        if (stavajici && Array.isArray(k) && k.length) {
+          let u = stavajici; for (const id of k) u = await uz().pridejKameru(stavajici.id, id);
+          return json({ ok: true, pridano: true, uzivatel: u, smsNastaveno: sms.nastaveno });
+        }
         return pozvanka(await uz().vytvor({ jmeno, telefon, kamery: k }), !!poslatSms);
       }
       const mu = path.match(/^\/api\/rodina\/uzivatele\/([a-z0-9]{1,40})(\/pozvanka)?$/);
       if (mu) {
         if (rodina) return jenPoskytovatel();
         if (mu[2] && m === 'POST') { const { poslatSms } = await telo(req).catch(() => ({})); return pozvanka(await uz().novaPozvanka(mu[1]), !!poslatSms); }
-        if (!mu[2] && m === 'DELETE') { await uz().smaz(mu[1]); return json({ ok: true }); }
+        if (!mu[2] && m === 'DELETE') {
+          const kam = url.searchParams.get('kamera') || '';
+          if (kam) { if (!isDeviceId(kam)) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400); const r = await uz().odeberKameru(mu[1], kam); return json({ ok: true, smazan: r.smazan, uzivatel: r.uzivatel }); }
+          await uz().smaz(mu[1]); return json({ ok: true, smazan: true });
+        }
         return json({ ok: false, error: 'Neznámá adresa.' }, 404);
       }
 

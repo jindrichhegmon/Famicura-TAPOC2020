@@ -22,6 +22,11 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   „uzamčená – odemkne rodina“ / „odemkla rodina (jméno)“.
 - Rodina: u nahrávky „🔒 nahrávka uzamčena · poskytovatel ji neuvidí, dokud ji
   neodemknete“ a tlačítko Odemknout (s potvrzením); v historii 🔒 u odkazu.
+- **Jeden člen rodiny u více kamer:** když v dispečinku u další kamery zadáte
+  telefon, který už účet má, kamera se k účtu přidá (žádná nová pozvánka,
+  stejné heslo; v aplikaci rodiny přibude přepínač kamer). „Odebrat“ u kamery
+  odebere jen tu kameru, účet zmizí až s poslední (`DELETE …?kamera=ID`).
+  V seznamu uživatelů je u účtu vidět, které další kamery má.
 - **Záložní zdroj obrazu přes ffmpeg** (`src/kamery.mjs` → `go2rtc.yaml`): u každé
   kamery jsou dva zdroje, vlastní RTSP klient go2rtc a za ním
   `ffmpeg:rtsp://…#video=copy#audio=copy`. Tapo C220 s firmwarem 1.3.1 odmítá

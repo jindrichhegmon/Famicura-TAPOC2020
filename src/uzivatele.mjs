@@ -90,7 +90,7 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
         const p = pozvankaPro();
         const r = { Id: id, Jmeno: j, Telefon: tel, HesloHash: null, Kamery: [...new Set(k)], PozvankaHash: p.PozvankaHash, PozvankaDo: p.PozvankaDo, Vytvoren: now(), PosledniPrihlaseni: null };
         await tabulky.vloz(t, TAB, r);
-        return { uzivatel: verejne(r), token: p.token };
+        return { uzivatel: verejne({ ...r, Kamery: JSON.stringify(r.Kamery) }), token: p.token };
       },
       /** Nová pozvánka = nové heslo: staré přestane platit, uživatel si zvolí jiné. */
       async novaPozvanka(id) {
@@ -110,6 +110,31 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
       },
       async smaz(id) {
         if (!(await tabulky.smaz(t, TAB, { Id: String(id) }))) throw chyba('Uživatel neexistuje.', 404);
+      },
+      /** Účet podle telefonu (stejný člověk u další kamery), nebo null. */
+      async podleTelefonu(telefon) {
+        const tel = normalizeTelefon(telefon); if (!tel) return null;
+        const r = (await tabulky.vyber(t, TAB, { kde: { Telefon: tel }, limit: 1 }))[0];
+        return r ? verejne(r) : null;
+      },
+      /** Přidá účtu další kameru (druhá kamera téhož člověka): heslo i pozvánka zůstávají. */
+      async pridejKameru(id, kameraId) {
+        if (!isDeviceId(kameraId)) throw chyba('Neplatné ID kamery.');
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        if (!r) throw chyba('Uživatel neexistuje.', 404);
+        const k = [...new Set([...kameryZ(r.Kamery), String(kameraId)])];
+        if (k.length > 10) throw chyba('Uživatel může mít nejvýš 10 kamer.');
+        await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k });
+        return verejne({ ...r, Kamery: JSON.stringify(k) });
+      },
+      /** Odebere účtu jednu kameru; když to byla poslední, účet smaže. → { smazan, uzivatel } */
+      async odeberKameru(id, kameraId) {
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        if (!r) throw chyba('Uživatel neexistuje.', 404);
+        const k = kameryZ(r.Kamery).filter((x) => x !== String(kameraId));
+        if (!k.length) { await tabulky.smaz(t, TAB, { Id: r.Id }); return { smazan: true, uzivatel: null }; }
+        await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k });
+        return { smazan: false, uzivatel: verejne({ ...r, Kamery: JSON.stringify(k) }) };
       },
     };
   }

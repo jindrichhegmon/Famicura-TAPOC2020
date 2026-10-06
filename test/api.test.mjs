@@ -405,7 +405,7 @@ test('obraz přes HTTPS: jen známá kamera, jen obraz, díly HLS jen podle id',
 const setCookie = (r) => (r.headers.get('set-cookie') || '').split(';')[0];
 
 test('rodina: poskytovatel založí uživatele, dostane odkaz a text SMS; bez SMS webhooku se SMS neodešle', async () => {
-  const { h, tabulky } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
+  const { h, tabulky } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }), kameryTenanty: async () => [{ id: 'tapoc2020', name: 'TAPO Test', tenant: T, place: '' }, { id: 'druha', name: 'Druhá', tenant: T, place: '' }, { id: 'cizi', name: 'Cizí kamera', tenant: T2, place: '' }] });
   const r = await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr Novák', telefon: '777 123 456', kamery: ['tapoc2020'], poslatSms: true } }));
   assert.equal(r.status, 200);
   const b = await r.json();
@@ -419,6 +419,14 @@ test('rodina: poskytovatel založí uživatele, dostane odkaz a text SMS; bez SM
   const list = await (await h(req('GET', '/api/rodina/uzivatele', { cookies: cookie() }))).json();
   assert.equal(list.uzivatele.length, 1);
   assert.equal(list.uzivatele[0].telefon, '777123456');
+  // stejný telefon u druhé kamery: žádný nový účet ani pozvánka, kamera se přidá; DELETE s ?kamera= odebere jen ji
+  const r2 = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '+420 777 123 456', kamery: ['druha'], poslatSms: true } }))).json();
+  assert.equal(r2.pridano, true); assert.equal(r2.uzivatel.id, b.uzivatel.id); assert.deepEqual(r2.uzivatel.kamery, ['tapoc2020', 'druha']); assert.equal(r2.odkaz, undefined);
+  assert.equal((await (await h(req('GET', '/api/rodina/uzivatele', { cookies: cookie() }))).json()).uzivatele.length, 1, 'pořád jeden účet');
+  assert.equal((await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['cizi'] } }))).status, 403, 'ani stávajícímu účtu nejde přidat cizí kamera');
+  const d1 = await (await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}?kamera=druha`, { cookies: cookie() }))).json();
+  assert.equal(d1.smazan, false); assert.deepEqual(d1.uzivatel.kamery, ['tapoc2020']);
+  assert.equal((await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}?kamera=../x`, { cookies: cookie() }))).status, 400);
   // bez přihlášení ani s cookie rodiny tam nikdo nesmí
   assert.equal((await h(req('GET', '/api/rodina/uzivatele'))).status, 401);
 });

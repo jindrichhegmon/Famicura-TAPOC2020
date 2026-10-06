@@ -724,7 +724,7 @@ async function renderUzivatele(p) {
   const users = data.uzivatele.filter((u) => u.kamery.includes(p.id));
   rodinaUzivatele.set(p.id, users);
   const inv = posledniPozvanka;
-  box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"><span class="grow"><strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
+  box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"><span class="grow"><strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}${u.kamery.length > 1 ? ` <span class="small muted">· také ${esc(u.kamery.filter((k) => k !== p.id).map((k) => sim.patient(k)?.name || k).join(', '))}</span>` : ''}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
       <button class="sm sec" data-a="pozvanka">Nová pozvánka (nové heslo)</button><button class="sm bad" data-a="smaz">Odebrat</button>
       ${inv && inv.uzivatelId === u.id ? `<div class="inv"><strong>${inv.sms?.odeslano ? 'SMS odeslána.' : inv.sms?.error ? `SMS neodešla: ${esc(inv.sms.error)}` : 'Pozvánka připravena.'}</strong> Odkaz platí 7 dní, je na jedno použití:<br><code>${esc(inv.odkaz)}</code>
         <div class="row"><button class="sm" data-a="copy">Kopírovat odkaz</button><a class="sm btnlike" href="${smsLink(u.telefon, inv.text)}">Poslat SMS z tohoto telefonu</a></div></div>` : ''}</li>`).join('') || '<li class="small muted">Zatím nikdo. Založte první účet níže; rodina dostane pozvánku SMS.</li>'}</ul>
@@ -740,8 +740,14 @@ async function renderUzivatele(p) {
     const err = box.querySelector('#uErr'); err.classList.add('hide');
     try {
       const r = await post('/api/rodina/uzivatele', { jmeno: box.querySelector('#uJmeno').value, telefon: box.querySelector('#uTel').value, kamery: [p.id], poslatSms: box.querySelector('#uSms').checked });
-      posledniPozvanka = { uzivatelId: r.uzivatel.id, odkaz: r.odkaz, text: r.text, sms: r.sms };
-      toast(r.sms.odeslano ? `Pozvánka odeslána SMS na ${r.uzivatel.telefon}.` : 'Účet založen, pozvánka je připravená.');
+      if (r.pridano) {
+        // telefon už účet má: kamera se k němu přidala, rodina ji uvidí pod stejným heslem (v aplikaci přibude přepínač kamer)
+        posledniPozvanka = null;
+        toast(r.uzivatel.aktivni ? `Telefon už má účet (${r.uzivatel.jmeno}): kamera mu byla přidána, přihlásí se stejným heslem a kameru si vybere v aplikaci.` : `Telefon už má účet (${r.uzivatel.jmeno}), kamera mu byla přidána. Účet ještě není aktivovaný – pošlete mu novou pozvánku.`);
+      } else {
+        posledniPozvanka = { uzivatelId: r.uzivatel.id, odkaz: r.odkaz, text: r.text, sms: r.sms };
+        toast(r.sms.odeslano ? `Pozvánka odeslána SMS na ${r.uzivatel.telefon}.` : 'Účet založen, pozvánka je připravená.');
+      }
       renderUzivatele(p);
     } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
   };
@@ -751,7 +757,8 @@ async function renderUzivatele(p) {
       if (b.dataset.a === 'copy') { await navigator.clipboard.writeText(inv.odkaz); toast('Odkaz zkopírován.'); return; }
       if (b.dataset.a === 'smaz') {
         if (b.textContent !== 'Opravdu odebrat?') { b.textContent = 'Opravdu odebrat?'; return; }
-        await apiJson(`/api/rodina/uzivatele/${id}`, { method: 'DELETE' }); posledniPozvanka = null; toast('Účet odebrán.');
+        const r = await apiJson(`/api/rodina/uzivatele/${id}?kamera=${encodeURIComponent(p.id)}`, { method: 'DELETE' }); posledniPozvanka = null;
+        toast(r.smazan ? 'Účet odebrán.' : `Kamera odebrána z účtu; ${r.uzivatel.jmeno} má dál své ostatní kamery.`);
       }
       if (b.dataset.a === 'pozvanka') {
         const r = await post(`/api/rodina/uzivatele/${id}/pozvanka`, { poslatSms: data.smsNastaveno });
