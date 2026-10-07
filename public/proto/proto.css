@@ -298,8 +298,8 @@ table.watch .okno-dalsi{min-height:26px;padding:0 8px;font-size:.9rem;line-heigh
 /* lišta „přihlaste se“ nahoře */
 #authBar{position:fixed;left:0;right:0;top:0;z-index:100;background:#fdf1e3;border-bottom:2px solid #e0a03a;color:var(--ink);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.92rem;box-shadow:0 4px 14px rgba(0,0,0,.12)}
 #authBar .btnlike{background:var(--blue);color:#fff;text-decoration:none;font-weight:700;padding:7px 12px;border-radius:9px;white-space:nowrap}
-body.withAuth{padding-top:56px}
-body.withAuth .apphead,body.withAuth .deskbar{top:56px}
+body.withAuth{padding-top:var(--auth-h,56px)}
+body.withAuth .apphead,body.withAuth .deskbar{top:var(--auth-h,56px)}
 #authBar .btnlike.sec2{background:#e6ecf2;color:var(--ink)}
 
 /* instalace na plochu (aplikace rodiny) */
@@ -359,13 +359,14 @@ body.withAuth .apphead,body.withAuth .deskbar{top:56px}
 .cm{--brand:#3358FF;--brand-dark:#2340CC;--brand-soft:#EEF1FF;--brand-soft2:#DDE3FF;--accent:#D22BF7;--accent-soft:#FBEBFE;--grad:linear-gradient(135deg,#D22BF7 0%,#3358FF 62%);--ok:#0E8A5F;--ok-soft:#E4F5EE;--warn:#B26A00;--warn-soft:#FDF3E2;--crit:#C42B2B;--crit-soft:#FDECEC;--info:#0B6E99;--info-soft:#E6F3F9;--ink:#14161C;--ink2:#4A5160;--ink3:#767E8F;--surface:#FCFCFB;--panel:#FFFFFF;--line:#E4E7EE;--line2:#F0F2F6;--shadow:0 1px 2px rgba(20,22,28,.05),0 4px 14px rgba(20,22,28,.05);--shadow-lg:0 10px 40px rgba(20,22,28,.22);--r:10px;--r-lg:14px;
   font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.5;color:var(--ink);-webkit-font-smoothing:antialiased}
 .cm.ovl{position:fixed;inset:0;background:rgba(20,22,28,.42);display:grid;place-items:start center;padding:14px 22px;z-index:120;overflow:auto}
-body.withAuth .cm.ovl{padding-top:72px}
+body.withAuth .cm.ovl{padding-top:calc(var(--auth-h,56px) + 16px)}
 .cm.ovl.hide{display:none}
 .cm .modal{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);width:100%;max-width:760px;max-height:min(90vh,820px);display:flex;flex-direction:column;margin-top:14px}
 .cm .modal>header{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2)}
 .cm .modal>header h3{margin:0;font-size:16px;font-weight:680;letter-spacing:-.01em;text-transform:none;color:var(--ink)}
 .cm .modal>header .sub{font-size:12.5px;color:var(--ink3);margin-top:2px}
-.cm .modal>header .x{margin-left:auto;font-size:19px;color:var(--ink3);line-height:1;padding:2px 8px;border-radius:6px;background:none;border:0;min-height:0}
+.cm .modal>header>div{min-width:0;flex:1 1 auto}
+.cm .modal>header .x{flex:0 0 auto;margin-left:auto;font-size:19px;color:var(--ink3);line-height:1;padding:2px 8px;border-radius:6px;background:none;border:0;min-height:0}
 .cm .modal>header .x:hover{background:var(--line2);color:var(--ink)}
 .cm .mbody{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .cm .modal>footer{padding:12px 18px;border-top:1px solid var(--line2);display:flex;gap:8px;align-items:stretch;justify-content:flex-end;background:#FBFBFD;border-radius:0 0 var(--r-lg) var(--r-lg)}
@@ -430,3 +431,34 @@ body.pending .desk,body.pending #critBanner{visibility:hidden}
 .kamvyber button .st{font-size:.74rem;font-weight:600;margin-top:2px;padding:2px 7px;border-radius:999px;background:#eef2f6;color:var(--ink2);align-self:flex-start}
 .kamvyber button .st.ok{background:#e6f6ec;color:#1b6e3a}.kamvyber button .st.warn{background:var(--warnbg);color:#8a5a00}.kamvyber button .st.crit{background:var(--badbg);color:#a12626}.kamvyber button .st.off{background:#eceff3;color:#555}
 .kamvyber button[aria-pressed=true]{border-color:var(--blue);background:#e7f1fb;box-shadow:inset 0 0 0 1px var(--blue)}
+
+/* ---------- Dispečink: světlejší modrá než aplikace rodiny (od 3.3) ---------- */
+.deskbar{background:linear-gradient(135deg,#1f6fc2,#3a8ee0);box-shadow:0 4px 14px rgba(31,111,194,.25)}
+.deskbar .muted{color:rgba(255,255,255,.78)}
+/* ---------- Dispečink na telefonu (od 3.3): kompaktní záhlaví, fronta alertů nahoře, tabulka Sledování se posouvá uvnitř ---------- */
+@media (max-width:760px){
+  .deskbar{padding:8px 14px 10px;gap:4px;margin-bottom:8px}
+  .deskbar>div:first-child{min-width:0;max-width:100%}
+  .deskbar h1{font-size:1rem;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .deskbar #jaInfo{display:none}
+  .deskbar #hlavicka{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.78rem}
+  .deskbar .right{margin-left:0;width:100%;gap:8px;justify-content:space-between;flex-wrap:nowrap}
+  .deskbar .stats{gap:10px;font-size:.8rem;flex-wrap:nowrap;white-space:nowrap;overflow:hidden}
+  .deskbar .stats #srcNote{display:none}
+  .deskbar .hbtn{gap:4px;flex:0 0 auto}
+  .deskbar .hbtn button{padding:6px 9px;min-height:36px;font-size:.85rem}
+  .deskbar .hbtn #napovedaBtn .ico+*,.deskbar .hbtn #napovedaBtn{font-size:.85rem}
+  .cols{display:flex;flex-direction:column;gap:0}
+  .cols>div{display:contents}
+  .cols .c,.cols .tiles,.cols .row{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
+  .detail .dtabs button{flex:1;padding:8px 4px;font-size:.85rem}
+  .deskbar .right{flex-wrap:wrap}
+  .deskbar .stats{width:100%;order:2}
+  .cols .c:has(#queue){order:-1;margin-top:0}
+  .cols #detail{margin-top:8px}
+  table.watch{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  #simPanel{width:min(360px,calc(100vw - 24px))}
+  #simPanel.min{left:auto;right:12px;width:auto}
+  #simPanel.min .hd{padding:6px 10px;border-radius:12px;font-size:.8rem;gap:8px}
+  .desk{padding-bottom:72px}
+}

@@ -206,8 +206,11 @@ export function mountAuthBanner(src) {
   login.href = '/?zpet=' + encodeURIComponent(zpet);
   if (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) login.removeAttribute('target');
   el.querySelector('#authRetry').onclick = () => location.reload();
-  const show = (text, login) => { el.querySelector('#authText').innerHTML = text; el.querySelector('#authLogin').classList.toggle('hide', !login); el.querySelector('#authApp').classList.toggle('hide', login); el.classList.remove('hide'); document.body.classList.add('withAuth'); };
-  const hide = () => { el.classList.add('hide'); document.body.classList.remove('withAuth'); };
+  // Výška pruhu je na telefonu jiná než na počítači: záhlaví a dialogy se posouvají podle skutečné výšky (--auth-h).
+  const vyska = () => { if (!el.classList.contains('hide')) document.body.style.setProperty('--auth-h', el.offsetHeight + 'px'); };
+  window.addEventListener('resize', vyska);
+  const show = (text, login) => { el.querySelector('#authText').innerHTML = text; el.querySelector('#authLogin').classList.toggle('hide', !login); el.querySelector('#authApp').classList.toggle('hide', login); el.classList.remove('hide'); document.body.classList.add('withAuth'); vyska(); requestAnimationFrame(vyska); };
+  const hide = () => { el.classList.add('hide'); document.body.classList.remove('withAuth'); document.body.style.removeProperty('--auth-h'); };
   const check = async () => {
     try {
       const r = await fetch('/api/devices');

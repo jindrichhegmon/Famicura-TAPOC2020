@@ -5,6 +5,20 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.3 · 7. 10. 2026 · dispečink na telefonu a světlejší záhlaví
+
+- **Dispečink jde používat na telefonu.** Záhlaví je na úzké obrazovce
+  kompaktní (název, tlačítka, počty v jedné řadě), fronta alertů je nad
+  dlaždicemi, tabulka Sledování v Nastavení kamery se posouvá do strany sama
+  a neroztahuje stránku (dřív se celá stránka zmenšila na 644 px a dialog
+  Nastavení nešel zavřít), dialogy a záhlaví se posouvají podle skutečné výšky
+  pruhu s hlášením o obrazu, panel Simulace je sbalený do malé pilulky vpravo
+  dole. Ověřeno v Chromu na rozměru iPhone 13 (390 px): žádné vodorovné
+  posouvání na dlaždicích, v detailu (Monitoring, Komunikace, Nastavení),
+  v Nastavení poskytovatele ani v Nápovědě.
+- **Záhlaví dispečinku je světlejší modré** než záhlaví aplikace rodiny
+  (tmavě modré), aby šlo obě aplikace rozeznat na první pohled.
+
 ## 3.2 · 6. 10. 2026 · rodina může kameru deaktivovat a aktivovat
 
 - **Rodina má v aplikaci tlačítko „⏻ Deaktivovat kameru“** (karta hned pod
