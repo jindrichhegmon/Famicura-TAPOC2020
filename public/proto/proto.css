@@ -433,7 +433,19 @@ body.pending .desk,body.pending #critBanner{visibility:hidden}
 .kamvyber button[aria-pressed=true]{border-color:var(--blue);background:#e7f1fb;box-shadow:inset 0 0 0 1px var(--blue)}
 
 /* ---------- Dispečink: světlejší modrá než aplikace rodiny (od 3.3) ---------- */
-.deskbar{background:linear-gradient(135deg,#1f6fc2,#3a8ee0);box-shadow:0 4px 14px rgba(31,111,194,.25)}
+:root{--hdr1:#1f6fc2;--hdr2:#3a8ee0}
+/* Barevná schémata dispečinku (⚙ Nastavení → Zobrazení; jen tento prohlížeč, html[data-schema]) */
+html[data-schema=tyrkys]{--hdr1:#0f8a8a;--hdr2:#2bb3b1;--blue:#0e8f8f;--navy:#0b5e5e}
+html[data-schema=zelena]{--hdr1:#2e8b57;--hdr2:#4caf7a;--blue:#2a8c4a;--navy:#1d5c33}
+html[data-schema=fialova]{--hdr1:#5b4bd6;--hdr2:#8a7cf0;--blue:#5b4bd6;--navy:#3d3290}
+html[data-schema=oranzova]{--hdr1:#c9661a;--hdr2:#e8873b;--blue:#c9661a;--navy:#8a4410}
+html[data-schema=grafit]{--hdr1:#3a4451;--hdr2:#5c6b7a;--blue:#4a5a6c;--navy:#2a323c}
+html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
+.deskbar{background:linear-gradient(135deg,var(--hdr1),var(--hdr2));box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.schemata{display:flex;gap:8px;flex-wrap:wrap}
+.schemata button{background:#fff;color:var(--ink);border:2px solid var(--line);border-radius:12px;padding:6px 10px 6px 6px;min-height:40px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.schemata button i{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--s1),var(--s2));display:inline-block}
+.schemata button[aria-pressed=true]{border-color:var(--ink);box-shadow:0 0 0 2px #fff inset}
 .deskbar .muted{color:rgba(255,255,255,.78)}
 /* ---------- Dispečink na telefonu (od 3.3): kompaktní záhlaví, fronta alertů nahoře, tabulka Sledování se posouvá uvnitř ---------- */
 @media (max-width:760px){

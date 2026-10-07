@@ -249,6 +249,35 @@ import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
   log.addEventListener('click', (e) => { const t = e.target.closest('.msg.bot .tema'); if (!t || t.textContent === 'AI') return; const d = [...document.querySelectorAll('.naptema')].find((x) => x.querySelector('summary').textContent === t.textContent); if (d) { tab('temata'); d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } });
 });
 let selected = null;
+/* Barevné schéma dispečinku: volba jen v tomhle prohlížeči (localStorage), html[data-schema] + proměnné v proto.css;
+ * hlavička stránky ho nastaví ještě před načtením CSS, aby neprobliklo výchozí. Rodina schéma nemá (tmavě modrá). */
+const SCHEMA_KEY = 'famicura.dispecink.schema';
+const SCHEMATA = [
+  { id: '', nazev: 'Modrá (výchozí)', s1: '#1f6fc2', s2: '#3a8ee0' },
+  { id: 'tyrkys', nazev: 'Tyrkysová', s1: '#0f8a8a', s2: '#2bb3b1' },
+  { id: 'zelena', nazev: 'Zelená', s1: '#2e8b57', s2: '#4caf7a' },
+  { id: 'fialova', nazev: 'Fialová', s1: '#5b4bd6', s2: '#8a7cf0' },
+  { id: 'oranzova', nazev: 'Oranžová', s1: '#c9661a', s2: '#e8873b' },
+  { id: 'grafit', nazev: 'Grafitová', s1: '#3a4451', s2: '#5c6b7a' },
+  { id: 'tmava', nazev: 'Tmavě modrá (jako rodina)', s1: '#0d4a75', s2: '#1b6bb8' },
+];
+function schemaAktualni() { try { return localStorage.getItem(SCHEMA_KEY) || ''; } catch { return ''; } }
+function nastavSchema(id) {
+  if (!SCHEMATA.some((x) => x.id === id)) id = '';
+  if (id) document.documentElement.dataset.schema = id; else delete document.documentElement.dataset.schema;
+  try { if (id) localStorage.setItem(SCHEMA_KEY, id); else localStorage.removeItem(SCHEMA_KEY); } catch { /* bez paměti prohlížeče */ }
+  const sch = SCHEMATA.find((x) => x.id === id); document.querySelector('meta[name=theme-color]')?.setAttribute('content', sch ? sch.s1 : '#1F6FC2');
+  kresliSchemata();
+}
+function kresliSchemata() {
+  const box = $('schemata'); if (!box) return;
+  const akt = schemaAktualni();
+  if (setHtml(box, SCHEMATA.map((x) => `<button type="button" data-s="${x.id}" aria-pressed="${x.id === akt}" title="${esc(x.nazev)}"><i style="--s1:${x.s1};--s2:${x.s2}"></i>${esc(x.nazev)}</button>`).join(''))) {
+    box.querySelectorAll('[data-s]').forEach((b) => { b.onclick = () => nastavSchema(b.dataset.s); });
+  }
+}
+kresliSchemata();
+
 const OVL_KEY = 'famicura.dispecink.skel';
 let overlay = (() => { try { return localStorage.getItem(OVL_KEY) !== '0'; } catch { return true; } })();   // drátěný model přes plný/rozostřený obraz v detailu: výchozí zapnuto, volba se pamatuje v prohlížeči
 function ulozOverlay(v) { overlay = v; try { localStorage.setItem(OVL_KEY, v ? '1' : '0'); } catch { /* bez paměti prohlížeče */ } }

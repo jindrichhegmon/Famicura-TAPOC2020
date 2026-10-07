@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.4 · 7. 10. 2026 · barevná schémata dispečinku
+
+- **Dispečink: výběr barevného schématu** v ⚙ Nastavení → Zobrazení na
+  tomto počítači: Modrá (výchozí), Tyrkysová, Zelená, Fialová, Oranžová,
+  Grafitová a Tmavě modrá (jako rodina). Mění záhlaví, tlačítka a zvýraznění;
+  volba platí jen v tomhle prohlížeči (`localStorage`, `html[data-schema]`)
+  a projeví se hned, bez probliknutí při načtení. Aplikace rodiny zůstává
+  tmavě modrá.
+
 ## 3.3 · 7. 10. 2026 · dispečink na telefonu a světlejší záhlaví
 
 - **Dispečink jde používat na telefonu.** Záhlaví je na úzké obrazovce

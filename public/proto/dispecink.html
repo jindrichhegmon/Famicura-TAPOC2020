@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Famicura · Dispečink (prototyp)</title>
-<meta name="theme-color" content="#106FD5">
+<meta name="theme-color" content="#1F6FC2">
+<script>try{var s=localStorage.getItem("famicura.dispecink.schema");if(s)document.documentElement.dataset.schema=s;}catch(e){}</script>
 <link rel="icon" type="image/png" sizes="32x32" href="/proto/ikony/famicura-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/proto/ikony/famicura-192.png">
 <link rel="apple-touch-icon" href="/proto/ikony/famicura-180.png">
@@ -63,6 +64,7 @@
         </div>
         <div class="sec">Zobrazení na tomto počítači</div>
         <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>
+        <div class="fld"><label>Barevné schéma dispečinku</label><div class="schemata" id="schemata"></div><div class="help">jen tento prohlížeč, projeví se hned; aplikace rodiny zůstává tmavě modrá, aby se obě daly rozeznat</div></div>
         <div class="sec">SMS a e-mail ze serveru (pozvánky, žádosti o obraz, upozornění na události)</div>
         <p class="gateerr hide" id="smsVarovani">Server má v SMS_WEBHOOK_URL stejnou adresu jako asistent: SMS i e-maily jdou do špatného scénáře Make a nedojdou. Správce spustí ./deploy/vps-env.sh a zadá adresu webhooku scénáře Famicura_Tapo_SMS_Pozvanka.</p>
         <div class="f2">
