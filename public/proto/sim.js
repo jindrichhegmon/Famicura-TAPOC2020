@@ -31,7 +31,11 @@ function commit() { save(state); bc?.postMessage({ type: 'state', state }); noti
 
 /* ---------- server ---------- */
 async function api(path, body) {
-  const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  // server, který neodpoví do půl minuty, je chyba, ne zamrzlá stránka
+  const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined;
+  let r;
+  try { r = await fetch(path, body === undefined ? { cache: 'no-store', signal } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal }); }
+  catch (e) { const err = new Error(e && e.name === 'TimeoutError' ? 'Server neodpověděl do 30 s.' : `Server je nedostupný (${e && e.message || 'síť'}).`); err.status = 0; throw err; }
   let data = {}; try { data = await r.json(); } catch { /* bez těla */ }
   if (!r.ok) { const e = new Error(data.error || `Chyba serveru (${r.status})`); e.status = r.status; throw e; }
   return data;
@@ -49,7 +53,7 @@ async function poll() {
   if (!server || polluji) return;
   polluji = true;
   try { const b = await api(`/api/proto/stav?v=${server.v}`); if (b.zmena) adopt(b); }
-  catch (e) { if (e.status === 401 || e.status === 403) odpojit(); else console.error('[sim] stav ze serveru se nepodařilo převzít:', e.message, e.stack || ''); }
+  catch (e) { if (e.status === 401) odpojit(); else console.error('[sim] stav ze serveru se nepodařilo převzít:', e.message, e.stack || ''); }
   polluji = false;
 }
 function odpojit() { server = null; clearInterval(pollTimer); pollTimer = null; state = load(); notify({ nahrazeno: true }); }
@@ -76,7 +80,12 @@ async function run(nazev, args) {
   if (pripojovani) await pripojovani;   // stránka může volat akci dřív, než je jasné, kdo stav drží
   if (server) {
     try { const b = await api('/api/proto/akce', { akce: nazev, args }); adopt(b); return b.vysledek; }
-    catch (e) { if (e.status === 401 || e.status === 403) { odpojit(); return runLocal(nazev, args); } toast(e.message, 'crit'); return undefined; }
+    catch (e) {
+      // 401 = odhlášen: stránka jede dál na místní simulaci (ukázka). 403 („tohle nastavuje poskytovatel“, „kamera nepatří tomuto
+      // poskytovateli“) je odpověď serveru, ne odhlášení – dřív se stránka tiše přepnula na simulaci a vypadala zamrzle.
+      if (e.status === 401) { odpojit(); return runLocal(nazev, args); }
+      toast(e.message, 'crit'); return undefined;
+    }
   }
   return runLocal(nazev, args);
 }

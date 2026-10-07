@@ -26,7 +26,10 @@ const seen = new Set(sim.state.notifications.map((n) => n.id));
  * telefonem a heslem. Stejná cookie pak platí i pro obraz a události
  * z hlavní aplikace, takže se nikam podruhé nepřihlašuje. */
 async function api(path, body) {
-  const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined;
+  let r;
+  try { r = await fetch(path, body === undefined ? { cache: 'no-store', signal } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal }); }
+  catch (e) { throw new Error(e && e.name === 'TimeoutError' ? 'Server neodpověděl do 30 s.' : `Server je nedostupný (${e && e.message || 'síť'}).`); }
   let data = {};
   try { data = await r.json(); } catch { /* bez těla */ }
   if (!r.ok) throw new Error(data.error || `Chyba serveru (${r.status})`);
@@ -78,7 +81,7 @@ function boot(ja) {
   FAMILY = (ja.kamery || []).map((k) => k.id);
   if (ja.role === 'rodina') {
     $('whoami').textContent = `${ja.jmeno} · rodina${posk ? ' · ' + posk : ''}`;
-    $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. ${ja.kamery.length ? '' : 'Poskytovatel vám zatím nepřiřadil kameru.'}`;
+    $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. ${ja.kamery.length ? '' : (ja.zprava || 'Poskytovatel vám zatím nepřiřadil kameru.')}`;
   } else {
     $('whoami').textContent = `${ja.jmeno || 'Poskytovatel'} · ${ja.role === 'dispecer' ? 'dispečink' : 'správce'}${posk ? ' · ' + posk : ''}`;
     $('ucetInfo').textContent = ja.role === 'dispecer' ? `Jste přihlášeni jako dispečer (${ja.jmeno}). Vidíte aplikaci rodiny pro kamery poskytovatele ${posk}.` : 'Jste přihlášeni jako správce serveru. Vidíte aplikaci rodiny pro kamery zvoleného poskytovatele.';
@@ -86,7 +89,8 @@ function boot(ja) {
   }
   if (!FAMILY.length) {
     // bez kamery není co kreslit: stránka řekne proč a nabídne ukázku
-    $('srcNote').textContent = 'Poskytovatel vám zatím nepřiřadil kameru. Až ji přiřadí, obraz se tu objeví sám.';
+    $('srcNote').textContent = ja.zprava || 'Poskytovatel vám zatím nepřiřadil kameru. Až ji přiřadí, obraz se tu objeví sám.';
+    if (ja.zprava) toast(ja.zprava, 'warn');
     FAMILY = [sim.state.patients[0]?.id || 'tapoc2020'];
   }
   setupPatients();
@@ -273,8 +277,13 @@ function kresliDeaktivaci(p) {
       const on = b.dataset.on === '1';
       if (on && !confirm('Deaktivovat kameru?\n\nPoskytovatel ani vy neuvidíte obraz, nic se nenahraje, události se nezapíší a nikdo nebude upozorněn. Kamera se otočí do stropu. Aktivovat ji můžete kdykoli.')) return;
       b.disabled = true;
-      try { await sim.deaktivace(patientId, on, ja.jmeno || 'rodina'); toast(on ? 'Kamera je deaktivovaná. Otáčí se do stropu.' : 'Kamera je aktivní, vrací se do výchozí polohy.'); }
-      catch (e) { toast(`Nepodařilo se: ${e.message}`, 'crit'); b.disabled = false; }
+      try {
+        // server akci buď provede (vrátí výsledek), nebo ji odmítne (chyba už je v bublině) – tlačítko pak nesmí zůstat zašedlé
+        const r = await sim.deaktivace(patientId, on, ja.jmeno || 'rodina');
+        if (!r) throw new Error('server akci neprovedl');
+        toast(on ? 'Kamera je deaktivovaná. Otáčí se do stropu.' : (r.poloha ? 'Kamera je aktivní, vrací se na původní záběr.' : 'Kamera je aktivní, vrací se do výchozí polohy.'));
+      } catch (e) { toast(`Nepodařilo se: ${e.message}`, 'crit'); }
+      finally { b.disabled = false; }
     };
   }
 }

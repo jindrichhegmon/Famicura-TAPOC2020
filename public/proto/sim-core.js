@@ -412,9 +412,14 @@ const akce = {
         text: `Rodina (${kdo}) deaktivovala kameru: poskytovatel nemá obraz, nepořizují se nahrávky, události se nezapisují; kamera se otáčí do stropu.` });
     } else {
       const od = p.deaktivace.od;
+      // poloha před deaktivací (uložil ji server při otáčení do stropu): kamera se vrátí na původní záběr, ne jen do výchozí polohy
+      const pl = p.deaktivace.poloha;
+      const poloha = pl && Number.isFinite(pl.x) && Number.isFinite(pl.y) ? { x: pl.x, y: pl.y } : null;
       delete p.deaktivace;
       s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'consent', state: 'uzavřen', by: 'rodina',
-        text: `Rodina (${kdo}) aktivovala kameru (deaktivovaná byla od ${casText(od)}): obraz a hlídání opět podle nastavení; kamera se vrací do výchozí polohy.` });
+        text: `Rodina (${kdo}) aktivovala kameru (deaktivovaná byla od ${casText(od)}): obraz a hlídání opět podle nastavení; kamera se vrací ${poloha ? 'na původní záběr' : 'do výchozí polohy'}.` });
+      if (s.events.length > 400) s.events.length = 400;
+      return { vysledek: { patientId: p.id, on, zmena: true, poloha } };
     }
     if (s.events.length > 400) s.events.length = 400;
     return { vysledek: { patientId: p.id, on, zmena: true } };

@@ -237,7 +237,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // Kamera je vidět: rodině jen její, dispečinku a správci s tenantem jen kamery tenanta, správci bez tenanta všechny.
       const smiKameru = (c) => {
         const id = typeof c === 'string' ? c : c.id;
-        if (rodina) return rodina.kamery.includes(id);
+        // rodina: jen své kamery, a jen dokud kamera patří tomuto poskytovateli (kamera přiřazená jinému poskytovateli zmizí i rodině,
+        // jinak by aplikace rodiny počítala s kamerou, kterou stav poskytovatele nezná, a zamrzla by)
+        if (rodina) return rodina.kamery.includes(id) && (typeof c === 'string' || !tenant || normTenant(c.tenant) === tenant);
         if (!tenant) return true;
         return (typeof c === 'string' ? '' : normTenant(c.tenant)) === tenant;
       };
@@ -252,8 +254,11 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'GET' && path === '/api/rodina/ja') {
         const vse = await kamery();
         const t = tenant ? await najemci.tenant(tenant).catch(() => ({ id: tenant, nazev: '' })) : null;
+        const moje = vse.filter(smiKameru);
+        // rodina má v účtu jen kameru, která už tomuto poskytovateli nepatří: stránka to řekne místo prázdné obrazovky
+        const zprava = rodina && !moje.length && rodina.kamery.length ? 'Kamera, ke které máte přístup, už u tohoto poskytovatele není (byla přiřazena jinému poskytovateli). Přístup u nového poskytovatele vám zřídí jeho dispečink.' : '';
         return json({ ok: true, role: ja.role, tenant: t ? { id: t.id, nazev: t.nazev } : null, jmeno: rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce',
-          telefon: rodina ? formatTelefon(rodina.telefon) : null, kamery: vse.filter(smiKameru).map(({ id, name, events }) => ({ id, name, events })) });
+          telefon: rodina ? formatTelefon(rodina.telefon) : null, kamery: moje.map(({ id, name, events }) => ({ id, name, events })), zprava });
       }
       if (m === 'POST' && path === '/api/rodina/heslo') {
         if (!rodina) return json({ ok: false, error: 'Heslo dispečera mění portál Péče doma plus, heslo správce ./deploy/vps-env.sh.' }, 400);
@@ -383,11 +388,15 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const vysledek = await (await stavTenanta()).proved(akce, args);
         // (De)aktivace rodinou: kamera se otočí do stropu (deaktivace) nebo zpět do výchozí polohy; výsledek se zapíše ke stavu, ať rodina vidí, že kamera opravdu kouká do stropu.
         if (akce === 'deaktivace' && vysledek.vysledek?.zmena) {
-          const { patientId: kam, on } = vysledek.vysledek;
+          const { patientId: kam, on, poloha: puvodni } = vysledek.vysledek;
           const st = await stavTenanta();
-          const zapis = (ok, chyba) => st.otoceniKamery({ kameraId: kam, on, ok, chyba }).catch((e) => console.error('[famicura-tapo] zápis otočení kamery:', e.message));
+          const zapis = (ok, chyba, poloha) => st.otoceniKamery({ kameraId: kam, on, ok, chyba, poloha }).catch((e) => console.error('[famicura-tapo] zápis otočení kamery:', e.message));
           if (!ptz) zapis(false, 'otáčení kamery není na serveru k dispozici');
-          else ptz.pohni(kam, on ? 'strop' : 'home').then(() => zapis(true), (e) => zapis(false, e.message));
+          else if (on) {
+            // nejdřív si přečíst, kam kamera kouká (po aktivaci se vrátí na totéž místo), pak do stropu
+            (ptz.poloha ? ptz.poloha(kam) : Promise.resolve(null)).catch(() => null)
+              .then((poloha) => ptz.pohni(kam, 'strop').then(() => zapis(true, null, poloha), (e) => zapis(false, e.message, poloha)));
+          } else ptz.pohni(kam, 'home', { poloha: puvodni || null }).then(() => zapis(true), (e) => zapis(false, e.message));
         }
         // Žádost dispečinku o plný obraz: rodině u té kamery odejde SMS, ať otevře aplikaci a rozhodne.
         if (akce === 'requestFull' && !rodina && vysledek.vysledek && typeof vysledek.vysledek === 'object') {

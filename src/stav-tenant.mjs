@@ -284,16 +284,18 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
      * (není to akce z prohlížeče – jde jen přes POST /api/nahravky/:id/odemknout, které ověří, že je to rodina kamery).
      */
     /** Výsledek otočení kamery po (de)aktivaci rodinou: k deaktivaci se zapíše stav (rodina vidí, že kamera opravdu kouká do stropu), chyba jde i do historie. */
-    otoceniKamery({ kameraId, on, ok, chyba }) {
+    otoceniKamery({ kameraId, on, ok, chyba, poloha = null }) {
       return serializovane(async () => {
         await nacti();
         const s = data.state;
         const p = s.patients.find((x) => x.id === kameraId); if (!p) return { v: data.v };
-        if (on && p.deaktivace) p.deaktivace = { ...p.deaktivace, otoceni: ok ? 'ok' : `chyba: ${chyba || 'kamera neodpověděla'}` };
+        // k deaktivaci se uloží i poloha před otočením do stropu (x, y podle ONVIF), aby se kamera po aktivaci vrátila na původní záběr
+        const pol = poloha && Number.isFinite(poloha.x) && Number.isFinite(poloha.y) ? { x: poloha.x, y: poloha.y } : null;
+        if (on && p.deaktivace) p.deaktivace = { ...p.deaktivace, otoceni: ok ? 'ok' : `chyba: ${chyba || 'kamera neodpověděla'}`, ...(pol ? { poloha: pol } : {}) };
         if (!ok) {
           const t = now();
           s.events.unshift({ id: 'n' + (s.seq++) + t.toString(36), at: t, patientId: kameraId, kind: 'consent', state: 'uzavřen', by: 'server',
-            text: `Kameru se nepodařilo otočit ${on ? 'do stropu' : 'do výchozí polohy'}: ${chyba || 'kamera neodpověděla'}. ${on ? 'Obraz, nahrávky a události jsou přesto vypnuté.' : ''}`.trim() });
+            text: `Kameru se nepodařilo otočit ${on ? 'do stropu' : 'zpět'}: ${chyba || 'kamera neodpověděla'}. ${on ? 'Obraz, nahrávky a události jsou přesto vypnuté.' : 'Záběr doladíte šipkami.'}`.trim() });
           if (s.events.length > 400) s.events.length = 400;
         }
         data.v++; await uloz();

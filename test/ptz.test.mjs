@@ -67,3 +67,37 @@ test('domeček: bez GotoHomePosition zkusí předvolbu, bez předvolby střed; k
   const k3 = createOnvif({ host: '127.0.0.1', port: 12020, user: 'u', pass: 'p', fetchImpl: kamera('nic') });
   await assert.rejects(() => k3.ptz('home'), /výchozí polohu nenabízí/);
 });
+
+test('deaktivace: strop počká na běžící krok (žádné 409), GetStatus dá polohu, zpět = AbsoluteMove na uloženou polohu před domečkem', async () => {
+  const zaznam = [];
+  const zakladni = fakeKamera(zaznam);
+  const kameraSPolohou = async (url, init) => {
+    const b = init.body;
+    if (/GetStatus/.test(b)) { zaznam.push({ url: String(url), body: b }); return new Response(OBAL('<tptz:GetStatusResponse><tptz:PTZStatus><tt:Position><tt:PanTilt x="0.25" y="-0.5" space="http://www.onvif.org/ver10/tptz/PanTiltSpaces/PositionGenericSpace"/></tt:Position></tptz:PTZStatus></tptz:GetStatusResponse>')); }
+    if (/AbsoluteMove/.test(b)) { zaznam.push({ url: String(url), body: b }); return new Response(OBAL('<tptz:AbsoluteMoveResponse/>')); }
+    return zakladni(url, init);
+  };
+  const kamery = async () => [{ id: 'tapoc2020', ip: '192.168.8.211', onvifPort: 2020, user: 'Kamera', pass: 'x' }];
+  const p = createPtz({ kamery, onvif: (o) => createOnvif({ ...o, fetchImpl: kameraSPolohou }), log: { log() {}, error() {} } });
+  // krok šipkou a hned deaktivace: strop neodmítne 409, počká, až krok skončí
+  const krok = p.pohni('tapoc2020', 'right', { ms: 150 });
+  const strop = p.pohni('tapoc2020', 'strop');
+  assert.deepEqual(await krok, { ok: true });
+  assert.deepEqual(await strop, { ok: true });
+  const tela = zaznam.filter((z) => /ptz_service/.test(z.url)).map((z) => z.body);
+  const iStop = tela.findIndex((t) => /tptz:Stop/.test(t)), iStrop = tela.findIndex((t) => /AbsoluteMove[\s\S]*y="1"/.test(t));
+  assert.ok(iStop >= 0 && iStrop > iStop, 'do stropu až po Stop kroku');
+  // poloha z GetStatus
+  assert.deepEqual(await p.poloha('tapoc2020'), { x: 0.25, y: -0.5 });
+  // zpět na uloženou polohu: jediné volání AbsoluteMove s x, y; domeček se nezkouší
+  zaznam.length = 0;
+  assert.deepEqual(await p.pohni('tapoc2020', 'home', { poloha: { x: 0.25, y: -0.5 } }), { ok: true });
+  const zpet = zaznam.filter((z) => /ptz_service/.test(z.url)).map((z) => z.body);
+  assert.equal(zpet.length, 1); assert.match(zpet[0], /AbsoluteMove[\s\S]*PanTilt x="0\.25" y="-0\.5"/);
+  // bez uložené polohy domeček jako dřív
+  zaznam.length = 0; await p.pohni('tapoc2020', 'home');
+  assert.match(zaznam.filter((z) => /ptz_service/.test(z.url))[0].body, /GotoHomePosition/);
+  // kamera bez GetStatus: poloha null, ne chyba (deaktivace jede dál)
+  const bezStatusu = createPtz({ kamery, onvif: (o) => createOnvif({ ...o, fetchImpl: fakeKamera([]) }), log: { log() {}, error() {} } });
+  assert.equal(await bezStatusu.poloha('tapoc2020'), null);
+});

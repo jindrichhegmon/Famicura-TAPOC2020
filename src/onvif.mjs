@@ -250,14 +250,17 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
 
   return {
     /** Otáčení kamery: směr left|right|up|down (ContinuousMove rychlostí 0–1, po ms Stop), home (GotoHomePosition), strop (horní doraz – deaktivace rodinou), stop. */
-    async ptz(smer, { rychlost = 0.5, ms = 400 } = {}) {
+    async ptz(smer, { rychlost = 0.5, ms = 400, poloha = null } = {}) {
       const { url, profil } = await ptzPriprav();
       const r = Math.max(0.1, Math.min(1, Number(rychlost) || 0.5));
       const v = { left: [-r, 0], right: [r, 0], up: [0, r], down: [0, -r] }[smer];
       if (smer === 'home') {
-        // Výchozí poloha: GotoHomePosition; Tapo některé firmwary nemají, pak první uložená předvolba (GetPresets → GotoPreset),
-        // a nakonec AbsoluteMove do středu (0, 0). Když nejde nic, srozumitelná chyba místo kódu z kamery.
+        // Zpět: nejdřív na uloženou polohu (AbsoluteMove x, y – záběr před deaktivací), pak výchozí poloha GotoHomePosition;
+        // Tapo některé firmwary nemají, pak první uložená předvolba (GetPresets → GotoPreset), a nakonec AbsoluteMove do středu (0, 0).
+        // Když nejde nic, srozumitelná chyba místo kódu z kamery.
+        const pl = poloha && Number.isFinite(poloha.x) && Number.isFinite(poloha.y) ? { x: Math.max(-1, Math.min(1, poloha.x)), y: Math.max(-1, Math.min(1, poloha.y)) } : null;
         const pokusy = [
+          ...(pl ? [async () => soap(url, { body: `<tptz:AbsoluteMove><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:Position><tt:PanTilt x="${pl.x}" y="${pl.y}"/></tptz:Position></tptz:AbsoluteMove>` })] : []),
           async () => soap(url, { body: `<tptz:GotoHomePosition><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GotoHomePosition>` }),
           async () => {
             const doc = await soap(url, { body: `<tptz:GetPresets><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GetPresets>` });
@@ -286,6 +289,14 @@ export function createOnvif({ host, port = 2020, user, pass, fetchImpl = fetch, 
       await new Promise((res) => setTimeout(res, Math.max(100, Math.min(3000, Number(ms) || 400))));
       await soap(url, { body: `<tptz:Stop><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken><tptz:PanTilt>true</tptz:PanTilt><tptz:Zoom>false</tptz:Zoom></tptz:Stop>` });
       return { ok: true };
+    },
+    /** Kam kamera kouká (GetStatus → Position/PanTilt x, y v rozsahu −1…1); null, když kamera polohu nehlásí. */
+    async poloha() {
+      const { url, profil } = await ptzPriprav();
+      const doc = await soap(url, { body: `<tptz:GetStatus><tptz:ProfileToken>${esc(profil)}</tptz:ProfileToken></tptz:GetStatus>` });
+      const pt = najdi(doc, 'Position', 'PanTilt');
+      const x = Number(pt?.attrs?.x), y = Number(pt?.attrs?.y);
+      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
     },
     /** Posun hodin kamery; bez něj by kamera digest s naším časem odmítla. */
     async syncClock() {

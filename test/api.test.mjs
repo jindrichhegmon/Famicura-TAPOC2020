@@ -812,7 +812,8 @@ test('ruční nahrávka z aplikace rodiny: jen svá kamera, jméno rodiny u řá
 
 test('deaktivace kamery rodinou: jen rodina, obraz 423 všem, otáčení 423, ruční nahrávka 403, kamera do stropu a zpět, výsledek otočení u stavu', async () => {
   const pohyby = [];
-  const ptz = { async pohni(kamera, smer) { pohyby.push([kamera, smer]); if (smer === 'strop' && pohyby.length > 2) throw Object.assign(new Error('Otočení se nepodařilo: kamera neodpověděla'), { status: 502 }); return { ok: true }; } };
+  // kamera hlásí polohu (0.1, 0.2): server si ji před otočením do stropu uloží a po aktivaci kameru vrátí na ni
+  const ptz = { async poloha() { return { x: 0.1, y: 0.2 }; }, async pohni(kamera, smer, o = {}) { pohyby.push([kamera, smer, o.poloha || null]); if (smer === 'strop' && pohyby.length > 2) throw Object.assign(new Error('Otočení se nepodařilo: kamera neodpověděla'), { status: 502 }); return { ok: true }; } };
   const go2rtc = { ...fakeGo2rtc(), async proxy() { return new Response(Buffer.alloc(20 * 1024, 2), { status: 200 }); } };
   const tabulky = createMockTabulky();
   const uloziste = { nastaveno: true, dir: '/tmp', async uloz(t, id, data) { return { soubor: id + '.enc', velikost: data.length }; }, async nacti() { return Buffer.alloc(0); }, async smaz() {} };
@@ -831,9 +832,10 @@ test('deaktivace kamery rodinou: jen rodina, obraz 423 všem, otáčení 423, ru
   assert.ok(st.patients[0].deaktivace); assert.equal(st.patients[0].deaktivace.kdo, 'Petr Novák');
   assert.match(st.events[0].text, /Rodina \(Petr Novák\) deaktivovala kameru/);
   await cekej();
-  assert.deepEqual(pohyby, [['tapoc2020', 'strop']]);
+  assert.deepEqual(pohyby, [['tapoc2020', 'strop', null]]);
   st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
   assert.equal(st.patients[0].deaktivace.otoceni, 'ok');
+  assert.deepEqual(st.patients[0].deaktivace.poloha, { x: 0.1, y: 0.2 }, 'poloha před otočením do stropu je u stavu');
   // obraz nedostane nikdo – dispečink ani rodina, WebRTC ani HTTPS; otáčení nejde; ruční nahrávka ne
   assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'tapoc2020', sdpOffer: 'v=0' } }))).status, 423);
   assert.equal((await h(req('POST', '/api/stream', { cookies: rc, body: { deviceId: 'tapoc2020', sdpOffer: 'v=0' } }))).status, 423);
@@ -851,8 +853,8 @@ test('deaktivace kamery rodinou: jen rodina, obraz 423 všem, otáčení 423, ru
   // aktivace: zpět do výchozí polohy, obraz zase jde
   pohyby.length = 0;
   r = await h(req('POST', '/api/proto/akce', { cookies: rc, body: { akce: 'deaktivace', args: ['tapoc2020', false] } }));
-  st = (await r.json()).state; assert.equal(st.patients[0].deaktivace, undefined); assert.match(st.events[0].text, /aktivovala kameru/);
-  await cekej(); assert.deepEqual(pohyby, [['tapoc2020', 'home']]);
+  st = (await r.json()).state; assert.equal(st.patients[0].deaktivace, undefined); assert.match(st.events[0].text, /aktivovala kameru.*vrací na původní záběr/);
+  await cekej(); assert.deepEqual(pohyby, [['tapoc2020', 'home', { x: 0.1, y: 0.2 }]], 'zpět na uloženou polohu');
   assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'tapoc2020', sdpOffer: 'v=0' } }))).status, 200);
   // otočení selže: deaktivace platí dál, u stavu je chyba a v historii řádek
   pohyby.length = 0; pohyby.push(null, null);
@@ -862,4 +864,25 @@ test('deaktivace kamery rodinou: jen rodina, obraz 423 všem, otáčení 423, ru
   assert.match(st.patients[0].deaktivace.otoceni, /^chyba: .*kamera neodpověděla/);
   assert.match(st.events[0].text, /nepodařilo otočit do stropu/);
   assert.equal((await h(req('POST', '/api/stream', { cookies: cookie(), body: { deviceId: 'tapoc2020', sdpOffer: 'v=0' } }))).status, 423);
+});
+
+test('rodina vidí jen kamery svého poskytovatele: kamera přiřazená jinému poskytovateli zmizí i z účtu rodiny a stránka dostane zprávu místo zamrznutí', async () => {
+  const { h, uzivatele, vsichni } = handler();
+  // účet s kamerou tenanta i s kamerou, která už patří jinému tenantovi (po vps-kamera.sh tenant …)
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000111', kamery: ['cizi', 'tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  let ja = await (await h(req('GET', '/api/rodina/ja', { cookies: rc }))).json();
+  assert.deepEqual(ja.kamery.map((k) => k.id), ['tapoc2020'], 'cizí kamera v účtu rodiny není vidět');
+  assert.equal(ja.zprava, '');
+  assert.equal((await h(req('POST', '/api/stream', { cookies: rc, body: { deviceId: 'cizi', sdpOffer: 'v=0' } }))).status, 404);
+  // účet jen s kamerou, která se přesunula jinam: prázdný seznam a srozumitelná zpráva
+  const u2 = await uzivatele.vytvor({ jmeno: 'Eva', telefon: '777000222', kamery: ['cizi'] });
+  const rod2 = await vsichni.aktivuj(u2.token, 'rodina-heslo-2');
+  const rc2 = cookieRodina(T, rod2.id).split(';')[0];
+  ja = await (await h(req('GET', '/api/rodina/ja', { cookies: rc2 }))).json();
+  assert.deepEqual(ja.kamery, []);
+  assert.match(ja.zprava, /už u tohoto poskytovatele není/);
+  // akce na tu kameru server odmítne jako neznámou kameru (stránka ukáže chybu, nepřepne se do simulace)
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: rc2, body: { akce: 'deaktivace', args: ['cizi', true] } }))).status, 404);
 });

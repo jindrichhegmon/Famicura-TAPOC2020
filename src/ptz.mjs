@@ -14,21 +14,39 @@ export function createPtz({ kamery, onvif = createOnvif, now = Date.now, log = c
   const klienti = new Map();   // kameraId → klient ONVIF
   const bezi = new Map();      // kameraId → Promise
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
+  const klient = async (kameraId) => {
+    const kam = (await kamery()).find((k) => k.id === kameraId);
+    if (!kam) throw chyba('Neznámá kamera.', 404);
+    let k = klienti.get(kameraId);
+    if (!k) { k = onvif({ host: kam.ip, port: kam.onvifPort || 2020, user: kam.user, pass: kam.pass, now }); klienti.set(kameraId, k); }
+    return k;
+  };
   return {
-    /** Pohne kamerou → { ok }. 404 neznámá kamera, 409 když se právě hýbe, 502 když kamera neodpoví nebo PTZ nemá. */
-    async pohni(kameraId, smer, { rychlost = 0.5, ms = 400 } = {}) {
+    /**
+     * Pohne kamerou → { ok }. 404 neznámá kamera, 409 když se právě hýbe (krok šipkou), 502 když kamera neodpoví nebo PTZ nemá.
+     * Otočení do stropu (deaktivace) a zpět (home, případně na uloženou polohu) na dokončení předchozího pohybu počká,
+     * aby deaktivace stisknutá hned po šipce neskončila chybou „právě se otáčí“.
+     */
+    async pohni(kameraId, smer, { rychlost = 0.5, ms = 400, poloha = null } = {}) {
       if (!SMERY_SERVER.includes(smer)) throw chyba('Směr: left, right, up, down, home nebo stop.', 400);
-      const kam = (await kamery()).find((k) => k.id === kameraId);
-      if (!kam) throw chyba('Neznámá kamera.', 404);
-      if (bezi.has(kameraId)) throw chyba('Kamera se právě otáčí, chvilku počkejte.', 409);
-      let k = klienti.get(kameraId);
-      if (!k) { k = onvif({ host: kam.ip, port: kam.onvifPort || 2020, user: kam.user, pass: kam.pass, now }); klienti.set(kameraId, k); }
+      const k = await klient(kameraId);
+      if (bezi.has(kameraId)) {
+        if (smer !== 'strop' && smer !== 'home') throw chyba('Kamera se právě otáčí, chvilku počkejte.', 409);
+        await bezi.get(kameraId).catch(() => {});
+      }
       const p = (async () => {
-        try { await k.syncClock?.().catch(() => {}); return await k.ptz(smer, { rychlost, ms }); }
+        try { await k.syncClock?.().catch(() => {}); return await k.ptz(smer, { rychlost, ms, poloha }); }
         catch (e) { klienti.delete(kameraId); log.error('[ptz]', kameraId, smer, e.message, e.detail || ''); throw chyba(`Otočení se nepodařilo: ${e.message}`, 502); }
-      })().finally(() => bezi.delete(kameraId));
+      })().finally(() => { if (bezi.get(kameraId) === p) bezi.delete(kameraId); });
       bezi.set(kameraId, p);
       return p;
+    },
+    /** Kam kamera právě kouká (ONVIF GetStatus) → { x, y } v rozsahu −1…1, nebo null, když to kamera neumí. Počká na běžící pohyb. */
+    async poloha(kameraId) {
+      const k = await klient(kameraId);
+      if (bezi.has(kameraId)) await bezi.get(kameraId).catch(() => {});
+      try { await k.syncClock?.().catch(() => {}); return await k.poloha(); }
+      catch (e) { log.error('[ptz]', kameraId, 'poloha', e.message, e.detail || ''); return null; }
     },
   };
 }

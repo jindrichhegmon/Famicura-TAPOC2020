@@ -5,6 +5,28 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.8 · 7. 10. 2026 · návrat kamery na původní záběr, deaktivace bez zamrznutí
+
+- **Po aktivaci se kamera vrací na záběr, který měla před deaktivací.** Server si
+  před otočením do stropu přečte polohu kamery (ONVIF `GetStatus`, x/y) a uloží
+  ji k deaktivaci (`A_KAM_Kamera.Deaktivace.poloha`); při aktivaci kameru otočí
+  `AbsoluteMove` na tu polohu a teprve když to kamera neumí, jede jako dřív
+  (výchozí poloha → předvolba → střed). V historii je „kamera se vrací na
+  původní záběr“ / „do výchozí polohy“ podle toho, co se povedlo.
+- **Deaktivace hned po šipce nekončí chybou „kamera se právě otáčí“:** otočení do
+  stropu a zpět počká na dokončení běžícího kroku (`src/ptz.mjs`); krok šipkou
+  během jiného pohybu dál vrací 409.
+- **Oprava: aplikace rodiny zamrzla a deaktivace se neprovedla, když účet rodiny
+  ukazoval na kameru, která už poskytovateli nepatří** (po `vps-kamera.sh tenant …`
+  přesunuté k jinému poskytovateli). Server (`/api/rodina/ja`, obraz) teď rodině
+  dává jen kamery jejího poskytovatele; když v účtu žádná taková není, stránka
+  řekne „Kamera, ke které máte přístup, už u tohoto poskytovatele není…“. Dřív
+  stránka kameru založila do stavu, server ji odmítl (403) a aplikace se tiše
+  přepnula na místní simulaci – tlačítka vypadala živá, ale nic se nedělo.
+- Robustnost klientů: odpověď serveru 403 už nepřepíná stránku do simulace (jen
+  401 = odhlášení), každé volání serveru má limit 30 s a hlásí chybu místo
+  zamrznutí, tlačítko Deaktivovat/Aktivovat se po chybě zase uvolní.
+
 ## 3.7 · 7. 10. 2026 · kamera přiřazená jinému poskytovateli zmizí z původního dispečinku
 
 - **Přiřazení kamery jinému tenantovi** (`vps-kamera.sh tenant …`) dřív nechalo
