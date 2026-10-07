@@ -14,7 +14,7 @@ function stav(tabulky, over = {}) {
   let t = over.t0 || 1_700_000_000_000;
   const now = () => t;
   const tenant = over.tenant || T;
-  const s = createStavTenantu({ tenant, tabulky, kamery: async () => (await kamery()).filter((k) => k.tenant === tenant), now, log: over.log || ticho, nazev: 'FamiCura s.r.o.', udalosti: over.udalosti || null, upozorni: over.upozorni || null, nahravky: over.nahravky || null });
+  const s = createStavTenantu({ tenant, tabulky, kamery: async () => (await (over.kamery || kamery)()).filter((k) => k.tenant === tenant), now, log: over.log || ticho, nazev: 'FamiCura s.r.o.', udalosti: over.udalosti || null, upozorni: over.upozorni || null, nahravky: over.nahravky || null });
   return { s, posun: (ms) => { t += ms; }, now };
 }
 
@@ -368,4 +368,31 @@ test('deaktivace kamery: v jádru i po restartu – bez obrazu, událostí a nah
   await st2.proved('deaktivace', ['tapoc2020', false, 'Eva']);
   assert.equal(tb.data[T].A_KAM_Kamera[0].Deaktivace, null);
   assert.ok((await st2.proved('emit', ['tapoc2020', 'fall', { real: true }])).vysledek, 'po aktivaci se hlídá');
+});
+
+test('kamera přiřazená jinému tenantovi z dispečinku zmizí (řádek Aktivni=0, historie zůstává, události se nezapisují); název a místo se drží podle serveru', async () => {
+  const tb = createMockTabulky();
+  const t0 = 1_700_000_000_000;
+  const { s: s1 } = stav(tb, { t0 });
+  await s1.stav();
+  await s1.proved('emit', ['tapoc2020', 'person', { real: true, text: 'Kamera hlásí: osoba.' }]);
+  assert.equal(tb.data[T].A_KAM_Kamera.length, 1);
+  const udalostiPred = tb.data[T].A_KAM_Udalost.filter((u) => u.KameraID === 'tapoc2020').length;
+  // cameras.json: tapoc2020 už patří jinému tenantovi, FamiCura má novou kam9; kamera dál hlásí události
+  const prijate = [{ prijato: t0 + 60_500, kameraId: 'tapoc2020', kind: 'cam-person', text: 'Kamera hlásí: osoba.' }];
+  const { s: s2 } = stav(tb, { t0: t0 + 60_000, udalosti: { nedavne: (od) => prijate.filter((e) => e.prijato > od) },
+    kamery: async () => [{ id: 'tapoc2020', name: 'Tapo', tenant: T2 }, { id: 'kam9', name: 'Nová kamera', tenant: T, place: 'Byt 3' }] });
+  const x = await s2.stav();
+  assert.deepEqual(x.state.patients.map((p) => p.id), ['kam9'], 'stará kamera pryč, nová tu je');
+  assert.equal(x.state.patients[0].name, 'Nová kamera'); assert.equal(x.state.patients[0].place, 'Byt 3');
+  const radky = Object.fromEntries(tb.data[T].A_KAM_Kamera.map((r) => [r.KameraID, r]));
+  assert.equal(radky.tapoc2020.Aktivni, false, 'řádek zůstává, jen neaktivní'); assert.equal(radky.kam9.Aktivni, true);
+  assert.equal(tb.data[T].A_KAM_Udalost.filter((u) => u.KameraID === 'tapoc2020').length, udalostiPred, 'historie zůstává, nová událost cizí kamery se nezapsala');
+  assert.ok(x.state.events.some((e) => e.patientId === 'tapoc2020'), 'historie v deníku zůstává');
+  // kamera se vrátí (přejmenovaná, jiné místo): řádek ožije, název a místo podle serveru
+  const { s: s3 } = stav(tb, { t0: t0 + 120_000, kamery: async () => [{ id: 'tapoc2020', name: 'Přejmenovaná', tenant: T, place: 'Kuchyň' }] });
+  const y = await s3.stav();
+  assert.deepEqual(y.state.patients.map((p) => [p.id, p.name, p.place]), [['tapoc2020', 'Přejmenovaná', 'Kuchyň']]);
+  const radky2 = Object.fromEntries(tb.data[T].A_KAM_Kamera.map((r) => [r.KameraID, r]));
+  assert.equal(radky2.tapoc2020.Aktivni, true); assert.equal(radky2.tapoc2020.Nazev, 'Přejmenovaná'); assert.equal(radky2.kam9.Aktivni, false);
 });

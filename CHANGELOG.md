@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.7 · 7. 10. 2026 · kamera přiřazená jinému poskytovateli zmizí z původního dispečinku
+
+- **Přiřazení kamery jinému tenantovi** (`vps-kamera.sh tenant …`) dřív nechalo
+  u původního poskytovatele starou dlaždici bez obrazu a události kamery se
+  zapisovaly oběma. Teď server při načtení stavu porovná kamery tenanta se
+  serverem (cameras.json): kamera, která tenantovi už nepatří, z dispečinku
+  zmizí (řádek v `A_KAM_Kamera` zůstane s `Aktivni = 0` i s celou historií),
+  události se jí dál nezapisují; když se vrátí, řádek ožije i s nastavením.
+- **Název a místo kamery v dispečinku se drží podle serveru** (`vps-kamera.sh
+  seznam`), aby obě strany říkaly totéž; dřív zůstal název z doby založení
+  řádku.
+
 ## 3.6 · 7. 10. 2026 · odkaz s jiným tenantem má přednost před přihlášením
 
 - **Dispečink otevřený odkazem `?tenant=ID` jiného poskytovatele, než ke kterému

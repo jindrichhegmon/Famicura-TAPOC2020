@@ -125,14 +125,32 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     return data;
   }
 
-  /** Kamery tenanta ze serveru (cameras.json), které v databázi ještě nejsou, dostanou řádek s výchozím nastavením. */
+  /** Kamery tenanta podle serveru (cameras.json): nové dostanou řádek s výchozím nastavením, název a místo se
+   *  drží podle serveru, a kamera, která už tenantovi nepatří (přiřazená jinému poskytovateli nebo smazaná),
+   *  z dispečinku zmizí – řádek zůstane s Aktivni = 0 i s historií, události se jí dál nezapisují (od 3.7). */
   async function doplnKamery() {
     let zmena = false;
-    for (const k of await kamery()) {
-      if (data.state.patients.some((p) => p.id === k.id)) continue;
-      proved(data.state, 'ensurePatient', [{ id: k.id, name: k.name }], now());
-      const p = data.state.patients.find((x) => x.id === k.id);
-      if (p) { p.provider = data.state.poskytovatel.nazev; p.place = k.place || p.place; zmena = true; }
+    const seznam = await kamery();
+    for (const p of [...data.state.patients]) {
+      if (!p.real || seznam.some((k) => k.id === p.id)) continue;
+      data.state.patients = data.state.patients.filter((x) => x !== p);
+      delete data.state.grants[p.id]; delete data.state.watching[p.id]; delete data.state.klid[p.id];
+      otisky.delete('k:' + p.id);
+      await tabulky.uprav(tenant, 'A_KAM_Kamera', { KameraID: p.id }, { Aktivni: false, Zmeneno: now() }).catch((e) => { if (log && log.error) log.error('[stav-tenant]', tenant, 'vyřazení kamery', p.id, e.message); });
+      if (log && log.log) log.log('[stav-tenant]', tenant, `kamera ${p.id} už tenantovi nepatří – vyřazena z dispečinku (historie zůstává)`);
+      zmena = true;
+    }
+    for (const k of seznam) {
+      let p = data.state.patients.find((x) => x.id === k.id);
+      if (!p) {
+        proved(data.state, 'ensurePatient', [{ id: k.id, name: k.name }], now());
+        p = data.state.patients.find((x) => x.id === k.id);
+        if (p) { p.provider = data.state.poskytovatel.nazev; p.place = k.place || p.place; zmena = true; }
+        continue;
+      }
+      // název a místo určuje správce serveru (vps-kamera.sh); dispečink je přebírá, aby obě strany říkaly totéž
+      if (k.name && p.name !== k.name) { p.name = k.name; zmena = true; }
+      if (k.place && p.place !== k.place) { p.place = k.place; zmena = true; }
     }
     if (zmena) { data.v++; await uloz(); }
   }
