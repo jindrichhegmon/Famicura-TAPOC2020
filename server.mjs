@@ -40,6 +40,7 @@ const { createStore } = await import('./src/store.mjs');
 const { BEZPECNOSTNI_HLAVICKY } = await import('./src/csp.mjs');
 const { createCameraEvents } = await import('./src/udalosti-kamer.mjs');
 const { kdo, dispecinkTenanta } = await import('./src/session.mjs');
+const { normTenant } = await import('./src/tabulky.mjs');
 const { createPdp } = await import('./src/pdp.mjs');
 const { createNajemci } = await import('./src/najemci.mjs');
 const { createUzivatele } = await import('./src/uzivatele.mjs');
@@ -139,7 +140,12 @@ const server = http.createServer(async (req, res) => {
     // Dispečink a provoz jen po přihlášení poskytovatele: bez něj jde místo
     // stránky přihlášení (stejná adresa, po přihlášení se načte znovu).
     // Dispečink a provoz jen pro dispečera tenanta (účet Péče doma plus) nebo správce se zvoleným tenantem.
-    if (/^proto[/\\](dispecink|provoz)\.html$/.test(rel) && !dispecinkTenanta(req.headers)) file = path.join(PUBLIC, 'proto', 'prihlaseni.html');
+    // Odkaz s jiným tenantem (?tenant=…) než má přihlášení má přednost: místo dispečinku jde přihlášení k tomu tenantovi (od 3.6).
+    if (/^proto[/\\](dispecink|provoz)\.html$/.test(rel)) {
+      const prihlasen = dispecinkTenanta(req.headers);
+      const chce = normTenant(url.searchParams.get('tenant') || '');
+      if (!prihlasen || (chce && prihlasen.tenant !== chce)) file = path.join(PUBLIC, 'proto', 'prihlaseni.html');
+    }
     // A folder (/proto/) serves its index.html, like any web server.
     if (await stat(file).then((st) => st.isDirectory(), () => false)) file = path.join(file, 'index.html');
     const data = await readFile(file);

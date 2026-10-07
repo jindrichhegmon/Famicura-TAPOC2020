@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.6 · 7. 10. 2026 · odkaz s jiným tenantem má přednost před přihlášením
+
+- **Dispečink otevřený odkazem `?tenant=ID` jiného poskytovatele, než ke kterému
+  je prohlížeč přihlášený, ukáže přihlášení k tomu novému poskytovateli**
+  (s poznámkou, u koho je prohlížeč přihlášený teď). Dřív server parametr
+  přehlédl a otevřel dispečink původního tenanta, takže se zdálo, že odkaz
+  nefunguje. Odkaz bez parametru dál otevře dispečink přihlášeného tenanta.
+
 ## 3.5 · 7. 10. 2026 · deník na telefonu
 
 - **Deník (historie) na telefonu:** datum se překrývalo s textem události,

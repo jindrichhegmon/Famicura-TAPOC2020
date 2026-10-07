@@ -72,6 +72,14 @@ async function start() {
     if (params.has('tenant')) { params.delete('tenant'); history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '')); }
     $('gKdo').textContent = `Poskytovatel: ${tenantInfo.nazev || tenantInfo.id} (${tenantInfo.id})`;
     $('gKdoAdmin').textContent = $('gKdo').textContent;
+    // Přihlášení u jiného poskytovatele v tomhle prohlížeči: odkaz s tenantem má přednost, ale ať je jasné, proč se hlásí znovu.
+    try {
+      const ja = await (await fetch('/api/rodina/ja', { cache: 'no-store' })).json();
+      if (ja && ja.tenant && ja.tenant.id && ja.tenant.id !== tenantInfo.id) {
+        $('gKdo').textContent += ` · V tomhle prohlížeči jste přihlášen(a) u poskytovatele ${ja.tenant.nazev || ja.tenant.id}; pro tohoto se přihlaste znovu.`;
+        $('gKdoAdmin').textContent = $('gKdo').textContent;
+      }
+    } catch { /* nepřihlášen */ }
     ukaz('gLogin');
   } catch (e) {
     localStorage.removeItem(TENANT_KEY);
