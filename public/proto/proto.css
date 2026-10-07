@@ -42,7 +42,9 @@ textarea{width:100%;min-height:64px}
 .list{list-style:none;margin:0;padding:0}
 .list li{padding:8px 0;border-bottom:1px solid var(--soft);display:flex;gap:8px;align-items:flex-start}
 .list li:last-child{border-bottom:0}
-.list .when{color:var(--muted);font-size:.8rem;white-space:nowrap;min-width:52px}
+.list .when{color:var(--muted);font-size:.8rem;white-space:nowrap;min-width:52px;flex:0 0 auto}
+/* telefon: datum na vlastním řádku nad textem, aby se nepřekrývalo s textem a text měl celou šířku */
+@media (max-width:600px){.list li{flex-wrap:wrap}.list li>.when{flex:0 0 100%;min-width:0;margin-bottom:-2px}.list li>.grow{flex:1 1 100%;min-width:0}}
 .banner{border-radius:12px;padding:10px 12px;margin:8px 0;border:1px solid var(--line);background:#fff;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .banner.crit{background:var(--badbg);border-color:#f1c7c7}
 .banner.warn{background:var(--warnbg);border-color:#f0d9b5}

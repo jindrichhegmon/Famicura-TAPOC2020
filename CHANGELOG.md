@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.5 · 7. 10. 2026 · deník na telefonu
+
+- **Deník (historie) na telefonu:** datum se překrývalo s textem události,
+  protože se sloupec s datem zmenšoval pod šířku textu. Datum se už
+  nezmenšuje a na úzké obrazovce (do 600 px) stojí na vlastním řádku nad
+  textem, který má celou šířku. Platí pro historii a seznam nahrávek
+  v dispečinku i v aplikaci rodiny.
+
 ## 3.4 · 7. 10. 2026 · barevná schémata dispečinku
 
 - **Dispečink: výběr barevného schématu** v ⚙ Nastavení → Zobrazení na
