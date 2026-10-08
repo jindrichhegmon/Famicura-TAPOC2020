@@ -433,7 +433,7 @@ function renderTiles() {
     t.querySelector('.tag').textContent = p.deaktivace ? MODE_TAG.deaktivace : p.offline ? 'kamera nedostupná' : MODE_TAG[tileMode(p.id)] || '';
     const b = t.querySelector('.st-badge'); b.textContent = { crit: 'kritické', warn: 'varování', off: 'offline', klid: 'klid' }[st]; b.className = 'badge st-badge ' + (st === 'klid' ? 'ok' : st === 'off' ? 'tech' : st);
     const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent' && e.kind !== 'poznamka');
-    t.querySelector('.st').textContent = last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí';
+    t.querySelector('.st').textContent = (p.naramek?.vypnuto ? '⏻ náramek vypnutý · ' : '') + (last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí');
   });
   $('nPat').textContent = s.patients.filter(visible).length;
   const vis = (e) => visible(sim.patient(e.patientId) || {});
@@ -493,7 +493,7 @@ function renderDetail(rebuild = false) {
     detailUnreg?.(); 
     const kon = kontaktyPro(p);
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
-      <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek</button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
+      <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span></button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
@@ -518,7 +518,7 @@ function renderDetail(rebuild = false) {
           <div class="kgrid krodina">${Array.from({ length: KONTAKTY_RODINA_MAX }, (_, i) => `<label>Rodina ${i + 1} – jméno<input type="text" class="kjmeno" data-i="${i}" maxlength="40" placeholder="dcera Eva" value="${esc(kon.rodina[i]?.jmeno || '')}"></label><label>telefon<input type="tel" class="ksms" data-i="${i}" maxlength="20" placeholder="777 123 456" value="${esc(kon.rodina[i]?.telefon ? formatTelefon(kon.rodina[i].telefon) : '')}"></label>`).join('')}</div>
           </fieldset>
           <fieldset class="ksekce"><legend>Poskytovatel <span class="muted">(společné pro všechny kamery)</span></legend>
-          <div class="kgrid kposk">${ROLE_POSKYTOVATELE.map((r) => { const tp = telefonyPoskytovatele(sim.state)[r]; return `<label>Telefon – ${esc(POPIS_ROLE[r])}<select class="kpzdroj" data-r="${r}">${ZDROJE_TELEFONU.map((z) => `<option value="${z}"${tp.zdroj === z ? ' selected' : ''}>${esc(POPIS_ZDROJE_TELEFONU[z])}</option>`).join('')}</select></label><label class="kptelL${tp.zdroj === 'pecedoma' ? ' hide' : ''}" data-r="${r}">${tp.zdroj === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'}<input type="tel" class="kptel" data-r="${r}" maxlength="20" placeholder="777 123 456" value="${esc(tp.telefon ? formatTelefon(tp.telefon) : '')}"></label><span class="small kpnahled" data-r="${r}"></span>`; }).join('')}</div>
+          <div class="kgrid kposk">${ROLE_POSKYTOVATELE.map((r) => { const tp = telefonyPoskytovatele(sim.state)[r]; return `<label>Telefon – ${esc(POPIS_ROLE[r])}<select class="kpzdroj" data-r="${r}">${ZDROJE_TELEFONU.map((z) => `<option value="${z}"${tp.zdroj === z ? ' selected' : ''}>${esc(POPIS_ZDROJE_TELEFONU[z])}</option>`).join('')}</select></label><label class="kptelL${tp.zdroj === 'pecedoma' ? ' kneviditelne' : ''}" data-r="${r}">${tp.zdroj === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'}<input type="tel" class="kptel" data-r="${r}" maxlength="20" placeholder="777 123 456" value="${esc(tp.telefon ? formatTelefon(tp.telefon) : '')}"></label><span class="small kpnahled" data-r="${r}"></span>`; }).join('')}</div>
           <p class="small muted" id="dkontaktyPosk">– Péče doma = kontaktní telefon poskytovatele v databázi Péče doma (bez tenanta, jedno číslo pro všechny tři); Péče doma plus = telefon v nastavení tohoto tenanta, zadáte ho tady a uloží se do Péče doma plus. Číslo z Péče doma (plus) dosadí server při každé události i do náramku a při změně ho pošle znovu.</p>
           </fieldset>
           <fieldset class="ksekce"><legend>E-maily</legend>
@@ -538,6 +538,7 @@ function renderDetail(rebuild = false) {
           <p class="small bad hide" id="dnaramekErr"></p>
         </form>
         </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
+        <div class="naramekVyp hide" id="dnaramekVyp"></div>
         <p id="dnaramekInfo"></p>
         <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
@@ -631,7 +632,7 @@ function renderDetail(rebuild = false) {
       } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
     };
     // změna zdroje telefonu poskytovatele: pole pro číslo jen u vlastního čísla a Péče doma plus (tam se ukládá do Plus), náhled hned
-    kf.querySelectorAll('.kpzdroj').forEach((sel) => { sel.onchange = () => { const r = sel.dataset.r; const inp = kf.querySelector(`.kptel[data-r="${r}"]`); const z = sel.value; const lab = kf.querySelector(`.kptelL[data-r="${r}"]`); lab.firstChild.textContent = z === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'; lab.classList.toggle('hide', z === 'pecedoma'); inp.value = z === 'pecedomaplus' ? (d.__sluzba?.pecedomaplus?.[r]?.telefon || '') : z === 'vlastni' ? (sim.poskytovatel[POLE_ROLE[r].telefon] || '') : ''; kresliPosk(d); }; });
+    kf.querySelectorAll('.kpzdroj').forEach((sel) => { sel.onchange = () => { const r = sel.dataset.r; const inp = kf.querySelector(`.kptel[data-r="${r}"]`); const z = sel.value; const lab = kf.querySelector(`.kptelL[data-r="${r}"]`); lab.firstChild.textContent = z === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'; lab.classList.toggle('kneviditelne', z === 'pecedoma'); inp.value = z === 'pecedomaplus' ? (d.__sluzba?.pecedomaplus?.[r]?.telefon || '') : z === 'vlastni' ? (sim.poskytovatel[POLE_ROLE[r].telefon] || '') : ''; kresliPosk(d); }; });
     kf.querySelectorAll('.kptel').forEach((i) => { i.oninput = () => kresliPosk(d); });
     const nf = d.querySelector('#dnaramek');
     nf.onsubmit = async (e) => {
@@ -778,9 +779,13 @@ function renderDetail(rebuild = false) {
     else if (!n.posledni) { stav.textContent = `Náramek ${n.id} přiřazen.`; info.textContent = 'Zatím se neozval. Zařízení musí mít nastavenou adresu serveru (SMS příkaz je v nápovědě → Náramek); po nastavení se ozve do minuty.'; }
     else {
       stav.textContent = `Náramek ${n.id} přiřazen.`;
-      info.innerHTML = `Naposledy se ozval <strong>${esc(ago(n.posledni))}</strong>${Number.isFinite(n.baterie) ? `, baterie <strong>${n.baterie} %</strong>` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha${n.poloha.priblizna ? ' (přibližná, z mobilní sítě)' : ' (GPS)'}</a> ${esc(ago(n.poloha.cas || n.posledni))}` : ' · poloha zatím není'}`
+      const ticho = Date.now() - n.posledni > 2 * 60 * 60 * 1000;
+      info.innerHTML = `Naposledy se ozval <strong${ticho ? ' class="bad"' : ''}>${esc(ago(n.posledni))}</strong>${ticho && !n.vypnuto ? ' <span class="bad">(neozývá se přes 2 hodiny – vybitý, bez signálu, nebo vypnutý tlačítkem)</span>' : ''}${Number.isFinite(n.baterie) ? `, baterie <strong>${n.baterie} %</strong>` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha${n.poloha.priblizna ? ' (přibližná, z mobilní sítě)' : ' (GPS)'}</a> ${esc(ago(n.poloha.cas || n.posledni))}` : ' · poloha zatím není'}`
         + (n.zdravi ? `<br>Poslední měření (${esc(ago(n.zdravi.cas))}): <strong>${esc(fmtZ(n.zdravi))}</strong>` : '');
     }
+    const vyp = d.querySelector('#dnaramekVyp'), tabVyp = d.querySelector('#dtabVyp');
+    vyp.classList.toggle('hide', !n?.vypnuto); tabVyp.classList.toggle('hide', !n?.vypnuto);
+    if (n?.vypnuto) setHtml(vyp, `⏻ NÁRAMEK JE VYPNUTÝ – příkaz k vypnutí poslal(a) ${esc(n.vypnulKdo || 'dispečink')} ${esc(fmtDT(n.vypnuto))}. Nehlásí SOS, pád ani polohu. Zapne se jen tlačítkem na náramku; jakmile se ozve, tohle hlášení zmizí.`);
     const mapa = d.querySelector('#dnaramekMapa');
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
     const sf = d.querySelector('#dnaramekSos');

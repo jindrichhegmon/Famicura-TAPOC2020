@@ -5,6 +5,17 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.23 · 8. 10. 2026 · kontakty pod sebou, vypnutý náramek jasně vidět
+
+- **Kontakty** (Komunikace): každý člověk z rodiny, každý telefon
+  poskytovatele a každá sada e-mailů na vlastním řádku (dřív dva vedle sebe).
+- **Vypnutý náramek**: po odeslání POWEROFF z dispečinku si server u náramku
+  zapíše `vypnuto` (kdy) a `vypnulKdo`; v záložce Náramek svítí červené
+  hlášení „NÁRAMEK JE VYPNUTÝ“, záložka má odznak ⏻ a dlaždice kamery
+  „⏻ náramek vypnutý“. Jakmile se náramek zase ozve (zapnutý tlačítkem),
+  server značku smaže a hlášení zmizí. Náramek, který se neozval přes
+  2 hodiny, má čas posledního ozvání červeně s vysvětlením.
+
 ## 3.22 · 8. 10. 2026 · telefony poskytovatele (dispečink, služba, administrace) v Kontaktech, čísla SOS jen z kontaktů, záložka Náramek za Monitoringem
 
 - **Kontakty kamery** (Komunikace) mají tři oddělené sekce: **Rodina** (5× jméno

@@ -213,10 +213,14 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       if (now() - kdy > 60 * 60 * 1000) { nezname.set(ramec.id, now()); log.log(`[naramky] neznámý přívěsek ${ramec.id} (${r.typ}) – přiřaďte ho v dispečinku u kamery (Komunikace → Náramek / přívěsek).`); }
       return;
     }
+    let sv = null, pac = null;
+    try { sv = (await kam.stav.stav()).state; pac = sv.patients.find((x) => x.id === kam.kameraId); } catch (e) { log.error('[naramky] stav kamery:', e.message); }
+    // náramek označený jako vypnutý (POWEROFF z dispečinku) se zase ozval → značka pryč
+    if (pac?.naramek?.vypnuto) { await kam.stav.naramek({ kameraId: kam.kameraId, vypnuto: null }).catch((e) => log.error('[naramky] zápis zapnutí:', e.message)); log.log(`[naramky] ${ramec.id} se po vypnutí zase ozval`); }
     // čekající čísla SOS (setNaramekSos, když náramek nebyl připojený): poslat při prvním ozvání
-    if (!sosPosilam.has(ramec.id)) {
+    if (!sosPosilam.has(ramec.id) && sv) {
       try {
-        const sv = (await kam.stav.stav()).state; const pac = sv.patients.find((x) => x.id === kam.kameraId); const n = pac?.naramek;
+        const n = pac?.naramek;
         if (n && Array.isArray(n.sos) && !n.sosOdeslano) {
           sosPosilam.add(ramec.id);
           try { const r = await prikaz(ramec.id, 'sos', { cislaSos: n.sos, tenant: kam.tenant, state: sv, patient: pac }); await kam.stav.naramek({ kameraId: kam.kameraId, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); log.log(`[naramky] ${ramec.id} čísla SOS odeslána při ozvání`); }

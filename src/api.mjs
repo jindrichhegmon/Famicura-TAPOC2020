@@ -494,7 +494,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const p = (await st.stav()).state.patients.find((x) => x.id === kamera);
         if (!p?.naramek?.id) return json({ ok: false, error: 'Ke kameře není přiřazen náramek.' }, 400);
         const r = await naramky.prikaz(p.naramek.id, String(prikaz || ''), { vlastni: typeof vlastni === 'string' ? vlastni : '' });
-        if (prikaz === 'vypnout' || prikaz === 'vlastni') await st.proved('poznamka', [kamera, `Náramek ${p.naramek.id}: poslán příkaz ${r.obsah}.`, ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce')]).catch(() => {});
+        const kdo = ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce');
+        if (prikaz === 'vypnout' || prikaz === 'vlastni') await st.proved('poznamka', [kamera, `Náramek ${p.naramek.id}: poslán příkaz ${r.obsah}.`, kdo]).catch(() => {});
+        if (prikaz === 'vypnout') await st.naramek({ kameraId: kamera, vypnuto: Date.now(), vypnulKdo: kdo }).catch(() => {});   // dispečink ukáže „náramek je vypnutý“, dokud se zase neozve
         return json({ ok: true, obsah: r.obsah, ...(r.predtim ? { predtim: r.predtim } : {}) });
       }
 

@@ -304,13 +304,14 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
       });
     },
     /** Ozvání náramku/přívěsku přiřazeného ke kameře (src/naramky.mjs): kdy naposledy, baterie %, poslední platná poloha. */
-    naramek({ kameraId, posledni, baterie = null, poloha = null, zdravi = null, sosOdeslano = undefined, sosOdeslaneCisla = undefined }) {
+    naramek({ kameraId, posledni, baterie = null, poloha = null, zdravi = null, sosOdeslano = undefined, sosOdeslaneCisla = undefined, vypnuto = undefined, vypnulKdo = '' }) {
       return serializovane(async () => {
         await nacti();
         const p = data.state.patients.find((x) => x.id === kameraId); if (!p || !p.naramek?.id) return { v: data.v };
         const n = { ...p.naramek, ...(posledni !== undefined ? { posledni: Number(posledni) || now() } : {}) };
         if (sosOdeslano !== undefined) n.sosOdeslano = sosOdeslano;   // kdy server poslal čísla SOS do náramku (null = čeká na ozvání)
         if (sosOdeslaneCisla !== undefined) n.sosOdeslaneCisla = sosOdeslaneCisla;   // skutečně poslaná čísla (ID z Kontaktů a zdroje Péče doma už dosazené)
+        if (vypnuto !== undefined) { n.vypnuto = vypnuto ? Number(vypnuto) : null; n.vypnulKdo = vypnuto ? String(vypnulKdo || '') : ''; }   // POWEROFF odeslán (kdy, kdo); smaže se, až se náramek zase ozve
         if (Number.isFinite(Number(baterie)) && baterie !== null) n.baterie = Number(baterie);
         if (poloha && Number.isFinite(poloha.lat) && Number.isFinite(poloha.lon)) n.poloha = { lat: poloha.lat, lon: poloha.lon, cas: poloha.cas || now(), ...(poloha.priblizna ? { priblizna: true } : {}) };
         // zdravotní měření: poslední známé hodnoty (tep, tlak, kyslík, teplota) s časem; nové měření doplní jen změřené položky

@@ -907,6 +907,7 @@ test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený ná
   assert.equal(r.status, 200);
   const st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
   assert.match(st.events[0].text, /poslán příkaz POWEROFF/);
+  assert.ok(st.patients[0].naramek.vypnuto > 0, 'náramek označený jako vypnutý'); assert.equal(st.patients[0].naramek.vypnulKdo, 'Správce');
   assert.equal((await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'cizi', prikaz: 'tep' } }))).status, 404);
   const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000333', kamery: ['tapoc2020'] });
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');

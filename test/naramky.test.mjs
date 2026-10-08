@@ -173,6 +173,11 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     const k = await spoj(port);
     await k.posli(ram('LK,0,0,95'));
     assert.ok(await cekej(() => n.pripojen(ID)), 'po prvním rámci je náramek připojený');
+    // vypnutý náramek (POWEROFF z dispečinku, stav vypnuto) se zase ozval → značka pryč
+    await s.naramek({ kameraId: 'tapoc2020', vypnuto: now(), vypnulKdo: 'Dispečer' });
+    assert.equal((await s.stav()).state.patients[0].naramek.vypnulKdo, 'Dispečer');
+    await k.posli(ram('LK,0,0,95'));
+    assert.ok(await cekej(async () => (await s.stav()).state.patients[0].naramek.vypnuto === null), 'po ozvání je vypnuto null');
     assert.deepEqual(await n.prikaz(ID, 'tep'), { ok: true, obsah: 'hrtstart,1' });
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*000A*hrtstart,1]`)), 'příkaz dorazil do spojení náramku');
     // tlak/kyslík/teplota: napřed hrtstart,1 (zapne snímač V48), po prodlevě vlastní příkaz
