@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.12 · 8. 10. 2026 · seznam příkazů náramku
+
+- **Tabulka příkazů** v záložce Náramek pod polem pro vlastní příkaz: bphrt,
+  oxygen, hrtstart,1 / hrtstart,300, btemp2, CR, UPLOAD, FIND, CALL, MONITOR,
+  SOS1–3, CENTER, LOWBAT, REMOVE, PEDO, LZ, VERNO, TS, RESET, POWEROFF s popisem;
+  klepnutí vloží příkaz do pole. ✔ = ověřeno u ReachFar V48 z logu serveru
+  (`bphrt` → tlak 110/68 a tep, `oxygen,1,95`, `hrtstart` přijato, POWEROFF),
+  ? = podle dokumentace protokolu. Varování před IP, PW a FACTORY.
+
 ## 3.11 · 8. 10. 2026 · mapa polohy, příkazy náramku, automatické měření
 
 - **Mapa poslední polohy** v záložce Náramek (dlaždice OpenStreetMap, zoom 16,

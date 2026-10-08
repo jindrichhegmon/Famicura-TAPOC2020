@@ -535,6 +535,30 @@ function renderDetail(rebuild = false) {
         <div class="akce"><button type="button" class="sm" data-nprikaz="tep">Změřit tep</button><button type="button" class="sm" data-nprikaz="tlak">Změřit tlak</button><button type="button" class="sm" data-nprikaz="kyslik">Změřit kyslík</button><button type="button" class="sm" data-nprikaz="teplota">Změřit teplotu</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm sec" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label>${['tep', 'tlak', 'kyslik', 'teplota'].map((k) => `<label class="small"><input type="checkbox" class="nauto" data-k="${k}" ${p.naramek?.auto?.[k] ? 'checked' : ''}> ${({ tep: 'tep', tlak: 'tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]}</label>`).join('')}<button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         <form class="kontakty" id="dnaramekVlastni"><div class="akce"><label class="small">příkaz pro náramek (pokročilé, podle dokumentace modelu) <input type="text" id="dnaramekVlastniText" maxlength="60" placeholder="např. hrtstart,1"></label><button class="sm sec" type="submit">Odeslat</button></div></form>
+        <p class="small muted">Příkazy, které náramek (protokol hodinek, ReachFar V48) přijímá – klepnutím se vloží do pole; ✔ = ověřeno u V48, ? = podle dokumentace, zatím neověřeno. Náramek přijatý příkaz zopakuje, vidíte to v logu serveru.</p>
+        <table class="mereni prikazy"><thead><tr><th>příkaz</th><th>co udělá</th><th></th></tr></thead><tbody>${[
+          ['bphrt', 'změří krevní tlak a tep (výsledek do tabulky Měření zdraví)', '✔'],
+          ['oxygen', 'změří kyslík v krvi', '✔'],
+          ['hrtstart,1', 'jedno měření tepu (hodnota přijde jako rámec heart)', '✔ přijato'],
+          ['hrtstart,300', 'měřit tep opakovaně každých 300 s; hrtstart,0 opakování vypne', '?'],
+          ['btemp2', 'změří teplotu', '?'],
+          ['CR', 'pošle polohu hned', '?'],
+          ['UPLOAD,600', 'interval hlášení polohy v sekundách (600 = 10 min)', '?'],
+          ['FIND', 'náramek zazvoní (hledání)', '?'],
+          ['CALL,+420', 'náramek zavolá na číslo (doplňte číslo)', '?'],
+          ['MONITOR,+420', 'náramek zavolá na číslo bez zvonění (poslech okolí)', '?'],
+          ['SOS1,+420', 'číslo, které náramek volá při SOS (SOS2, SOS3 další)', '?'],
+          ['CENTER,+420', 'hlavní číslo (centrum), ze kterého náramek bere příkazy', '?'],
+          ['LOWBAT,1', 'hlásit slabou baterii (0 vypne)', '?'],
+          ['REMOVE,1', 'hlásit sejmutí náramku (0 vypne)', '?'],
+          ['PEDO,1', 'krokoměr zapnout (0 vypne)', '?'],
+          ['LZ,0,1', 'jazyk (0 angličtina) a časové pásmo (1 = střední Evropa, v létě 2)', '?'],
+          ['VERNO', 'verze firmware', '?'],
+          ['TS', 'stav zařízení (IMEI, verze, baterie…)', '?'],
+          ['RESET', 'restart náramku', '?'],
+          ['POWEROFF', 'vypne náramek (zapne se jen tlačítkem)', '✔'],
+        ].map(([k, t, o]) => `<tr><td><a href="#" data-nvzor="${k}"><code>${k}</code></a></td><td class="wrap">${t}</td><td>${o}</td></tr>`).join('')}</tbody></table>
+        <p class="small muted">Neposílejte IP (adresa serveru), PW (heslo) ani FACTORY – náramek by se od serveru odpojil nebo přišel o nastavení.</p>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
         <div id="dnaramekMereni"></div>
         </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
@@ -616,6 +640,7 @@ function renderDetail(rebuild = false) {
     };
     d.querySelectorAll('[data-nprikaz]').forEach((b) => { b.onclick = () => { if (b.dataset.nprikaz === 'vypnout' && !confirm('Vypnout náramek? Zapne se zase jen tlačítkem na náramku.')) return; poslatPrikaz(b.dataset.nprikaz); }; });
     d.querySelector('#dnaramekVlastni').onsubmit = (e) => { e.preventDefault(); const t = d.querySelector('#dnaramekVlastniText').value.trim(); if (t) poslatPrikaz('vlastni', t); };
+    d.querySelectorAll('[data-nvzor]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); const i = d.querySelector('#dnaramekVlastniText'); i.value = a.dataset.nvzor; i.focus(); if (/\+420$/.test(i.value)) i.setSelectionRange(i.value.length, i.value.length); }; });
     d.querySelector('#dnaramekAuto').onsubmit = async (e) => {
       e.preventDefault();
       const auto = { min: Number(d.querySelector('#dnaramekAutoMin').value) || 0 };
