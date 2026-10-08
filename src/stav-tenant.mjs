@@ -304,13 +304,23 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
       });
     },
     /** Ozvání náramku/přívěsku přiřazeného ke kameře (src/naramky.mjs): kdy naposledy, baterie %, poslední platná poloha. */
-    naramek({ kameraId, posledni, baterie = null, poloha = null }) {
+    naramek({ kameraId, posledni, baterie = null, poloha = null, zdravi = null }) {
       return serializovane(async () => {
         await nacti();
         const p = data.state.patients.find((x) => x.id === kameraId); if (!p || !p.naramek?.id) return { v: data.v };
         const n = { ...p.naramek, posledni: Number(posledni) || now() };
         if (Number.isFinite(Number(baterie)) && baterie !== null) n.baterie = Number(baterie);
-        if (poloha && Number.isFinite(poloha.lat) && Number.isFinite(poloha.lon)) n.poloha = { lat: poloha.lat, lon: poloha.lon, cas: poloha.cas || now() };
+        if (poloha && Number.isFinite(poloha.lat) && Number.isFinite(poloha.lon)) n.poloha = { lat: poloha.lat, lon: poloha.lon, cas: poloha.cas || now(), ...(poloha.priblizna ? { priblizna: true } : {}) };
+        // zdravotní měření: poslední známé hodnoty (tep, tlak, kyslík, teplota) s časem; nové měření doplní jen změřené položky
+        if (zdravi && typeof zdravi === 'object') {
+          const z = { ...(n.zdravi || {}) };
+          for (const k of ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota']) if (Number.isFinite(Number(zdravi[k])) && zdravi[k] !== null) z[k] = Number(zdravi[k]);
+          z.cas = now(); n.zdravi = z;
+          // historie měření (nejnovější první, nejvýš 48 záznamů) pro tabulku v záložce Náramek
+          const zaznam = { cas: z.cas };
+          for (const k of ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota']) if (Number.isFinite(Number(zdravi[k])) && zdravi[k] !== null) zaznam[k] = Number(zdravi[k]);
+          n.mereni = [zaznam, ...(Array.isArray(n.mereni) ? n.mereni : [])].slice(0, 48);
+        }
         p.naramek = n;
         data.v++; await uloz();
         return { v: data.v };

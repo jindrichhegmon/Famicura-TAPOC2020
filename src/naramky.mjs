@@ -27,6 +27,7 @@ const MAX_BUFFER = 64 * 1024;    // ochrana proti zahlcení jedním spojením
 const DEDUP_MS = 60 * 1000;      // stejný poplach z téhož zařízení do minuty = opakování
 const OZVANI_MS = 5 * 60 * 1000; // ozvání bez změny baterie se zapisuje nejvýš po 5 minutách
 const CACHE_MS = 60 * 1000;      // přiřazení ID → kamera se hledá znovu po minutě
+const MERENI_MS = 60 * 60 * 1000; // řádek s měřením do historie nejvýš jednou za hodinu
 
 /* ---------- rámce ---------- */
 
@@ -84,25 +85,38 @@ const maBit = (status, bity) => bity.some((b) => (status / 2 ** b) % 2 >= 1);
 export function rozeberObsah(obsah) {
   const pole = obsah.split(',');
   const typ = pole[0].trim().toUpperCase();
-  const out = { typ, pole: pole.slice(1), poloha: null, baterie: null, status: null, poplachy: [] };
+  const out = { typ, pole: pole.slice(1), poloha: null, baterie: null, status: null, poplachy: [], zdravi: null };
   if (typ === 'LK') {
     const b = Number(pole[3]); if (Number.isFinite(b) && pole.length >= 4) out.baterie = b;
     return out;
   }
   // některý firmware posílá nouzové tlačítko jako samostatný typ (SOS / sos) bez polohy
   if (typ === 'SOS') { out.poplachy.push('sos'); return out; }
-  if (typ === 'UD' || typ === 'UD2' || typ === 'AL' || typ === 'WT' || typ === 'UD_LTE') {
+  // zdravotní měření (V48 a hodinky): bphrt = tlak horní, dolní, tep; heart = tep; oxygen = kyslík %; btemp2 = tělesná teplota
+  const cisla = pole.slice(1).map((x) => Number(x)).filter((x) => Number.isFinite(x));
+  if (typ === 'BPHRT' && cisla.length >= 2) {
+    out.zdravi = { tlakS: cisla[0], tlakD: cisla[1] };
+    if (cisla[2] > 0) out.zdravi.tep = cisla[2];
+    if (!(out.zdravi.tlakS > 0)) delete out.zdravi.tlakS;
+    if (!(out.zdravi.tlakD > 0)) delete out.zdravi.tlakD;
+  } else if ((typ === 'HEART' || typ === 'PULSE') && cisla[0] > 0) out.zdravi = { tep: cisla[0] };
+  else if ((typ === 'OXYGEN' || typ === 'SPO2' || typ === 'BLOOD') && cisla.find((x) => x >= 50 && x <= 100)) out.zdravi = { spo2: cisla.find((x) => x >= 50 && x <= 100) };
+  else if ((typ === 'BTEMP2' || typ === 'BTEMP' || typ === 'TEMP') && cisla.find((x) => x >= 30 && x <= 45)) out.zdravi = { teplota: cisla.find((x) => x >= 30 && x <= 45) };
+  if (out.zdravi && !Object.keys(out.zdravi).length) out.zdravi = null;
+  // UD, UD2, UD_LTE (poloha), AL, AL_LTE (poplach), WT – V48 (4G) posílá varianty s příponou _LTE
+  if (jePolohovy(typ)) {
     // datum, čas, A/V, lat, N/S, lon, E/W, rychlost, kurz, výška, satelity, signál, baterie, kroky, převrácení, status
     const [datum, cas, platne, lat, ns, lon, ew, rychlost, , , , , baterie, , , status] = pole.slice(1);
     const la = Number(lat), lo = Number(lon);
-    if (platne === 'A' && Number.isFinite(la) && Number.isFinite(lo) && (la !== 0 || lo !== 0)) {
-      out.poloha = { lat: Math.abs(la) * (ns === 'S' ? -1 : 1), lon: Math.abs(lo) * (ew === 'W' ? -1 : 1), cas: casZ(datum, cas), rychlost: Number(rychlost) || 0 };
+    if (Number.isFinite(la) && Number.isFinite(lo) && (la !== 0 || lo !== 0)) {
+      // A = GPS fix; V se souřadnicemi = poloha z mobilní sítě nebo poslední známá – přibližná, ale pro dispečink lepší než nic
+      out.poloha = { lat: Math.abs(la) * (ns === 'S' ? -1 : 1), lon: Math.abs(lo) * (ew === 'W' ? -1 : 1), cas: casZ(datum, cas), rychlost: Number(rychlost) || 0, priblizna: platne !== 'A' };
     }
     const b = Number(baterie); if (Number.isFinite(b) && baterie !== undefined && baterie !== '') out.baterie = b;
     const st = parseInt(status, 16); out.status = Number.isFinite(st) ? st : null;
     const s = out.status || 0;
     if (maBit(s, BIT.pad)) out.poplachy.push('pad');
-    if (maBit(s, BIT.sos) || (typ === 'AL' && !out.poplachy.length && !maBit(s, BIT.bateriePod) && !maBit(s, BIT.sejmuti) && !maBit(s, BIT.oblastVen))) out.poplachy.push('sos');
+    if (maBit(s, BIT.sos) || (typ.startsWith('AL') && !out.poplachy.length && !maBit(s, BIT.bateriePod) && !maBit(s, BIT.sejmuti) && !maBit(s, BIT.oblastVen))) out.poplachy.push('sos');
     if (maBit(s, BIT.bateriePod)) out.poplachy.push('baterie');
     if (maBit(s, BIT.sejmuti)) out.poplachy.push('sejmuti');
     if (maBit(s, BIT.oblastVen)) out.poplachy.push('oblastVen');
@@ -119,6 +133,18 @@ function casZ(datum, cas) {
 }
 
 export const mapaOdkaz = (p) => p ? `https://maps.google.com/?q=${p.lat.toFixed(5)},${p.lon.toFixed(5)}` : '';
+/** Text měření pro historii a dispečink: tep 72, tlak 122/75, kyslík 97 %, teplota 36,5 °C. */
+export function popisZdravi(z) {
+  if (!z) return '';
+  const c = [];
+  if (z.tep) c.push(`tep ${z.tep}`);
+  if (z.tlakS && z.tlakD) c.push(`tlak ${z.tlakS}/${z.tlakD}`);
+  if (z.spo2) c.push(`kyslík ${z.spo2} %`);
+  if (z.teplota) c.push(`teplota ${String(z.teplota).replace('.', ',')} °C`);
+  return c.join(', ');
+}
+/** Typy rámců s polohou: UD, UD2, UD_LTE, AL, AL_LTE, WT… */
+export const jePolohovy = (typ) => /^(UD|AL|WT)/.test(typ);
 
 /* ---------- server ---------- */
 
@@ -162,12 +188,11 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
     stat.prijato++; stat.posledni = now();
     const r = rozeberObsah(ramec.obsah);
     // diagnostika: každý rámec jedním řádkem (u polohových typů bez souřadnic, u ostatních i obsah), ať jde doladit model
-    const sPolohou = r.typ === 'UD' || r.typ === 'UD2' || r.typ === 'AL' || r.typ === 'WT' || r.typ === 'UD_LTE';
-    log.log(`[naramky] ${ramec.id} ${r.typ}${ramec.index ? ' #' + ramec.index : ''} stav=${r.status === null ? '-' : r.status.toString(16).padStart(8, '0')} baterie=${r.baterie ?? '-'} poloha=${r.poloha ? 'ano' : 'ne'} poplachy=${r.poplachy.join(',') || '-'}${sPolohou ? '' : ' obsah=' + ramec.obsah.slice(0, 80)}`);
+    const sPolohou = jePolohovy(r.typ);
+    log.log(`[naramky] ${ramec.id} ${r.typ}${ramec.index ? ' #' + ramec.index : ''} stav=${r.status === null ? '-' : r.status.toString(16).padStart(8, '0')} baterie=${r.baterie ?? '-'} poloha=${r.poloha ? (r.poloha.priblizna ? 'přibližná' : 'GPS') : 'ne'} poplachy=${r.poplachy.join(',') || '-'}${r.zdravi ? ' zdravi=' + popisZdravi(r.zdravi) : ''}${sPolohou ? '' : ' obsah=' + ramec.obsah.slice(0, 80)}`);
     // potvrzení: LK, AL, TKQ – jinak zařízení poplach opakuje a ozvání považuje za ztracené
-    if (r.typ === 'LK' || r.typ === 'AL' || r.typ === 'TKQ' || r.typ === 'TKQ2') {
-      try { socket.write(slozRamec(ramec, r.typ)); } catch { /* spojení už není */ }
-    }
+    const odpoved = r.typ === 'LK' || r.typ === 'TKQ' || r.typ === 'TKQ2' ? r.typ : r.typ.startsWith('AL') ? 'AL' : null;
+    if (odpoved) { try { socket.write(slozRamec(ramec, odpoved)); } catch { /* spojení už není */ } }
     const kam = await najdi(ramec.id);
     if (!kam) {
       stat.nezname++;
@@ -182,6 +207,16 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       posledniOzvani.set(ramec.id, { cas: now(), baterie: r.baterie ?? oz?.baterie ?? null });
       await kam.stav.naramek({ kameraId: kam.kameraId, posledni: now(), baterie: r.baterie, poloha: r.poloha }).catch((e) => log.error('[naramky] zápis ozvání:', e.message));
     }
+    if (r.zdravi) {
+      await kam.stav.naramek({ kameraId: kam.kameraId, posledni: now(), zdravi: r.zdravi }).catch((e) => log.error('[naramky] zápis měření:', e.message));
+      // do historie kamery jednou za hodinu (jinak by pravidelné měření vytlačilo ostatní řádky); poslední hodnoty jsou vždy u kamery
+      const klic = ramec.id + '|mereni';
+      if (now() - (posledniPoplach.get(klic) || 0) >= MERENI_MS) {
+        posledniPoplach.set(klic, now());
+        try { await kam.stav.proved('emit', [kam.kameraId, 'mereni', { real: true, naramek: true, text: 'Měření náramku: ' + popisZdravi(r.zdravi) + '.' }]); }
+        catch (e) { log.error('[naramky] měření se nezapsalo:', e.message); }
+      }
+    }
     for (const druh of r.poplachy) {
       const kind = { sos: 'sos', pad: 'devfall', baterie: 'battery' }[druh];
       if (!kind) continue;   // sejmutí a oblast jen do logu
@@ -190,7 +225,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       posledniPoplach.set(klic, now());
       stat.poplachy++;
       const text = { sos: 'Přívěsek: stisknuto nouzové tlačítko', devfall: 'Přívěsek hlásí pád', battery: 'Přívěsek hlásí slabou baterii' }[kind]
-        + (r.baterie !== null ? ` (baterie ${r.baterie} %)` : '') + (r.poloha ? ` · poloha ${mapaOdkaz(r.poloha)}` : '') + '.';
+        + (r.baterie !== null ? ` (baterie ${r.baterie} %)` : '') + (r.poloha ? ` · ${r.poloha.priblizna ? 'přibližná poloha' : 'poloha'} ${mapaOdkaz(r.poloha)}` : '') + '.';
       try {
         await kam.stav.proved('emit', [kam.kameraId, kind, { real: true, naramek: true, text }]);
         log.log(`[naramky] ${ramec.id} → ${kam.tenant} ${kam.kameraId}: ${kind}`);

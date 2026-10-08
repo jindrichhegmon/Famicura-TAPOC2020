@@ -493,7 +493,7 @@ function renderDetail(rebuild = false) {
     detailUnreg?.(); 
     const kon = kontaktyPro(p);
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
-      <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
+      <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button><button type="button" data-t="naramek" role="tab">⌚ Náramek</button></div>
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
@@ -519,14 +519,22 @@ function renderDetail(rebuild = false) {
           <div class="akce"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
           <p class="small bad hide" id="dkontaktyErr"></p>
         </form>
-        </div><div class="blok"><h3>Náramek / přívěsek SOS</h3><p class="small muted">– ID zařízení z aplikace náramku (např. ReachFar V48: O zařízení → ID zařízení); SOS, pád a slabá baterie pak jdou do fronty této kamery</p>
+        </div><div class="blok"><h3>Poznámky dispečinku</h3><p class="small muted">– přehled všech poznámek k této kameře, nejnovější nahoře; novou přidáte v Monitoringu</p>
+        <div class="notes"><ul id="dnotes"></ul></div>
+      </div></section>
+      <section class="dsec hide" data-sec="naramek">
+        <div class="blok"><h3>Náramek / přívěsek SOS</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
         <form class="kontakty" id="dnaramek">
           <div class="kgrid"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label></div>
           <div class="akce"><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekStav"></span></div>
           <p class="small bad hide" id="dnaramekErr"></p>
         </form>
-        </div><div class="blok"><h3>Poznámky dispečinku</h3><p class="small muted">– přehled všech poznámek k této kameře, nejnovější nahoře; novou přidáte v Monitoringu</p>
-        <div class="notes"><ul id="dnotes"></ul></div>
+        </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
+        <p id="dnaramekInfo"></p>
+        </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
+        <div id="dnaramekMereni"></div>
+        </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
+        <ul class="list" id="dnaramekPoplachy"></ul>
       </div></section>
       <section class="dsec hide" data-sec="nastaveni">
         <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</p>
@@ -660,10 +668,23 @@ function renderDetail(rebuild = false) {
   d.querySelector('#dkontaktyStav').textContent = describeKontakty(p) ? `Uloženo: ${describeKontakty(p)}` : 'Zatím žádné kontakty; bez nich SMS ani e-mail neodcházejí.';
   {
     const n = p.naramek;
-    const el = d.querySelector('#dnaramekStav');
-    if (!n?.id) el.textContent = 'Zatím žádný náramek.';
-    else if (!n.posledni) el.textContent = `Náramek ${n.id} přiřazen, zatím se neozval (zařízení musí mít nastavenou adresu serveru, viz nápověda).`;
-    else el.innerHTML = `Naposledy se ozval ${esc(ago(n.posledni))}${Number.isFinite(n.baterie) ? `, baterie ${n.baterie} %` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha</a>` : ''}`;
+    const stav = d.querySelector('#dnaramekStav'), info = d.querySelector('#dnaramekInfo');
+    const fmtZ = (z) => { const c = []; if (z?.tep) c.push(`tep ${z.tep}`); if (z?.tlakS && z?.tlakD) c.push(`tlak ${z.tlakS}/${z.tlakD}`); if (z?.spo2) c.push(`kyslík ${z.spo2} %`); if (z?.teplota) c.push(`teplota ${String(z.teplota).replace('.', ',')} °C`); return c.join(', '); };
+    if (!n?.id) { stav.textContent = 'Zatím žádný náramek.'; info.textContent = 'Náramek není přiřazen.'; }
+    else if (!n.posledni) { stav.textContent = `Náramek ${n.id} přiřazen.`; info.textContent = 'Zatím se neozval. Zařízení musí mít nastavenou adresu serveru (SMS příkaz je v nápovědě → Náramek); po nastavení se ozve do minuty.'; }
+    else {
+      stav.textContent = `Náramek ${n.id} přiřazen.`;
+      info.innerHTML = `Naposledy se ozval <strong>${esc(ago(n.posledni))}</strong>${Number.isFinite(n.baterie) ? `, baterie <strong>${n.baterie} %</strong>` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha${n.poloha.priblizna ? ' (přibližná, z mobilní sítě)' : ' (GPS)'}</a> ${esc(ago(n.poloha.cas || n.posledni))}` : ' · poloha zatím není'}`
+        + (n.zdravi ? `<br>Poslední měření (${esc(ago(n.zdravi.cas))}): <strong>${esc(fmtZ(n.zdravi))}</strong>` : '');
+    }
+    const mer = Array.isArray(n?.mereni) ? n.mereni : [];
+    setHtml(d.querySelector('#dnaramekMereni'), mer.length
+      ? `<table class="mereni"><thead><tr><th>Čas</th><th>Tep</th><th>Tlak</th><th>Kyslík</th><th>Teplota</th></tr></thead><tbody>${mer.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td><td>${z.tep ?? ''}</td><td>${z.tlakS && z.tlakD ? `${z.tlakS}/${z.tlakD}` : ''}</td><td>${z.spo2 ? z.spo2 + ' %' : ''}</td><td>${z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : ''}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="small muted">Zatím žádné měření.</p>');
+    const popl = sim.state.events.filter((e) => e.patientId === p.id && ['sos', 'devfall', 'battery'].includes(e.kind)).slice(0, 20);
+    setHtml(d.querySelector('#dnaramekPoplachy'), popl.length
+      ? popl.map((e) => `<li><span class="badge ${esc(urovenUdalosti(e) || 'info')}">${esc(KINDS[e.kind]?.source || 'náramek')}</span><span class="when">${esc(fmtDT(e.at))}</span><span class="grow">${esc(eventText(e))}${e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''}</span></li>`).join('')
+      : '<li class="muted">Zatím žádný poplach z náramku.</li>');
     if (n?.id && !d.querySelector('#dnaramek').contains(document.activeElement)) d.querySelector('#dnaramekId').value = n.id;
   }
   if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();

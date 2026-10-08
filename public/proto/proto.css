@@ -476,3 +476,7 @@ html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
   #simPanel.min .hd{padding:6px 10px;border-radius:12px;font-size:.8rem;gap:8px}
   .desk{padding-bottom:72px}
 }
+/* záložka Náramek: tabulka měření zdraví */
+.mereni{width:100%;border-collapse:collapse;font-size:.9rem}
+.mereni th,.mereni td{padding:4px 8px;text-align:left;border-bottom:1px solid var(--soft);white-space:nowrap}
+.mereni th{font-weight:600;color:var(--muted,#5b6b78)}

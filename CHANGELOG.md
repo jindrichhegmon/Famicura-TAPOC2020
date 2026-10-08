@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.10 · 8. 10. 2026 · záložka Náramek, měření zdraví, poplach V48
+
+- **Detail kamery má záložku ⌚ Náramek** (místo bloku v Komunikaci): přiřazení
+  (ID zařízení), stav (poslední ozvání, baterie, poloha), **měření zdraví**
+  (poslední hodnoty a tabulka posledních 48 měření: tep, krevní tlak, kyslík,
+  teplota) a poplachy z náramku (SOS, pád, slabá baterie).
+- **Zdravotní rámce**: `bphrt` (tlak horní, dolní, tep), `heart`/`PULSE` (tep),
+  `oxygen` (kyslík %), `btemp2` (teplota) → `A_KAM_Kamera.Naramek.zdravi`
+  a `.mereni`; do historie kamery řádek „Měření náramku“ nejvýš jednou za
+  hodinu (druh `mereni`, informativní).
+- **ReachFar V48**: poplach přichází jako `AL_LTE`, poloha jako `UD_LTE`;
+  každý typ začínající `AL` se bere jako poplach a potvrzuje se `AL`. Poloha
+  bez GPS fixu (`V`) se souřadnicemi z mobilní sítě se ukládá jako přibližná
+  (odkaz „přibližná, z mobilní sítě“). `calllog` a ostatní typy jen do logu.
+
 ## 3.9 · 8. 10. 2026 · náramky a přívěsky SOS přímo na server
 
 - **Nouzový přívěsek / hodinky (ReachFar RF‑V48, protokol hodinek jako

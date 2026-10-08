@@ -84,13 +84,17 @@ daty **přímo na tento server**: TCP port `NARAMKY_PORT` (výchozí 5093,
 baterie podle bitů pole status), `TKQ`; `LK`, `AL` a `TKQ` potvrzuje, jinak
 zařízení poplach opakuje.
 
-Přívěsek se přiřadí ke kameře v dispečinku: detail kamery → Komunikace →
-**Náramek / přívěsek SOS** → ID zařízení (v aplikaci náramku: O zařízení → ID
+Přívěsek se přiřadí ke kameře v dispečinku: detail kamery → záložka
+**⌚ Náramek** → ID zařízení (v aplikaci náramku: O zařízení → ID
 zařízení). Od té chvíle: SOS → událost **Nouzové tlačítko**, pád → **Pád
 hlášený náramkem**, slabá baterie → **Slabá baterie náramku** u té kamery,
 dál jako u událostí kamery (fronta, SMS, e‑mail, nahrávka kamery se zatrženým
-Nahrávat). SOS projde i u kamery deaktivované rodinou. V Komunikaci je vidět,
-kdy se přívěsek naposledy ozval, baterie a odkaz na poslední polohu. Stejný
+Nahrávat). SOS projde i u kamery deaktivované rodinou. V záložce Náramek je
+vidět poslední ozvání, baterie, poloha (GPS, nebo přibližná z mobilní sítě),
+poslední měření zdraví a tabulka měření (tep, tlak, kyslík, teplota z rámců
+`heart`, `bphrt`, `oxygen`, `btemp2`; do historie kamery jde řádek „Měření
+náramku“ nejvýš jednou za hodinu) a poplachy z náramku. V48 posílá poplach jako
+`AL_LTE` a polohu jako `UD_LTE`; obojí se bere jako AL/UD. Stejný
 poplach z téhož zařízení do minuty se počítá jednou. Neznámé ID server jen
 potvrdí a zapíše do logu (`[naramky] neznámý přívěsek …`), nic nezakládá.
 
@@ -577,7 +581,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 3.9) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.10) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

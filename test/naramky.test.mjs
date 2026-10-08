@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { vyrizniRamce, rozeberObsah, slozRamec, createNaramky } from '../src/naramky.mjs';
+import { vyrizniRamce, rozeberObsah, slozRamec, createNaramky, popisZdravi } from '../src/naramky.mjs';
 import { createStavTenantu } from '../src/stav-tenant.mjs';
 import { createMockTabulky } from './mock-tabulky.mjs';
 
@@ -42,7 +42,16 @@ test('obsah rámce: LK s baterií, UD s polohou, AL = SOS, stav s bitem pádu a 
   const bat = rozeberObsah(`UD,${POLOHA},00020000`); assert.deepEqual(bat.poplachy, ['baterie']);
   const bat2 = rozeberObsah(`UD,${POLOHA},00000001`); assert.deepEqual(bat2.poplachy, ['baterie']);
   const v = rozeberObsah('UD,081026,105959,V,0.0,N,0.0,E,0.0,0,0,0,80,60,0,0,00000000'); assert.equal(v.poloha, null); assert.equal(v.baterie, 60);
+  // ReachFar V48: AL_LTE / UD_LTE, bez GPS fixu (V) ale se souřadnicemi z mobilní sítě = přibližná poloha
+  const lte = rozeberObsah('AL_LTE,081026,134553,V,49.262834,N,17.7108907,E,0.00,0.0,0.0,0,58,95,0,0,00010000,1,255,230,1,0,0,0,0');
+  assert.deepEqual(lte.poplachy, ['sos']); assert.equal(lte.baterie, 95); assert.equal(lte.poloha.priblizna, true); assert.ok(Math.abs(lte.poloha.lat - 49.262834) < 1e-6);
+  assert.deepEqual(rozeberObsah('UD_LTE,081026,134553,A,49.262834,N,17.7108907,E,0.00,0.0,0.0,5,58,95,0,0,00000000').poplachy, []);
   const jih = rozeberObsah('UD,081026,105959,A,33.8688,S,151.2093,E,0,0,0,5,80,50,0,0,00000000'); assert.ok(jih.poloha.lat < 0 && jih.poloha.lon > 0);
+  assert.deepEqual(rozeberObsah('bphrt,122,75,73,,,,').zdravi, { tlakS: 122, tlakD: 75, tep: 73 });
+  assert.deepEqual(rozeberObsah('heart,72').zdravi, { tep: 72 }); assert.deepEqual(rozeberObsah('oxygen,97').zdravi, { spo2: 97 });
+  assert.deepEqual(rozeberObsah('btemp2,1,36.6').zdravi, { teplota: 36.6 }); assert.equal(rozeberObsah('bphrt,0,0,0').zdravi, null);
+  assert.equal(popisZdravi({ tep: 73, tlakS: 122, tlakD: 75, spo2: 97, teplota: 36.6 }), 'tep 73, tlak 122/75, kyslík 97 %, teplota 36,6 °C');
+  assert.equal(rozeberObsah('calllog,602520069,,2,1,1791467169,11').zdravi, null);
 });
 
 function tenant(tabulky) {
@@ -101,6 +110,22 @@ test('server náramků: ozvání se zapíše ke kameře, SOS a pád jdou do fron
     posun(61 * 1000);
     await k.posli(ram(`UD,${POLOHA},00020000,7,255,230,1,0,0,0,0`));
     assert.ok(await cekej(async () => (await s.stav()).state.events.some((e) => e.kind === 'battery')), 'slabá baterie');
+    // AL_LTE (V48) se potvrzuje jako AL a dává SOS
+    posun(61 * 1000);
+    k.prijato(); await k.posli(ram(`AL_LTE,081026,134553,V,49.262834,N,17.7108907,E,0.00,0.0,0.0,0,58,95,0,0,00010000,1,255,230,1,0,0,0,0`));
+    assert.ok(await cekej(async () => (await s.stav()).state.events.filter((e) => e.kind === 'sos').length === 2), 'SOS z AL_LTE');
+    assert.equal((k.prijato().match(/\*0002\*AL\]/g) || []).length, 3, 'AL_LTE potvrzeno jako AL (i opakovaný poplach se potvrzuje)');
+    assert.match((await s.stav()).state.events.find((e) => e.kind === 'sos').text, /přibližná poloha/);
+    // zdravotní měření: hodnoty u kamery, řádek v historii jednou za hodinu
+    await k.posli(ram('bphrt,122,75,73,,,,')); await k.posli(ram('oxygen,97')); await k.posli(ram('btemp2,1,36.6'));
+    assert.ok(await cekej(async () => (await s.stav()).state.patients[0].naramek.zdravi?.teplota === 36.6), 'teplota u kamery');
+    const z = (await s.stav()).state.patients[0].naramek.zdravi;
+    assert.equal(z.tlakS, 122); assert.equal(z.tlakD, 75); assert.equal(z.tep, 73); assert.equal(z.spo2, 97);
+    assert.equal((await s.stav()).state.events.filter((e) => e.kind === 'mereni').length, 1, 'jen jeden řádek měření za hodinu');
+    assert.match((await s.stav()).state.events.find((e) => e.kind === 'mereni').text, /tep 73, tlak 122\/75/);
+    await k.posli(ram('heart,71'));
+    assert.ok(await cekej(async () => (await s.stav()).state.patients[0].naramek.zdravi?.tep === 71), 'tep se přepíše, ostatní zůstane');
+    assert.equal((await s.stav()).state.patients[0].naramek.zdravi.spo2, 97);
     // neznámé zařízení: potvrdí LK, nic nezapíše
     const pocet = (await s.stav()).state.events.length;
     await k.posli(ram(`AL,${POLOHA},00010000,7,255,230,1,0,0,0,0`, '1111122222'));

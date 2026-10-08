@@ -27,6 +27,7 @@ export const KINDS = {
   offline:    { label: 'Kamera nedostupná',            level: 'tech', source: 'systém' },
   online:     { label: 'Kamera opět dostupná',         level: 'tech', source: 'systém' },
   battery:    { label: 'Slabá baterie náramku',        level: 'tech', source: 'náramek' },
+  mereni:     { label: 'Měření náramku',               level: 'info', source: 'náramek' },
 };
 /** Úroveň události pro zobrazení: řádek „mimo hlídané hodiny“ je vždy informativní. */
 export const urovenUdalosti = (e) => e?.mimoHodiny ? 'info' : (KINDS[e?.kind]?.level || null);
