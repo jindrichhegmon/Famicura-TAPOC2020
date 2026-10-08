@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.11 · 8. 10. 2026 · mapa polohy, příkazy náramku, automatické měření
+
+- **Mapa poslední polohy** v záložce Náramek (dlaždice OpenStreetMap, zoom 16,
+  značka uprostřed; CSP `img-src https://tile.openstreetmap.org`).
+- **Příkazy náramku** (`POST /api/naramek/prikaz`, jen poskytovatel, jen do
+  právě připojeného náramku): Změřit tep `hrtstart,1`, tlak `bphrt`, kyslík
+  `oxygen`, teplotu `btemp2`, Zjistit polohu `CR`, Vypnout náramek `POWEROFF`
+  (do historie), vlastní příkaz pro ladění modelu (do historie). Server si
+  pamatuje spojení každého náramku a posílá rámec `[3G*ID*DÉLKA*příkaz]`.
+- **Automatické měření** (akce `setNaramekAuto`, `Naramek.auto` – interval
+  v minutách a veličiny): server každou minutu zkontroluje připojené náramky
+  a po uplynutí intervalu pošle zvolená měření.
+- Testy: příkazy, 409 bez spojení, vlastní příkaz jen bezpečné znaky,
+  automatické měření podle intervalu, API (403 rodina, 400 bez náramku).
+
 ## 3.10 · 8. 10. 2026 · záložka Náramek, měření zdraví, poplach V48
 
 - **Detail kamery má záložku ⌚ Náramek** (místo bloku v Komunikaci): přiřazení

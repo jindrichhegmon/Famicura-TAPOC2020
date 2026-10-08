@@ -68,7 +68,7 @@ function handler(over = {}) {
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
   const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null , naramky: over.naramky || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -885,4 +885,26 @@ test('rodina vidí jen kamery svého poskytovatele: kamera přiřazená jinému 
   assert.match(ja.zprava, /už u tohoto poskytovatele není/);
   // akce na tu kameru server odmítne jako neznámou kameru (stránka ukáže chybu, nepřepne se do simulace)
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: rc2, body: { akce: 'deaktivace', args: ['cizi', true] } }))).status, 404);
+});
+
+test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený náramek 400, vypnutí jde do historie, rodina 403', async () => {
+  const posl = [];
+  const naramky = { stav() { return { port: 5093 }; }, async prikaz(id, nazev, { vlastni } = {}) { posl.push([id, nazev, vlastni || '']); if (nazev === 'tep') return { ok: true, obsah: 'hrtstart,1' }; if (nazev === 'vypnout') return { ok: true, obsah: 'POWEROFF' }; const e = new Error('Neznámý příkaz náramku'); e.status = 400; throw e; } };
+  const { h, uzivatele, vsichni } = handler({ naramky });
+  let r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'tep' } }));
+  assert.equal(r.status, 400); assert.match((await r.json()).error, /není přiřazen náramek/);
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
+  r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'tep' } }));
+  assert.equal(r.status, 200); assert.equal((await r.json()).obsah, 'hrtstart,1');
+  assert.deepEqual(posl[0], ['9705357211', 'tep', '']);
+  r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'vypnout' } }));
+  assert.equal(r.status, 200);
+  const st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
+  assert.match(st.events[0].text, /poslán příkaz POWEROFF/);
+  assert.equal((await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'cizi', prikaz: 'tep' } }))).status, 404);
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000333', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  assert.equal((await h(req('POST', '/api/naramek/prikaz', { cookies: rc, body: { kamera: 'tapoc2020', prikaz: 'tep' } }))).status, 403);
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: rc, body: { akce: 'setNaramekAuto', args: ['tapoc2020', { min: 10, tep: true }] } }))).status, 403);
 });

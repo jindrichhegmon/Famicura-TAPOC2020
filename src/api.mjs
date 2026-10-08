@@ -381,7 +381,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const telo_ = await telo(req); const akce = telo_.akce; let args = telo_.args;
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
         // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
-        if (akce === 'setNaramek' && rodina) return jenPoskytovatel();
+        if ((akce === 'setNaramek' || akce === 'setNaramekAuto') && rodina) return jenPoskytovatel();
         // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
         if (akce === 'deaktivace') {
           if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);
@@ -426,6 +426,19 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (await deaktivovana(kamera)) return json({ ok: false, error: 'Kamera je deaktivovaná rodinou a míří do stropu; otáčet půjde až po aktivaci.', deaktivace: true }, 423);
         await ptz.pohni(kamera, String(smer || ''), { rychlost: Number(rychlost) || 0.5, ms: Number(ms) || 400 });
         return json({ ok: true });
+      }
+      // Příkaz náramku/přívěsku (jen poskytovatel): změřit tep / tlak / kyslík / teplotu, zjistit polohu, vypnout; vlastní text pro ladění modelu.
+      if (m === 'POST' && path === '/api/naramek/prikaz') {
+        if (rodina) return jenPoskytovatel();
+        const { kamera, prikaz, vlastni } = await telo(req);
+        if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        if (!naramky) return json({ ok: false, error: 'Příjem náramků není na serveru zapnutý (NARAMKY_PORT).' }, 503);
+        const st = await stavTenanta();
+        const p = (await st.stav()).state.patients.find((x) => x.id === kamera);
+        if (!p?.naramek?.id) return json({ ok: false, error: 'Ke kameře není přiřazen náramek.' }, 400);
+        const r = await naramky.prikaz(p.naramek.id, String(prikaz || ''), { vlastni: typeof vlastni === 'string' ? vlastni : '' });
+        if (prikaz === 'vypnout' || prikaz === 'vlastni') await st.proved('poznamka', [kamera, `Náramek ${p.naramek.id}: poslán příkaz ${r.obsah}.`, ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce')]).catch(() => {});
+        return json({ ok: true, obsah: r.obsah });
       }
 
       // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.

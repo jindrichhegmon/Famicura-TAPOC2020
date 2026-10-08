@@ -157,3 +157,39 @@ test('náramek: SOS projde i u kamery deaktivované rodinou, přiřazení jen pl
   assert.equal(st.state.patients[0].naramek, undefined); assert.match(st.state.events[0].text, /odebrán/);
   assert.equal(tb.data[T].A_KAM_Kamera[0].Naramek, null);
 });
+
+test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → POWEROFF, nepřipojený 409, vlastní příkaz jen bezpečné znaky; automatické měření podle nastavení', async () => {
+  const tb = createMockTabulky();
+  const { s, kamery, now, posun } = tenant(tb);
+  await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
+  const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho });
+  const port = await n.start({ autoMs: 0 });
+  try {
+    await assert.rejects(() => n.prikaz(ID, 'tep'), /není připojený/);
+    const k = await spoj(port);
+    await k.posli(ram('LK,0,0,95'));
+    assert.ok(await cekej(() => n.pripojen(ID)), 'po prvním rámci je náramek připojený');
+    assert.deepEqual(await n.prikaz(ID, 'tep'), { ok: true, obsah: 'hrtstart,1' });
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*000A*hrtstart,1]`)), 'příkaz dorazil do spojení náramku');
+    await n.prikaz(ID, 'vypnout');
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0008*POWEROFF]`)));
+    await assert.rejects(() => n.prikaz(ID, 'neco'), /Neznámý příkaz/);
+    await assert.rejects(() => n.prikaz(ID, 'vlastni', { vlastni: 'x]*[y' }), /Příkaz:/);
+    assert.equal((await n.prikaz(ID, 'vlastni', { vlastni: 'hrtstart,300' })).obsah, 'hrtstart,300');
+    // automatické měření: každých 10 min tep a tlak; první tik pošle hned, druhý až po intervalu
+    await assert.rejects(() => s.proved('setNaramekAuto', ['tapoc2020', { min: 5000 }, 'x']), /0 \(vypnuto\) až 1440/);
+    await s.proved('setNaramekAuto', ['tapoc2020', { min: 10, tep: true, tlak: true }, 'Dispečer']);
+    assert.match((await s.stav()).state.events[0].text, /každých 10 min: tep, tlak/);
+    k.prijato(); const pred = k.prijato().length;
+    assert.equal(await n.tik(), 2);
+    assert.ok(await cekej(() => k.prijato().slice(pred).includes('hrtstart,1') && k.prijato().slice(pred).includes('*bphrt]')), 'tep i tlak odeslány');
+    assert.equal(await n.tik(), 0, 'před uplynutím intervalu nic');
+    posun(11 * 60 * 1000);
+    assert.equal(await n.tik(), 2, 'po intervalu znovu');
+    await s.proved('setNaramekAuto', ['tapoc2020', { min: 0 }, 'Dispečer']);
+    posun(11 * 60 * 1000);
+    assert.equal(await n.tik(), 0, 'vypnuto');
+    k.konec();
+    assert.ok(await cekej(() => !n.pripojen(ID)), 'po zavření spojení není připojený');
+  } finally { await n.stop(); }
+});

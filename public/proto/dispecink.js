@@ -531,6 +531,10 @@ function renderDetail(rebuild = false) {
         </form>
         </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <p id="dnaramekInfo"></p>
+        <div class="mapa hide" id="dnaramekMapa"></div>
+        <div class="akce"><button type="button" class="sm" data-nprikaz="tep">Změřit tep</button><button type="button" class="sm" data-nprikaz="tlak">Změřit tlak</button><button type="button" class="sm" data-nprikaz="kyslik">Změřit kyslík</button><button type="button" class="sm" data-nprikaz="teplota">Změřit teplotu</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm sec" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
+        <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label>${['tep', 'tlak', 'kyslik', 'teplota'].map((k) => `<label class="small"><input type="checkbox" class="nauto" data-k="${k}" ${p.naramek?.auto?.[k] ? 'checked' : ''}> ${({ tep: 'tep', tlak: 'tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]}</label>`).join('')}<button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
+        <form class="kontakty" id="dnaramekVlastni"><div class="akce"><label class="small">příkaz pro náramek (pokročilé, podle dokumentace modelu) <input type="text" id="dnaramekVlastniText" maxlength="60" placeholder="např. hrtstart,1"></label><button class="sm sec" type="submit">Odeslat</button></div></form>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
         <div id="dnaramekMereni"></div>
         </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
@@ -599,6 +603,25 @@ function renderDetail(rebuild = false) {
         if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo.'; err.classList.remove('hide'); return; }
         toast(id ? `Náramek ${id} přiřazen. Až se ozve, uvidíte tu čas ozvání a baterii.` : 'Náramek odebrán.');
       } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
+    };
+    // příkazy náramku (změřit, poloha, vypnout, vlastní) a automatické měření
+    const nstav = d.querySelector('#dnaramekPrikazStav');
+    const poslatPrikaz = async (prikaz, vlastni) => {
+      nstav.textContent = 'posílám…';
+      try {
+        const r = await post('/api/naramek/prikaz', { kamera: p.id, prikaz, vlastni });
+        nstav.textContent = `odesláno (${r.obsah}); výsledek měření dorazí do minuty`;
+        toast(prikaz === 'vypnout' ? 'Příkaz k vypnutí odeslán.' : 'Příkaz odeslán náramku.');
+      } catch (e) { nstav.textContent = ''; toast(`Náramek: ${e.message}`, 'crit'); }
+    };
+    d.querySelectorAll('[data-nprikaz]').forEach((b) => { b.onclick = () => { if (b.dataset.nprikaz === 'vypnout' && !confirm('Vypnout náramek? Zapne se zase jen tlačítkem na náramku.')) return; poslatPrikaz(b.dataset.nprikaz); }; });
+    d.querySelector('#dnaramekVlastni').onsubmit = (e) => { e.preventDefault(); const t = d.querySelector('#dnaramekVlastniText').value.trim(); if (t) poslatPrikaz('vlastni', t); };
+    d.querySelector('#dnaramekAuto').onsubmit = async (e) => {
+      e.preventDefault();
+      const auto = { min: Number(d.querySelector('#dnaramekAutoMin').value) || 0 };
+      d.querySelectorAll('.nauto').forEach((c) => { auto[c.dataset.k] = c.checked; });
+      try { const r = await sim.setNaramekAuto(p.id, auto, ME()); if (r === undefined && sim.naServeru) throw new Error('uložení se nepodařilo'); d.querySelector('#dnaramekAutoStav').textContent = auto.min > 0 ? `uloženo: každých ${auto.min} min` : 'vypnuto'; toast(auto.min > 0 ? `Automatické měření každých ${auto.min} min uloženo.` : 'Automatické měření vypnuto.'); }
+      catch (ex) { toast(`Nepodařilo se: ${ex.message}`, 'crit'); }
     };
     const ovl = d.querySelector('#ovl'); ovl.onclick = () => { ulozOverlay(!overlay); kresliOvl(d); };
     const tf = d.querySelector('#dtrvalaForm');
@@ -677,6 +700,10 @@ function renderDetail(rebuild = false) {
       info.innerHTML = `Naposledy se ozval <strong>${esc(ago(n.posledni))}</strong>${Number.isFinite(n.baterie) ? `, baterie <strong>${n.baterie} %</strong>` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha${n.poloha.priblizna ? ' (přibližná, z mobilní sítě)' : ' (GPS)'}</a> ${esc(ago(n.poloha.cas || n.posledni))}` : ' · poloha zatím není'}`
         + (n.zdravi ? `<br>Poslední měření (${esc(ago(n.zdravi.cas))}): <strong>${esc(fmtZ(n.zdravi))}</strong>` : '');
     }
+    const mapa = d.querySelector('#dnaramekMapa');
+    if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
+    const as = d.querySelector('#dnaramekAutoStav');
+    if (as && !d.querySelector('#dnaramekAuto').contains(document.activeElement)) as.textContent = n?.auto?.min > 0 ? `uloženo: každých ${n.auto.min} min` : 'vypnuto';
     const mer = Array.isArray(n?.mereni) ? n.mereni : [];
     setHtml(d.querySelector('#dnaramekMereni'), mer.length
       ? `<table class="mereni"><thead><tr><th>Čas</th><th>Tep</th><th>Tlak</th><th>Kyslík</th><th>Teplota</th></tr></thead><tbody>${mer.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td><td>${z.tep ?? ''}</td><td>${z.tlakS && z.tlakD ? `${z.tlakS}/${z.tlakD}` : ''}</td><td>${z.spo2 ? z.spo2 + ' %' : ''}</td><td>${z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : ''}</td></tr>`).join('')}</tbody></table>`
@@ -783,6 +810,25 @@ function renderHistorie(d, p, s) {
  * a přihlašuje se telefonem a heslem (src/uzivatele.mjs). */
 let posledniPozvanka = null;   // { uzivatelId, odkaz, text, sms } – ukázat po založení / nové pozvánce
 const rodinaUzivatele = new Map();   // id kamery → účty rodiny ze serveru (pro „Zavolat rodině“)
+/** Mapa polohy náramku: dlaždice OpenStreetMap (zoom 16) kolem bodu, značka uprostřed; kreslí se znovu jen při změně souřadnic. */
+function kresliMapu(el, lat, lon) {
+  const klic = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  if (el.dataset.k === klic) return;
+  el.dataset.k = klic;
+  const z = 16, n = 2 ** z, W = el.clientWidth || 600, H = el.clientHeight || 320;
+  const la = lat * Math.PI / 180;
+  const px = (lon + 180) / 360 * n * 256, py = (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n * 256;
+  const x0 = px - W / 2, y0 = py - H / 2;
+  const casti = [];
+  for (let tx = Math.floor(x0 / 256); tx <= Math.floor((x0 + W) / 256); tx++) {
+    for (let ty = Math.floor(y0 / 256); ty <= Math.floor((y0 + H) / 256); ty++) {
+      if (ty < 0 || ty >= n) continue;
+      casti.push(`<img alt="" src="https://tile.openstreetmap.org/${z}/${((tx % n) + n) % n}/${ty}.png" style="left:${Math.round(tx * 256 - x0)}px;top:${Math.round(ty * 256 - y0)}px">`);
+    }
+  }
+  el.innerHTML = casti.join('') + '<div class="znacka" title="poslední poloha náramku"></div><span class="osm">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></span>';
+}
+
 async function apiJson(path, init) {
   const r = await fetch(path, init);
   let data = {}; try { data = await r.json(); } catch { /* bez těla */ }

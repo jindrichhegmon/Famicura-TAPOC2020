@@ -25,7 +25,7 @@ const MAPA = { 'cam-linecross': 'linecross', 'cam-intrusion': 'intrusion', 'cam-
 const UDALOSTI_MAX = 400, ZADOSTI_MAX = 100;
 const ZAKAZANE = new Set(['reset']);   // ostrá data tenanta nikdo nevynuluje z prohlížeče
 // akce, jejichž první argument je kamera: musí patřit tenantovi (jinak by šlo zapsat událost cizí kameře)
-const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace', 'setNaramek']);
+const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace', 'setNaramek', 'setNaramekAuto']);
 const json = (v) => { if (v === null || v === undefined || v === '') return null; try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 const otisk = (o) => JSON.stringify(o);
 

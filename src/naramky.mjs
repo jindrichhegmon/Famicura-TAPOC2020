@@ -28,6 +28,8 @@ const DEDUP_MS = 60 * 1000;      // stejný poplach z téhož zařízení do min
 const OZVANI_MS = 5 * 60 * 1000; // ozvání bez změny baterie se zapisuje nejvýš po 5 minutách
 const CACHE_MS = 60 * 1000;      // přiřazení ID → kamera se hledá znovu po minutě
 const MERENI_MS = 60 * 60 * 1000; // řádek s měřením do historie nejvýš jednou za hodinu
+/** Příkazy serveru náramku (protokol hodinek / SeTracker; V48 dtto): jedno měření, poloha, vypnutí. */
+export const PRIKAZY = { tep: 'hrtstart,1', tlak: 'bphrt', kyslik: 'oxygen', teplota: 'btemp2', poloha: 'CR', vypnout: 'POWEROFF' };
 
 /* ---------- rámce ---------- */
 
@@ -155,6 +157,8 @@ export const jePolohovy = (typ) => /^(UD|AL|WT)/.test(typ);
  */
 export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', now = Date.now, log = console } = {}) {
   const spojeni = new Set();
+  const aktivni = new Map();       // id přívěsku → { socket, vyrobce, index, cas } – kudy mu poslat příkaz
+  const posledniAuto = new Map();  // id → čas posledního automatického měření
   const cache = new Map();         // id přívěsku → { tenant, kameraId, do }
   const nezname = new Map();       // id → kdy naposledy zalogováno
   const posledniPoplach = new Map(); // id|druh → čas
@@ -186,6 +190,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
 
   async function zpracuj(ramec, socket) {
     stat.prijato++; stat.posledni = now();
+    aktivni.set(ramec.id, { socket, vyrobce: ramec.vyrobce, index: ramec.index, cas: now() });
     const r = rozeberObsah(ramec.obsah);
     // diagnostika: každý rámec jedním řádkem (u polohových typů bez souřadnic, u ostatních i obsah), ať jde doladit model
     const sPolohou = jePolohovy(r.typ);
@@ -247,21 +252,67 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       for (const r of ramce) fronta = fronta.then(() => zpracuj(r, socket)).catch((e) => log.error('[naramky]', e.message));
     });
     socket.on('error', () => {});
-    socket.on('close', () => spojeni.delete(socket));
+    socket.on('close', () => { spojeni.delete(socket); for (const [id, a] of aktivni) if (a.socket === socket) aktivni.delete(id); });
   }
+
+  /** Příkaz náramku: nazev z PRIKAZY, nebo 'vlastni' s textem (ladění modelu). Náramek musí být právě připojený. */
+  async function prikaz(id, nazev, { vlastni = '' } = {}) {
+    const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
+    let obsah = PRIKAZY[nazev];
+    if (nazev === 'vlastni') {
+      obsah = String(vlastni || '').trim();
+      if (!/^[A-Za-z0-9_,.:+\- ]{1,60}$/.test(obsah)) throw chyba('Příkaz: 1 až 60 znaků (písmena, číslice, čárky, tečky), bez hranatých závorek a hvězdiček.', 400);
+    }
+    if (!obsah) throw chyba('Neznámý příkaz náramku (tep, tlak, kyslik, teplota, poloha, vypnout, vlastni).', 400);
+    const a = aktivni.get(String(id));
+    if (!a || a.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
+    await new Promise((res, rej) => a.socket.write(slozRamec({ vyrobce: a.vyrobce, id: String(id), index: a.index }, obsah), 'latin1', (e) => (e ? rej(e) : res())));
+    log.log(`[naramky] ${id} ← příkaz ${obsah}`);
+    return { ok: true, obsah };
+  }
+
+  /** Automatické měření: u náramků s nastavením auto (min > 0) pošle zvolená měření, když uplynul interval a náramek je připojený. */
+  async function tik() {
+    let posl = 0;
+    for (const t of await tenanti()) {
+      let st;
+      try { st = await (await najemci.pro(t)).stav(); } catch { continue; }
+      for (const p of st.state.patients) {
+        const n = p.naramek; const auto = n?.auto;
+        if (!n?.id || !auto || !(auto.min > 0)) continue;
+        const a = aktivni.get(String(n.id)); if (!a || a.socket.destroyed) continue;
+        if (now() - (posledniAuto.get(n.id) || 0) < auto.min * 60 * 1000) continue;
+        posledniAuto.set(n.id, now());
+        for (const k of ['tep', 'tlak', 'kyslik', 'teplota']) {
+          if (!auto[k]) continue;
+          try { await prikaz(n.id, k); posl++; } catch (e) { log.error('[naramky] automatické měření', n.id, k, e.message); }
+          await new Promise((r) => setTimeout(r, 1500));   // měření se nemají překrývat
+        }
+      }
+    }
+    return posl;
+  }
+  let autoTimer = null;
 
   return {
     get port() { return server ? server.address().port : port; },
-    stav() { return { port: server ? server.address().port : null, spojeni: spojeni.size, ...stat }; },
+    stav() { return { port: server ? server.address().port : null, spojeni: spojeni.size, pripojene: [...aktivni.keys()], ...stat }; },
     zapomen() { cache.clear(); },
-    start() {
+    pripojen(id) { const a = aktivni.get(String(id)); return !!a && !a.socket.destroyed; },
+    prikaz, tik,
+    start({ autoMs = 60 * 1000 } = {}) {
       return new Promise((resolve, reject) => {
         server = net.createServer(obsluz);
         server.once('error', reject);
-        server.listen(port, host, () => { server.off('error', reject); resolve(server.address().port); });
+        server.listen(port, host, () => {
+          server.off('error', reject);
+          if (autoMs > 0) { autoTimer = setInterval(() => tik().catch((e) => log.error('[naramky] automatické měření:', e.message)), autoMs); autoTimer.unref?.(); }
+          resolve(server.address().port);
+        });
       });
     },
     stop() {
+      if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
       for (const s of spojeni) s.destroy();
       return new Promise((resolve) => { if (!server) return resolve(); server.close(() => resolve()); server = null; });
     },

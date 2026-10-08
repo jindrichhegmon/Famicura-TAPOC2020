@@ -13,7 +13,8 @@ export const CSP = [
   // stránka má vlastní inline <script type=module>; MediaPipe je WASM
   "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net",
   "connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com",
-  "img-src 'self' data: blob:",
+  // mapa polohy náramku: dlaždice OpenStreetMap
+  "img-src 'self' data: blob: https://tile.openstreetmap.org",
   "media-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "worker-src 'self' blob:",

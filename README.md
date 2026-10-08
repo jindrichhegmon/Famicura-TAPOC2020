@@ -98,6 +98,21 @@ náramku“ nejvýš jednou za hodinu) a poplachy z náramku. V48 posílá popla
 poplach z téhož zařízení do minuty se počítá jednou. Neznámé ID server jen
 potvrdí a zapíše do logu (`[naramky] neznámý přívěsek …`), nic nezakládá.
 
+Záložka Náramek umí i **příkazy náramku** (jen poskytovatel, `POST
+/api/naramek/prikaz`): Změřit tep (`hrtstart,1`), tlak (`bphrt`), kyslík
+(`oxygen`), teplotu (`btemp2`), Zjistit polohu (`CR`), Vypnout náramek
+(`POWEROFF`, zapisuje se do historie) a vlastní příkaz pro ladění modelu
+(písmena, číslice, čárky; do 60 znaků, zapisuje se do historie). Příkaz jde
+jen do právě připojeného náramku (jinak 409), ve stejném rámci
+`[3G*ID*DÉLKA*příkaz]`. **Automatické měření** (akce `setNaramekAuto`,
+`Naramek.auto`: interval v minutách a veličiny): server každou minutu
+zkontroluje připojené náramky a po uplynutí intervalu pošle zvolená měření za
+sebou. Názvy `hrtstart,1`, `CR`, `UPLOAD`, `POWEROFF` jsou z dokumentace
+protokolu SeTracker/Beesure; `bphrt`, `oxygen`, `btemp2` jsou názvy, pod
+kterými V48 hodnoty posílá, a jako příkazy je ověřte v logu (náramek příkaz
+po přijetí zopakuje jako potvrzení). Mapa poslední polohy je z dlaždic
+OpenStreetMap (CSP `img-src tile.openstreetmap.org`), bez vlastního klíče.
+
 Přívěsek se na server nasměruje SMS příkazem z mobilu (přívěsek SMS přijímá,
 i když z SIM bez SMS neodpovídá): `pw,123456,ip,95.216.201.2,5093#`
 (ReachFar; u jiných modelů `ip,95.216.201.2,5093#`). Tím přestane posílat
@@ -581,7 +596,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 3.10) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.11) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
