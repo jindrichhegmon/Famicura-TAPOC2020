@@ -5,6 +5,24 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.20 · 8. 10. 2026 · zdroje čísel SOS: Péče doma / Péče doma plus / vlastní, náhled kam volá
+
+- **Slot SOS má tři zdroje**: vlastní číslo, **Péče doma** (`pecedoma` =
+  kontaktní telefon poskytovatele v databázi Péče doma, bez tenanta; tenant
+  na něj ukazuje přes `Tenants.FamicuraProviderID`) a **Péče doma plus**
+  (`pecedomaplus` = telefon služby tohoto tenanta, `SLUZBA_TELEFON`
+  v `A_MSPPP_Nastaveni`). Starší zápis `sluzba` se bere jako Péče doma plus,
+  jinak Péče doma. Aplikace jhn-apps vrací obě čísla zvlášť
+  (`{ pecedoma, pecedomaplus }`) a akcí `nastav` zapíše telefon služby do
+  Plus; v dispečinku je k tomu pole „Telefon služby v Péče doma plus“
+  (`POST /api/naramek/sluzba-telefon { telefon }`).
+- **„Náramek bude volat“**: pod formulářem je živý náhled skutečných čísel
+  podle zvolených zdrojů (ještě před uložením) a vedle něj čísla naposledy
+  nastavená v náramku s časem. Blok pod tím ukazuje obě čísla služby a odkud
+  jsou; chybějící číslo je červeně s důvodem.
+- Chyba při odeslání říká, který zdroj číslo nemá („Péče doma: číslo služby
+  není nastavené (Poskytovatel nemá … kontaktní telefon)“).
+
 ## 3.19 · 8. 10. 2026 · číslo služby z Péče doma ve slotu SOS
 
 - **Slot SOS může být „číslo služby (Péče doma)“** místo pevného čísla

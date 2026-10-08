@@ -443,12 +443,20 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         }
         return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah, skutecna });
       }
-      // Číslo služby poskytovatele (Péče doma plus SLUZBA_TELEFON, jinak Péče doma contact_phone) – pro volbu „číslo služby“ ve slotu SOS.
-      if (m === 'GET' && path === '/api/naramek/sluzba-telefon') {
+      // Čísla služby poskytovatele: Péče doma (contact_phone poskytovatele, bez tenanta) a Péče doma plus (SLUZBA_TELEFON tenanta); POST { telefon } zapíše to v Plus.
+      if ((m === 'GET' || m === 'POST') && path === '/api/naramek/sluzba-telefon') {
         if (rodina) return jenPoskytovatel();
-        if (!sluzba || !sluzba.nastaveno) return json({ ok: true, nastaveno: false, telefon: '', zdroj: '', poskytovatel: '', chyba: 'Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC, ./deploy/vps-env.sh).' });
-        try { const v = await sluzba.telefon(tenant, { cerstve: url.searchParams.get('cerstve') === '1' }); return json({ ok: true, nastaveno: true, telefon: v.telefon, zdroj: v.zdroj, poskytovatel: v.poskytovatel, duvod: v.duvod || '', zastarale: !!v.zastarale }); }
-        catch (e) { return json({ ok: true, nastaveno: true, telefon: '', zdroj: '', poskytovatel: '', chyba: e.message }); }
+        const prazdne = { poskytovatel: '', pecedoma: { telefon: '', poskytovatel: '', duvod: '' }, pecedomaplus: { telefon: '' } };
+        if (!sluzba || !sluzba.nastaveno) return json({ ok: true, nastaveno: false, ...prazdne, chyba: 'Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC, ./deploy/vps-env.sh).' });
+        try {
+          let v;
+          if (m === 'POST') {   // zápis telefonu služby do Péče doma plus (SLUZBA_TELEFON tenanta), do historie každé kamery s náramkem se nepíše – je to nastavení poskytovatele
+            const { telefon } = await telo(req);
+            if (typeof telefon !== 'string') return json({ ok: false, error: 'Zadejte telefon (prázdný = smazat).' }, 400);
+            v = await sluzba.nastav(tenant, telefon);
+          } else v = await sluzba.telefon(tenant, { cerstve: url.searchParams.get('cerstve') === '1' });
+          return json({ ok: true, nastaveno: true, poskytovatel: v.poskytovatel, pecedoma: v.pecedoma, pecedomaplus: v.pecedomaplus, zastarale: !!v.zastarale });
+        } catch (e) { if (m === 'POST') throw e; return json({ ok: true, nastaveno: true, ...prazdne, chyba: e.message }); }
       }
       // Měření zdraví z náramku jedné kamery (jen poskytovatel), nejnovější první, nejvýš 2000 (stránkuje stránka); format=xlsx = sešit Excelu (až 10000).
       if (m === 'GET' && path === '/api/naramek/mereni') {

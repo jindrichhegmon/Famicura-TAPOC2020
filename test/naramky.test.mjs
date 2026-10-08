@@ -250,19 +250,20 @@ test('číslo služby v náramku: „sluzba“ se dosadí před odesláním, př
   const tb = createMockTabulky();
   const { s, kamery, now, posun } = tenant(tb);
   await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
-  let cislo = '+420602620069';
-  const sluzba = { nastaveno: true, volani: 0, async telefon() { this.volani++; return { telefon: cislo, zdroj: 'pecedoma', poskytovatel: 'X', cas: now() }; } };
+  let cislo = '+420602620069', plus = '+420111222333';
+  const sluzba = { nastaveno: true, volani: 0, async telefon() { this.volani++; return { poskytovatel: 'X', pecedoma: { telefon: cislo, poskytovatel: 'X', duvod: cislo ? '' : 'Poskytovatel nemá v Péče doma vyplněný kontaktní telefon.' }, pecedomaplus: { telefon: plus }, cas: now() }; } };
   const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho, prodlevaMs: 20, sluzba, sluzbaMs: 10 * 60 * 1000 });
   const port = await n.start({ autoMs: 0 });
   try {
     const k = await spoj(port);
     await k.posli(ram('LK,0,0,95'));
     assert.ok(await cekej(() => n.pripojen(ID)));
-    const r = await n.prikaz(ID, 'sos', { cislaSos: ['sluzba', '', '602520069'], tenant: '22202480FAMICURA' });
-    assert.deepEqual(r.cisla, ['+420602620069', '', '602520069']);
-    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420602620069]`)), 'číslo služby dosazené do SOS1');
+    const r = await n.prikaz(ID, 'sos', { cislaSos: ['pecedoma', 'pecedomaplus', '602520069'], tenant: '22202480FAMICURA' });
+    assert.deepEqual(r.cisla, ['+420602620069', '+420111222333', '602520069'], 'Péče doma do SOS1, Péče doma plus do SOS2');
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420602620069]`) && k.prijato().includes(`[3G*${ID}*0012*SOS2,+420111222333]`)), 'čísla služby dosazená');
+    assert.deepEqual((await n.prikaz(ID, 'sos', { cislaSos: ['sluzba'], tenant: '22202480FAMICURA' })).cisla, ['+420111222333', '', ''], 'starší zápis sluzba = Péče doma plus');
     await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
-    await s.proved('setNaramekSos', ['tapoc2020', ['sluzba', '', '602520069'], 'Dispečer']);
+    await s.proved('setNaramekSos', ['tapoc2020', ['pecedoma', 'pecedomaplus', '602520069'], 'Dispečer']);
     await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
     // tik: číslo stejné → nic; změna v Péče doma → po uplynutí sluzbaMs znovu odeslat
     k.prijato(); let pred = k.prijato().length;
@@ -270,9 +271,10 @@ test('číslo služby v náramku: „sluzba“ se dosadí před odesláním, př
     cislo = '+420777000111'; posun(11 * 60 * 1000);
     await n.tik();
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420777000111]`)), 'po změně čísla služby se SOS1 poslalo znovu');
-    assert.deepEqual((await s.stav()).state.patients[0].naramek.sosOdeslaneCisla, ['+420777000111', '', '602520069']);
-    cislo = ''; posun(11 * 60 * 1000);
-    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['sluzba'], tenant: '22202480FAMICURA' }), /není v Péče doma nastavené/);
+    assert.deepEqual((await s.stav()).state.patients[0].naramek.sosOdeslaneCisla, ['+420777000111', '+420111222333', '602520069']);
+    cislo = ''; plus = ''; posun(11 * 60 * 1000);
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['pecedoma'], tenant: '22202480FAMICURA' }), /Péče doma: číslo služby není nastavené \(Poskytovatel nemá/);
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['pecedomaplus'], tenant: '22202480FAMICURA' }), /Péče doma plus: číslo služby není nastavené/);
     k.konec();
   } finally { await n.stop(); }
 });

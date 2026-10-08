@@ -20,6 +20,7 @@
  * Přijímá se jen od ID, které některý poskytovatel přiřadil; neznámé ID se jen zaloguje
  * (jednou za hodinu), ať se dá přiřadit. Žádná data se neposílají zpět kromě potvrzení.
  */
+import { ZDROJE_SOS, POPIS_ZDROJE, cisloZdroje } from './sluzba.mjs';
 import net from 'node:net';
 
 const MAX_RAMEC = 4096;          // delší obsah (obrázky, záznamy) nás nezajímá
@@ -273,17 +274,18 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   }
 
   /** Příkaz náramku: nazev z PRIKAZY, nebo 'vlastni' s textem (ladění modelu). Náramek musí být právě připojený. */
-  /** Skutečná čísla pro náramek: 'sluzba' → číslo služby tenanta (chyba 400, když není nastavené), ostatní ověřená a bez mezer. */
+  /** Skutečná čísla pro náramek: 'pecedoma' / 'pecedomaplus' ('sluzba' starší zápis) → číslo služby tenanta (chyba 400, když není), ostatní ověřená a bez mezer. */
   async function cislaSkutecna(tenant, cislaSos) {
     const out = [];
     for (let i = 0; i < 3; i++) {
       const c = String((cislaSos || [])[i] ?? '').replace(/[\s-]/g, '');
-      if (c === 'sluzba') {
+      if (ZDROJE_SOS.includes(c)) {
         if (!sluzba || !sluzba.nastaveno) throw chyba('Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC).', 503);
         if (!tenant) throw chyba('Číslo služby: chybí tenant.', 400);
         const v = await sluzba.telefon(tenant);
-        if (!v.telefon) throw chyba(`Číslo služby není v Péče doma nastavené${v.duvod ? ' (' + v.duvod + ')' : ''}.`, 400);
-        out.push(v.telefon);
+        const tel = cisloZdroje(v, c);
+        if (!tel) throw chyba(`${POPIS_ZDROJE[c]}: číslo služby není nastavené${c !== 'pecedomaplus' && v.pecedoma?.duvod ? ' (' + v.pecedoma.duvod + ')' : c === 'pecedomaplus' ? ' (vyplňte Telefon služby v Péče doma plus pod čísly SOS)' : ''}.`, 400);
+        out.push(tel);
       } else {
         if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba('Číslo SOS: jen číslice, případně + na začátku.', 400);
         out.push(c);
@@ -296,7 +298,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
     const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
     if (nazev === 'sos') {
       // čísla SOS: SOS1,číslo … SOS3,číslo (prázdné = smazat); zapsaná ve stavu kamery (setNaramekSos), sem už přijdou ověřená;
-      // 'sluzba' = číslo služby poskytovatele (src/sluzba.mjs) – dosadí se tady, proto je potřeba tenant
+      // 'pecedoma' / 'pecedomaplus' = číslo služby poskytovatele (src/sluzba.mjs) – dosadí se tady, proto je potřeba tenant
       const a0 = aktivni.get(String(id));
       if (!a0 || a0.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
       const cisla = await cislaSkutecna(tenant, cislaSos);
@@ -349,7 +351,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       for (const p of st.state.patients) {
         const n = p.naramek;
         // číslo služby ve slotu SOS: každých sluzbaMs porovnat s naposledy poslanými čísly a při změně poslat znovu
-        if (n?.id && Array.isArray(n.sos) && n.sos.includes('sluzba') && n.sosOdeslano && sluzba?.nastaveno) {
+        if (n?.id && Array.isArray(n.sos) && n.sos.some((c) => ZDROJE_SOS.includes(c)) && n.sosOdeslano && sluzba?.nastaveno) {
           const a = aktivni.get(String(n.id));
           if (a && !a.socket.destroyed && now() - (posledniSluzba.get(n.id) || 0) >= sluzbaMs && !sosPosilam.has(String(n.id))) {
             posledniSluzba.set(n.id, now());

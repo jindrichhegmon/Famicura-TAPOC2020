@@ -970,17 +970,23 @@ test('čísla SOS přes API: uloží ke kameře, bez připojeného náramku ček
 });
 
 test('číslo služby: slot „sluzba“ se dosadí z jhn-apps (Péče doma), GET /api/naramek/sluzba-telefon, bez nastavení srozumitelně', async () => {
-  const sluzba = { nastaveno: true, async telefon(t) { return { telefon: '+420602620069', zdroj: 'pecedoma', poskytovatel: 'Ing. Jindřich Hegmon', cas: Date.now() }; } };
+  let plusTel = '';
+  const stavS = () => ({ poskytovatel: 'Ing. Jindřich Hegmon', pecedoma: { telefon: '+420602620069', poskytovatel: 'Ing. Jindřich Hegmon', duvod: '' }, pecedomaplus: { telefon: plusTel }, cas: Date.now() });
+  const sluzba = { nastaveno: true, async telefon() { return stavS(); }, async nastav(t, tel) { plusTel = tel ? (/^\d{9}$/.test(tel) ? '+420' + tel : tel) : ''; return stavS(); } };
   const posl = [];
   const naramky = { stav() { return { port: 5093 }; }, pripojen: () => true, async prikaz(id, nazev, o = {}) { posl.push(o.cislaSos); return { ok: true, obsah: 'x', cisla: ['+420602620069', '602520069', ''] }; } };
   const { h } = handler({ naramky, sluzba });
   await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
   let r = await h(req('GET', '/api/naramek/sluzba-telefon', { cookies: cookie() }));
-  assert.equal(r.status, 200); let j = await r.json(); assert.equal(j.telefon, '+420602620069'); assert.equal(j.zdroj, 'pecedoma'); assert.equal(j.nastaveno, true);
-  r = await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['sluzba', '602520069', ''] } }));
-  j = await r.json(); assert.equal(r.status, 200); assert.deepEqual(j.cisla, ['sluzba', '602520069', '']); assert.deepEqual(j.skutecna, ['+420602620069', '602520069', '']); assert.deepEqual(posl[0], ['sluzba', '602520069', '']);
+  assert.equal(r.status, 200); let j = await r.json(); assert.equal(j.pecedoma.telefon, '+420602620069'); assert.equal(j.pecedomaplus.telefon, ''); assert.equal(j.nastaveno, true);
+  // zápis telefonu služby do Péče doma plus
+  r = await h(req('POST', '/api/naramek/sluzba-telefon', { cookies: cookie(), body: { telefon: '722972596' } }));
+  j = await r.json(); assert.equal(r.status, 200); assert.equal(j.pecedomaplus.telefon, '+420722972596');
+  r = await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['pecedoma', 'pecedomaplus', '602520069'] } }));
+  j = await r.json(); assert.equal(r.status, 200); assert.deepEqual(j.cisla, ['pecedoma', 'pecedomaplus', '602520069']); assert.deepEqual(posl[0], ['pecedoma', 'pecedomaplus', '602520069']);
   const st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
-  assert.deepEqual(st.patients[0].naramek.sosOdeslaneCisla, ['+420602620069', '602520069', '']); assert.match(st.events[0].text, /číslo služby, 602520069/);
+  assert.deepEqual(st.patients[0].naramek.sos, ['pecedoma', 'pecedomaplus', '602520069']); assert.match(st.events[0].text, /číslo služby \(Péče doma\), číslo služby \(Péče doma plus\), 602520069/);
+  assert.equal((await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['sluzba', '', ''] } }))).status, 200, 'starší zápis sluzba se přijme');
   const { h: h2 } = handler({ naramky });
   j = await (await h2(req('GET', '/api/naramek/sluzba-telefon', { cookies: cookie() }))).json();
   assert.equal(j.nastaveno, false); assert.match(j.chyba, /JHN_APPS_TOKEN/);

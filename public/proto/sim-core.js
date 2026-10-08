@@ -352,16 +352,16 @@ const akce = {
     return { vysledek: p.naramek || null };
   },
   /** Čísla SOS náramku (až 3): ukládají se ke kameře, server je pošle do náramku příkazy SOS1–SOS3 (src/naramky.mjs) a zapíše sosOdeslano
-   *  a sosOdeslaneCisla (skutečně poslaná). Hodnota 'sluzba' = číslo služby poskytovatele z Péče doma (plus), server ho dosadí a hlídá změnu. */
+   *  a sosOdeslaneCisla (skutečně poslaná). Hodnota 'pecedoma' / 'pecedomaplus' = číslo služby poskytovatele z Péče doma / Péče doma plus, server ho dosadí a hlídá změnu. */
   setNaramekSos(s, now, patientId, cisla, by) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
     if (!p.naramek?.id) throw chyba('Nejdřív přiřaďte náramek (ID zařízení).');
     if (!Array.isArray(cisla) || cisla.length > 3) throw chyba('Zadejte nejvýš tři čísla SOS.');
     const nova = [0, 1, 2].map((i) => String(cisla[i] ?? '').replace(/[\s-]/g, ''));
-    for (const c of nova) if (c && c !== 'sluzba' && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba(`Číslo SOS „${c}“: jen číslice, případně + na začátku (např. +420722972596), nebo „sluzba“ = číslo služby poskytovatele.`);
+    for (const c of nova) if (c && !['pecedoma', 'pecedomaplus', 'sluzba'].includes(c) && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba(`Číslo SOS „${c}“: jen číslice, případně + na začátku (např. +420722972596), nebo zdroj „pecedoma“ / „pecedomaplus“ = číslo služby poskytovatele.`);
     if (JSON.stringify(p.naramek.sos || ['', '', '']) === JSON.stringify(nova)) return { zmena: false, vysledek: nova };
     p.naramek = { ...p.naramek, sos: nova, sosOdeslano: null, sosOdeslaneCisla: null };
-    const seznam = nova.filter(Boolean).map((c) => (c === 'sluzba' ? 'číslo služby' : c));
+    const seznam = nova.filter(Boolean).map((c) => ({ pecedoma: 'číslo služby (Péče doma)', pecedomaplus: 'číslo služby (Péče doma plus)', sluzba: 'číslo služby' })[c] || c);
     s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink',
       text: seznam.length ? `Čísla SOS náramku: ${seznam.join(', ')} (pošlou se do náramku).` : 'Čísla SOS náramku smazána (pošle se do náramku).', note: '' });
     if (s.events.length > 400) s.events.length = 400;
