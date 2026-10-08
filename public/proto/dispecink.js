@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -531,7 +531,7 @@ function renderDetail(rebuild = false) {
         </form>
         </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <p id="dnaramekInfo"></p>
-        <div class="mapa hide" id="dnaramekMapa"></div>
+        <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
@@ -832,6 +832,7 @@ function kresliMapu(el, lat, lon) {
   if (el.dataset.k === klic) return;
   el.dataset.k = klic;
   const z = 16, n = 2 ** z, W = el.clientWidth || 600, H = el.clientHeight || 320;
+  el.dataset.wh = `${W}x${H}`;
   const la = lat * Math.PI / 180;
   const px = (lon + 180) / 360 * n * 256, py = (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n * 256;
   const x0 = px - W / 2, y0 = py - H / 2;
@@ -874,9 +875,57 @@ function kresliMereni(d) {
   const vyrez = radky.slice(m.strana * m.na, (m.strana + 1) * m.na);
   d.querySelector('#dnaramekStrana').textContent = radky.length ? `${m.strana + 1} / ${stran} · ${radky.length}${radky.length >= 2000 ? '+' : ''} měření` : '';
   d.querySelector('#dnaramekPrev').disabled = m.strana === 0; d.querySelector('#dnaramekNext').disabled = m.strana >= stran - 1;
+  // hodnota mimo běžné rozmezí oranžově (warn), mimo varovné rozmezí červeně (bad); meze v sim-core MEZE_ZDRAVI
+  const bunka = (k, v, text) => { const u = urovenHodnoty(k, v); const m = MEZE_ZDRAVI[k]; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ` title="mimo běžné rozmezí ${m.ok[0]}–${m.ok[1]} ${m.jednotka}"` : ''}>${text}</td>`; };
+  const bunkaTlak = (z) => { if (!(z.tlakS && z.tlakD)) return '<td></td>'; const u = ['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || ''; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ' title="mimo běžné rozmezí 90–139 / 60–89 mmHg"' : ''}>${z.tlakS}/${z.tlakD}</td>`; };
   setHtml(el, vyrez.length
-    ? `<table class="mereni"><thead><tr><th>Čas</th><th>Tep</th><th>Tlak</th><th>Kyslík</th><th>Teplota</th></tr></thead><tbody>${vyrez.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td><td>${z.tep ?? ''}</td><td>${z.tlakS && z.tlakD ? `${z.tlakS}/${z.tlakD}` : ''}</td><td>${z.spo2 ? z.spo2 + ' %' : ''}</td><td>${z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : ''}</td></tr>`).join('')}</tbody></table>`
+    ? `<table class="mereni"><thead><tr><th>Čas</th><th>Tep</th><th>Tlak</th><th>Kyslík</th><th>Teplota</th></tr></thead><tbody>${vyrez.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td>${bunka('tep', z.tep, z.tep ?? '')}${bunkaTlak(z)}${bunka('spo2', z.spo2, z.spo2 ? z.spo2 + ' %' : '')}${bunka('teplota', z.teplota, z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : '')}</tr>`).join('')}</tbody></table>`
     : '<p class="small muted">Zatím žádné měření.</p>');
+  kresliGraf(d, radky);
+}
+/* Graf vývoje měření za posledních 24 h vedle mapy: čtyři malé grafy (tep, tlak, kyslík, teplota) se společnou časovou osou,
+   jedna osa hodnot na graf, světlé pásmo = běžné rozmezí, body mimo rozmezí oranžově/červeně, popisek bodu po najetí myší. */
+const GRAFY = [
+  { k: 'tep', nazev: 'Tep', jednotka: '/min', serie: [['tep', 'tep', 's1']] },
+  { k: 'tlak', nazev: 'Krevní tlak', jednotka: 'mmHg', serie: [['tlakS', 'horní', 's1'], ['tlakD', 'dolní', 's2']] },
+  { k: 'spo2', nazev: 'Kyslík v krvi', jednotka: '%', serie: [['spo2', 'kyslík', 's1']] },
+  { k: 'teplota', nazev: 'Teplota', jednotka: '°C', serie: [['teplota', 'teplota', 's1']] },
+];
+function kresliGraf(d, radky, now = Date.now()) {
+  const el = d.querySelector('#dnaramekGraf'); if (!el) return;
+  const DEN = 24 * 3600 * 1000; const od = now - DEN;
+  const data = (radky || []).filter((r) => r.cas >= od && r.cas <= now + 60_000).sort((a, b) => a.cas - b.cas);
+  const W = 320, H = 96, L = 38, R = 10, T = 8, B = 20;
+  const x = (t) => L + ((t - od) / DEN) * (W - L - R);
+  const fmtCas = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+  const fmtV = (v) => String(v).replace('.', ',');
+  setHtml(el, GRAFY.map((g) => {
+    const serie = g.serie.filter(([k]) => data.some((r) => r[k] != null));
+    if (!serie.length) return `<figure class="graf prazdny"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span></figcaption><p class="small muted">bez měření za 24 h</p></figure>`;
+    const hodnoty = []; for (const [k] of serie) for (const r of data) if (r[k] != null) hodnoty.push(Number(r[k]));
+    const meze = serie.length === 1 ? MEZE_ZDRAVI[serie[0][0]] : null;
+    let min = Math.min(...hodnoty, ...(meze ? [meze.ok[0]] : [])), max = Math.max(...hodnoty, ...(meze ? [meze.ok[1]] : []));
+    if (max - min < 4) { const s = (4 - (max - min)) / 2; min -= s; max += s; }
+    const krok = (max - min) / 2; min -= krok * 0.08; max += krok * 0.08;
+    const y = (v) => T + ((max - v) / (max - min)) * (H - T - B);
+    const osaY = [min, (min + max) / 2, max].map((v) => `<line class="osa" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${L - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmtV(Math.round(v * 10) / 10)}</text>`).join('');
+    const osaX = [0, 6, 12, 18, 24].map((h) => { const t = od + h * 3600 * 1000; return `<line class="osa" x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="${T}" y2="${H - B}"/><text class="tick" x="${x(t).toFixed(1)}" y="${H - 8}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${h === 24 ? 'teď' : fmtCas(t)}</text>`; }).join('');
+    const pasmo = meze ? `<rect class="pasmo" x="${L}" y="${y(Math.min(meze.ok[1], max)).toFixed(1)}" width="${W - L - R}" height="${Math.max(0, y(Math.max(meze.ok[0], min)) - y(Math.min(meze.ok[1], max))).toFixed(1)}"><title>běžné rozmezí ${fmtV(meze.ok[0])}–${fmtV(meze.ok[1])} ${esc(meze.jednotka)}</title></rect>` : '';
+    const cary = serie.map(([k, nazev, cls]) => {
+      const body = data.filter((r) => r[k] != null);
+      const cara = body.length > 1 ? `<path class="cara ${cls}" d="${body.map((r, i) => `${i ? 'L' : 'M'}${x(r.cas).toFixed(1)} ${y(Number(r[k])).toFixed(1)}`).join(' ')}"/>` : '';
+      const tecky = body.map((r) => { const u = urovenHodnoty(k, r[k]); return `<circle class="bod ${cls} ${u}" cx="${x(r.cas).toFixed(1)}" cy="${y(Number(r[k])).toFixed(1)}" r="4"><title>${esc(fmtDT(r.cas))} · ${esc(nazev)} ${fmtV(r[k])} ${esc(g.jednotka)}${u === 'warn' ? ' · mimo běžné rozmezí' : u === 'bad' ? ' · výrazně mimo rozmezí' : ''}</title></circle>`; }).join('');
+      const posl = body[body.length - 1];
+      const vpravo = x(posl.cas) + 40 > W - R;   // u pravého okraje popisek vlevo od bodu, jinak vpravo
+      const popis = serie.length > 1 ? `<text class="popis" x="${(vpravo ? x(posl.cas) - 7 : x(posl.cas) + 7).toFixed(1)}" y="${(y(Number(posl[k])) + 3).toFixed(1)}" text-anchor="${vpravo ? 'end' : 'start'}">${esc(nazev)}</text>` : '';
+      return cara + tecky + popis;
+    }).join('');
+    const legenda = serie.length > 1 ? `<span class="legenda">${serie.map(([, nazev, cls]) => `<i class="lg ${cls}"></i>${esc(nazev)}`).join(' ')}</span>` : '';
+    return `<figure class="graf"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span>${legenda}</figcaption><svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.nazev)} za posledních 24 hodin">${pasmo}${osaY}${osaX}${cary}</svg></figure>`;
+  }).join(''));
+  // mapa vedle grafů se natáhne na jejich výšku; dlaždice jsou spočítané pro původní rozměr, proto překreslit
+  const mapa = d.querySelector('#dnaramekMapa');
+  if (mapa && mapa.dataset.k && !mapa.classList.contains('hide') && mapa.dataset.wh !== `${mapa.clientWidth}x${mapa.clientHeight}`) { const [la, lo] = mapa.dataset.k.split(','); mapa.dataset.k = ''; kresliMapu(mapa, Number(la), Number(lo)); }
 }
 async function apiJson(path, init) {
   const r = await fetch(path, init);

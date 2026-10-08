@@ -1,6 +1,6 @@
 /* Prototyp prostředí: rodina, dispečink, provoz. Stejná paleta jako aplikace. */
 :root{color-scheme:light;--ink:#17212b;--muted:#5a6b7d;--blue:#106fd5;--navy:#0d4a75;--bg:#f5f7f9;--line:#dde4ea;--soft:#eef2f6;
-  --ok:#0b5c2e;--okbg:#eef7f0;--warn:#9a5710;--warnbg:#fdf1e3;--bad:#a12626;--badbg:#fbeaea}
+  --ok:#0b5c2e;--okbg:#eef7f0;--warn:#9a5710;--warnbg:#fdf1e3;--bad:#a12626;--badbg:#fbeaea;--oranz:#c25a00}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transparent}
@@ -481,6 +481,22 @@ html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
 .mereni th,.mereni td{padding:4px 8px;text-align:left;border-bottom:1px solid var(--soft);white-space:nowrap}
 .mereni th{font-weight:600;color:var(--muted,#5b6b78)}
 /* záložka Náramek: mapa poslední polohy (dlaždice OpenStreetMap) */
+.mapagraf{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch}
+.mapagraf .mapa{flex:1 1 340px;min-width:0;height:auto;min-height:320px;align-self:stretch}
+.grafy{flex:1 1 340px;min-width:0;display:grid;grid-template-columns:1fr;gap:6px;margin:8px 0}
+.grafy:empty{display:none}
+.graf{margin:0;background:var(--soft);border-radius:10px;padding:6px 8px 2px}
+.graf figcaption{font-size:.78rem;font-weight:600;color:var(--ink);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.graf .legenda{font-weight:400;color:var(--muted);font-size:.72rem}.graf .lg{display:inline-block;width:10px;height:3px;border-radius:2px;margin:0 3px 2px 0;vertical-align:middle}
+.graf .lg.s1,.g .cara.s1,.g .bod.s1{stroke:#2a78d6}.graf .lg.s1{background:#2a78d6}.g .bod.s1{fill:#2a78d6}
+.graf .lg.s2,.g .cara.s2,.g .bod.s2{stroke:#d9822b}.graf .lg.s2{background:#d9822b}.g .bod.s2{fill:#d9822b}
+.graf.prazdny p{margin:6px 0}
+svg.g{width:100%;height:auto;display:block}
+.g .osa{stroke:var(--line);stroke-width:1}.g .tick{font-size:10px;fill:var(--muted)}
+.g .cara{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.g .bod{stroke:#fff;stroke-width:1.5}.g .bod.warn{fill:var(--oranz);stroke:var(--oranz)}.g .bod.bad{fill:var(--bad);stroke:var(--bad);r:5}
+.g .pasmo{fill:#2a78d6;opacity:.09}.g .popis{font-size:10px;fill:var(--ink)}
+.mereni td.hod.warn{color:var(--oranz);font-weight:700}.mereni td.hod.bad{color:var(--bad);font-weight:700}
 .mapa{position:relative;width:100%;height:320px;overflow:hidden;border-radius:12px;background:#e8eef2;margin:8px 0}
 .mapa img{position:absolute;width:256px;height:256px;max-width:none}
 .mapa .znacka{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#d93025;border:3px solid #fff;box-shadow:0 0 0 2px #d93025}

@@ -31,6 +31,23 @@ export const KINDS = {
 };
 /** Úroveň události pro zobrazení: řádek „mimo hlídané hodiny“ je vždy informativní. */
 export const urovenUdalosti = (e) => e?.mimoHodiny ? 'info' : (KINDS[e?.kind]?.level || null);
+/** Meze zdravotních hodnot z náramku: v „ok“ je hodnota v pořádku, mimo „ok“ ale v „varovani“ je oranžová (špatná),
+ *  mimo „varovani“ červená (moc špatná). Orientační rozmezí pro dospělé; tlakS/tlakD = horní/dolní tlak (mmHg), spo2 = kyslík (%), teplota (°C). */
+export const MEZE_ZDRAVI = {
+  tep: { ok: [50, 100], varovani: [40, 120], jednotka: '/min' },
+  tlakS: { ok: [90, 139], varovani: [80, 159], jednotka: 'mmHg' },
+  tlakD: { ok: [60, 89], varovani: [50, 99], jednotka: 'mmHg' },
+  spo2: { ok: [94, 100], varovani: [90, 100], jednotka: '%' },
+  teplota: { ok: [35.5, 37.4], varovani: [35.0, 38.4], jednotka: '°C' },
+};
+/** 'ok' | 'warn' (oranžově) | 'bad' (červeně) | '' (neznámá veličina nebo nečíslo). */
+export function urovenHodnoty(k, v) {
+  const m = MEZE_ZDRAVI[k]; const n = Number(v);
+  if (!m || v === null || v === undefined || !Number.isFinite(n)) return '';
+  if (n < m.varovani[0] || n > m.varovani[1]) return 'bad';
+  if (n < m.ok[0] || n > m.ok[1]) return 'warn';
+  return 'ok';
+}
 export const LEVEL_LABEL = { crit: 'kritická', warn: 'varování', info: 'informativní', tech: 'technická' };
 export const CONSENT = { none: 'žádný obraz (jen události)', skeleton: 'drátěný model', blur: 'rozostření', full: 'plný obraz' };
 

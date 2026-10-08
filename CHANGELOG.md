@@ -5,6 +5,19 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.17 · 8. 10. 2026 · grafy za 24 h a barevné meze hodnot
+
+- **Grafy vedle mapy** v záložce Náramek: tep, krevní tlak (horní a dolní),
+  kyslík a teplota za posledních 24 hodin, každý s vlastní osou hodnot, světlým
+  pásmem běžného rozmezí a časovou osou po 6 hodinách; body mimo rozmezí jsou
+  oranžové nebo červené, po najetí myší je čas a hodnota. Bez knihoven (SVG).
+- **Meze hodnot** (`MEZE_ZDRAVI`, `urovenHodnoty` v sim-core.js): tep 50–100
+  (varovné 40–120), tlak horní 90–139 (80–159), dolní 60–89 (50–99), kyslík
+  ≥ 94 % (≥ 90), teplota 35,5–37,4 °C (35,0–38,4). Hodnota mimo běžné rozmezí
+  je v tabulce Měření zdraví **oranžově**, mimo varovné **červeně** (s popiskem
+  rozmezí po najetí myší).
+- Mapa se natáhne na výšku grafů a překreslí dlaždice.
+
 ## 3.16 · 8. 10. 2026 · jedna sada měření v jednom řádku
 
 - **Hodnoty z jedné sady měření** (tlak s tepem, kyslík, teplota přicházejí

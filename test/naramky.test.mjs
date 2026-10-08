@@ -4,6 +4,7 @@ import net from 'node:net';
 import { vyrizniRamce, rozeberObsah, slozRamec, createNaramky, popisZdravi } from '../src/naramky.mjs';
 import { createStavTenantu } from '../src/stav-tenant.mjs';
 import { createMockTabulky } from './mock-tabulky.mjs';
+import { urovenHodnoty, MEZE_ZDRAVI } from '../public/proto/sim-core.js';
 
 const T = '22202480FAMICURA';
 const ticho = { log() {}, error() {} };
@@ -204,4 +205,14 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     k.konec();
     assert.ok(await cekej(() => !n.pripojen(ID)), 'po zavření spojení není připojený');
   } finally { await n.stop(); }
+});
+
+test('meze zdraví: v rozmezí ok, mimo běžné oranžově (warn), mimo varovné červeně (bad), neznámé prázdné', () => {
+  assert.equal(urovenHodnoty('tep', 72), 'ok'); assert.equal(urovenHodnoty('tep', 105), 'warn'); assert.equal(urovenHodnoty('tep', 125), 'bad'); assert.equal(urovenHodnoty('tep', 38), 'bad');
+  assert.equal(urovenHodnoty('tlakS', 120), 'ok'); assert.equal(urovenHodnoty('tlakS', 145), 'warn'); assert.equal(urovenHodnoty('tlakS', 165), 'bad');
+  assert.equal(urovenHodnoty('tlakD', 70), 'ok'); assert.equal(urovenHodnoty('tlakD', 95), 'warn'); assert.equal(urovenHodnoty('tlakD', 102), 'bad');
+  assert.equal(urovenHodnoty('spo2', 97), 'ok'); assert.equal(urovenHodnoty('spo2', 92), 'warn'); assert.equal(urovenHodnoty('spo2', 88), 'bad');
+  assert.equal(urovenHodnoty('teplota', 36.6), 'ok'); assert.equal(urovenHodnoty('teplota', 37.8), 'warn'); assert.equal(urovenHodnoty('teplota', 39.1), 'bad'); assert.equal(urovenHodnoty('teplota', 34.5), 'bad');
+  assert.equal(urovenHodnoty('tep', null), ''); assert.equal(urovenHodnoty('neco', 5), ''); assert.equal(urovenHodnoty('spo2', 'x'), '');
+  assert.ok(Object.keys(MEZE_ZDRAVI).every((k) => MEZE_ZDRAVI[k].ok[0] >= MEZE_ZDRAVI[k].varovani[0] && MEZE_ZDRAVI[k].ok[1] <= MEZE_ZDRAVI[k].varovani[1]), 'běžné rozmezí leží uvnitř varovného');
 });
