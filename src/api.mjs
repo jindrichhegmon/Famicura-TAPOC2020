@@ -381,7 +381,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const telo_ = await telo(req); const akce = telo_.akce; let args = telo_.args;
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
         // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
-        if ((akce === 'setNaramek' || akce === 'setNaramekAuto') && rodina) return jenPoskytovatel();
+        if ((akce === 'setNaramek' || akce === 'setNaramekAuto' || akce === 'setNaramekSos') && rodina) return jenPoskytovatel();
         // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
         if (akce === 'deaktivace') {
           if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);
@@ -426,6 +426,22 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (await deaktivovana(kamera)) return json({ ok: false, error: 'Kamera je deaktivovaná rodinou a míří do stropu; otáčet půjde až po aktivaci.', deaktivace: true }, 423);
         await ptz.pohni(kamera, String(smer || ''), { rychlost: Number(rychlost) || 0.5, ms: Number(ms) || 400 });
         return json({ ok: true });
+      }
+      // Čísla SOS náramku (jen poskytovatel): uloží ke kameře (akce setNaramekSos) a hned pošle do náramku (SOS1–SOS3); když není připojený, pošle je server při jeho příštím ozvání.
+      if (m === 'POST' && path === '/api/naramek/sos') {
+        if (rodina) return jenPoskytovatel();
+        const { kamera, cisla } = await telo(req);
+        if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        const st = await stavTenanta();
+        const kdo = ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce');
+        const v = await st.proved('setNaramekSos', [kamera, Array.isArray(cisla) ? cisla : [], kdo]);
+        const p = (await st.stav()).state.patients.find((x) => x.id === kamera);
+        let odeslano = false, obsah = '';
+        if (naramky && p?.naramek?.id && naramky.pripojen?.(p.naramek.id)) {
+          try { obsah = (await naramky.prikaz(p.naramek.id, 'sos', { cislaSos: p.naramek.sos || [] })).obsah; await st.naramek({ kameraId: kamera, sosOdeslano: Date.now() }); odeslano = true; }
+          catch (e) { if (e.status !== 409) throw e; }
+        }
+        return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah });
       }
       // Měření zdraví z náramku jedné kamery (jen poskytovatel), nejnovější první, nejvýš 2000 (stránkuje stránka); format=xlsx = sešit Excelu (až 10000).
       if (m === 'GET' && path === '/api/naramek/mereni') {

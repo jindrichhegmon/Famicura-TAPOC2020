@@ -183,6 +183,10 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     assert.ok(await cekej(() => k.prijato().endsWith(`[3G*${ID}*000A*hrtstart,1][3G*${ID}*0005*bphrt][3G*${ID}*0006*oxygen][3G*${ID}*0009*bodytemp2]`)), 'sada zdraví v pořadí, hrtstart,1 jen jednou');
     k.prijato(); assert.equal((await n.prikaz(ID, 'teplota')).obsah, 'bodytemp2');
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0009*bodytemp2]`)), 'teplota = bodytemp2 (btemp2 je jen hlášení)');
+    // čísla SOS: SOS1–SOS3 za sebou, prázdné = smazat; neplatné číslo 400
+    k.prijato(); assert.equal((await n.prikaz(ID, 'sos', { cislaSos: ['+420722972596', '602520069', ''] })).obsah, 'SOS1,+420722972596 + SOS2,602520069 + SOS3,');
+    assert.ok(await cekej(() => k.prijato().endsWith(`[3G*${ID}*0012*SOS1,+420722972596][3G*${ID}*000E*SOS2,602520069][3G*${ID}*0005*SOS3,]`)), 'čísla SOS odeslána v pořadí');
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['abc'] }), /Číslo SOS/);
     await n.prikaz(ID, 'vypnout');
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0008*POWEROFF]`)));
     await assert.rejects(() => n.prikaz(ID, 'neco'), /Neznámý příkaz/);
@@ -215,4 +219,29 @@ test('meze zdraví: v rozmezí ok, mimo běžné oranžově (warn), mimo varovn�
   assert.equal(urovenHodnoty('teplota', 36.6), 'ok'); assert.equal(urovenHodnoty('teplota', 37.8), 'warn'); assert.equal(urovenHodnoty('teplota', 39.1), 'bad'); assert.equal(urovenHodnoty('teplota', 34.5), 'bad');
   assert.equal(urovenHodnoty('tep', null), ''); assert.equal(urovenHodnoty('neco', 5), ''); assert.equal(urovenHodnoty('spo2', 'x'), '');
   assert.ok(Object.keys(MEZE_ZDRAVI).every((k) => MEZE_ZDRAVI[k].ok[0] >= MEZE_ZDRAVI[k].varovani[0] && MEZE_ZDRAVI[k].ok[1] <= MEZE_ZDRAVI[k].varovani[1]), 'běžné rozmezí leží uvnitř varovného');
+});
+
+test('čísla SOS: akce setNaramekSos (ověření čísel, poznámka do historie) a odeslání při příštím ozvání náramku, když nebyl připojený', async () => {
+  const tb = createMockTabulky();
+  const { s, kamery, now } = tenant(tb);
+  await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
+  await assert.rejects(() => s.proved('setNaramekSos', ['tapoc2020', ['12'], 'x']), /Číslo SOS/);
+  await assert.rejects(() => s.proved('setNaramekSos', ['tapoc2020', ['1', '2', '3', '4'], 'x']), /nejvýš tři/);
+  await s.proved('setNaramekSos', ['tapoc2020', ['+420 722 972 596', '', '602520069'], 'Dispečer']);
+  let st = await s.stav();
+  assert.deepEqual(st.state.patients[0].naramek.sos, ['+420722972596', '', '602520069']); assert.equal(st.state.patients[0].naramek.sosOdeslano, null);
+  assert.match(st.state.events[0].text, /Čísla SOS náramku: \+420722972596, 602520069/);
+  const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho, prodlevaMs: 20 });
+  const port = await n.start({ autoMs: 0 });
+  try {
+    const k = await spoj(port);
+    await k.posli(ram('LK,0,0,95'));
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420722972596]`) && k.prijato().includes(`[3G*${ID}*0005*SOS2,]`) && k.prijato().includes(`[3G*${ID}*000E*SOS3,602520069]`), 4000), 'čísla SOS odeslána při prvním ozvání');
+    assert.ok(await cekej(async () => (await s.stav()).state.patients[0].naramek.sosOdeslano === now()), 'sosOdeslano zapsáno');
+    const pred = k.prijato().length;
+    await k.posli(ram('LK,0,0,95'));
+    await new Promise((r) => setTimeout(r, 150));
+    assert.ok(!k.prijato().slice(pred).includes('SOS1'), 'podruhé se neposílají');
+    k.konec();
+  } finally { await n.stop(); }
 });

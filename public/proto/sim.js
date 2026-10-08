@@ -136,6 +136,7 @@ export const sim = {
   setKontakty(patientId, kontakty, by) { return run('setKontakty', [patientId, kontakty, by]); },
   setNaramek(patientId, id, by) { return run('setNaramek', [patientId, id, by]); },
   setNaramekAuto(patientId, auto, by) { return run('setNaramekAuto', [patientId, auto, by]); },
+  setNaramekSos(patientId, cisla, by) { return run('setNaramekSos', [patientId, cisla, by]); },
   setConsent(patientId, consent) { return run('setConsent', [patientId, consent]); },
   requestFull(patientId, from, reason) { return run('requestFull', [patientId, from, reason]); },
   answerRequest(reqId, answer, minutes = 15) { return run('answerRequest', [reqId, answer, minutes]); },

@@ -534,6 +534,9 @@ function renderDetail(rebuild = false) {
         <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
+        <form class="kontakty" id="dnaramekSos"><div class="kgrid">${[0, 1, 2].map((i) => `<label>SOS ${i + 1}. číslo<input type="tel" class="nsos" data-i="${i}" maxlength="16" placeholder="+420…" value="${esc(p.naramek?.sos?.[i] || '')}"></label>`).join('')}</div>
+          <div class="akce"><button class="sm" type="submit">Uložit čísla SOS a poslat do náramku</button><span class="small muted" id="dnaramekSosStav"></span></div>
+          <p class="small muted">– čísla, která náramek po stisku SOS postupně volá (a posílá jim SMS); pořadí 1 → 2 → 3, prázdné pole číslo smaže</p></form>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
         <div class="akce"><label class="small">na stránku <select id="dnaramekNa">${[10, 20, 50, 100].map((v) => `<option value="${v}">${v}</option>`).join('')}</select></label><button type="button" class="sm sec" id="dnaramekPrev">‹ novější</button><span class="small muted" id="dnaramekStrana"></span><button type="button" class="sm sec" id="dnaramekNext">starší ›</button><button type="button" class="sm sec" id="dnaramekExcel">Stáhnout do Excelu</button></div>
         <div id="dnaramekMereni"></div>
@@ -635,6 +638,16 @@ function renderDetail(rebuild = false) {
       const a = document.createElement('a'); a.href = `/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}&format=xlsx`; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
       toast('Stahuji sešit Excelu s měřením…');
     };
+    d.querySelector('#dnaramekSos').onsubmit = async (e) => {
+      e.preventDefault();
+      const cisla = [...d.querySelectorAll('.nsos')].map((i) => i.value.trim());
+      const st = d.querySelector('#dnaramekSosStav'); st.textContent = 'ukládám…';
+      try {
+        const r = await post('/api/naramek/sos', { kamera: p.id, cisla });
+        st.textContent = r.odeslano ? `odesláno do náramku ${fmtDT(Date.now())}` : 'uloženo; do náramku se pošle, až se ozve';
+        toast(r.odeslano ? 'Čísla SOS odeslána do náramku.' : 'Čísla SOS uložena, pošlou se při příštím ozvání náramku.');
+      } catch (ex) { st.textContent = ''; toast(`Čísla SOS: ${ex.message}`, 'crit'); }
+    };
     d.querySelector('#dnaramekAuto').onsubmit = async (e) => {
       e.preventDefault();
       const auto = { min: Number(d.querySelector('#dnaramekAutoMin').value) || 0 };
@@ -721,6 +734,11 @@ function renderDetail(rebuild = false) {
     }
     const mapa = d.querySelector('#dnaramekMapa');
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
+    const sf = d.querySelector('#dnaramekSos');
+    if (sf && !sf.contains(document.activeElement)) {
+      d.querySelectorAll('.nsos').forEach((i) => { i.value = n?.sos?.[Number(i.dataset.i)] || ''; });
+      d.querySelector('#dnaramekSosStav').textContent = !n?.sos ? '' : n.sosOdeslano ? `odesláno do náramku ${fmtDT(n.sosOdeslano)}` : 'uloženo; do náramku se pošle, až se ozve';
+    }
     const as = d.querySelector('#dnaramekAutoStav');
     if (as && !d.querySelector('#dnaramekAuto').contains(document.activeElement)) as.textContent = n?.auto?.min > 0 ? `uloženo: každých ${n.auto.min} min` : 'vypnuto';
     nactiMereni(d, p, n);

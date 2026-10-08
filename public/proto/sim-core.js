@@ -351,6 +351,21 @@ const akce = {
     if (s.events.length > 400) s.events.length = 400;
     return { vysledek: p.naramek || null };
   },
+  /** Čísla SOS náramku (až 3): ukládají se ke kameře, server je pošle do náramku příkazy SOS1–SOS3 (src/naramky.mjs) a zapíše sosOdeslano. */
+  setNaramekSos(s, now, patientId, cisla, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    if (!p.naramek?.id) throw chyba('Nejdřív přiřaďte náramek (ID zařízení).');
+    if (!Array.isArray(cisla) || cisla.length > 3) throw chyba('Zadejte nejvýš tři čísla SOS.');
+    const nova = [0, 1, 2].map((i) => String(cisla[i] ?? '').replace(/[\s-]/g, ''));
+    for (const c of nova) if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba(`Číslo SOS „${c}“: jen číslice, případně + na začátku (např. +420722972596).`);
+    if (JSON.stringify(p.naramek.sos || ['', '', '']) === JSON.stringify(nova)) return { zmena: false, vysledek: nova };
+    p.naramek = { ...p.naramek, sos: nova, sosOdeslano: null };
+    const seznam = nova.filter(Boolean);
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink',
+      text: seznam.length ? `Čísla SOS náramku: ${seznam.join(', ')} (pošlou se do náramku).` : 'Čísla SOS náramku smazána (pošle se do náramku).', note: '' });
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: nova };
+  },
   /** Automatické měření náramku: { min: 0–1440 (0 = vypnuto), tep, tlak, kyslik, teplota: bool }. Příkazy posílá server (src/naramky.mjs). */
   setNaramekAuto(s, now, patientId, auto, by) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };

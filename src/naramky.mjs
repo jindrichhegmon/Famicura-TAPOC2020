@@ -162,6 +162,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   const spojeni = new Set();
   const aktivni = new Map();       // id přívěsku → { socket, vyrobce, index, cas } – kudy mu poslat příkaz
   const posledniAuto = new Map();  // id → čas posledního automatického měření
+  const sosPosilam = new Set();     // id → právě se posílají čísla SOS (ať se nepošlou dvakrát z rámců za sebou)
   const cache = new Map();         // id přívěsku → { tenant, kameraId, do }
   const nezname = new Map();       // id → kdy naposledy zalogováno
   const posledniPoplach = new Map(); // id|druh → čas
@@ -207,6 +208,17 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       const kdy = nezname.get(ramec.id) || 0;
       if (now() - kdy > 60 * 60 * 1000) { nezname.set(ramec.id, now()); log.log(`[naramky] neznámý přívěsek ${ramec.id} (${r.typ}) – přiřaďte ho v dispečinku u kamery (Komunikace → Náramek / přívěsek).`); }
       return;
+    }
+    // čekající čísla SOS (setNaramekSos, když náramek nebyl připojený): poslat při prvním ozvání
+    if (!sosPosilam.has(ramec.id)) {
+      try {
+        const n = (await kam.stav.stav()).state.patients.find((x) => x.id === kam.kameraId)?.naramek;
+        if (n && Array.isArray(n.sos) && !n.sosOdeslano) {
+          sosPosilam.add(ramec.id);
+          try { await prikaz(ramec.id, 'sos', { cislaSos: n.sos }); await kam.stav.naramek({ kameraId: kam.kameraId, sosOdeslano: now() }); log.log(`[naramky] ${ramec.id} čísla SOS odeslána při ozvání`); }
+          finally { sosPosilam.delete(ramec.id); }
+        }
+      } catch (e) { log.error('[naramky] čísla SOS:', e.message); }
     }
     // ozvání a baterie ke kameře (nejvýš jednou za 5 minut, při změně baterie nebo poloze hned)
     const oz = posledniOzvani.get(ramec.id);
@@ -259,8 +271,22 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   }
 
   /** Příkaz náramku: nazev z PRIKAZY, nebo 'vlastni' s textem (ladění modelu). Náramek musí být právě připojený. */
-  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false } = {}) {
+  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false, cislaSos = [] } = {}) {
     const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
+    if (nazev === 'sos') {
+      // čísla SOS: SOS1,číslo … SOS3,číslo (prázdné = smazat); zapsaná ve stavu kamery (setNaramekSos), sem už přijdou ověřená
+      const a0 = aktivni.get(String(id));
+      if (!a0 || a0.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
+      const cisla = [0, 1, 2].map((i) => String(cislaSos[i] ?? '').replace(/[\s-]/g, ''));
+      for (const c of cisla) if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba('Číslo SOS: jen číslice, případně + na začátku.', 400);
+      const poslano = [];
+      for (let i = 0; i < 3; i++) {
+        if (poslano.length) await new Promise((r) => setTimeout(r, prodlevaMs));
+        const r = await prikaz(id, 'vlastni', { vlastni: `SOS${i + 1},${cisla[i]}` });
+        poslano.push(r.obsah);
+      }
+      return { ok: true, obsah: poslano.join(' + ') };
+    }
     if (nazev === 'zdravi') {
       const a0 = aktivni.get(String(id));
       if (!a0 || a0.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
@@ -278,7 +304,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       obsah = String(vlastni || '').trim();
       if (!/^[A-Za-z0-9_,.:+\- ]{1,60}$/.test(obsah)) throw chyba('Příkaz: 1 až 60 znaků (písmena, číslice, čárky, tečky), bez hranatých závorek a hvězdiček.', 400);
     }
-    if (!obsah) throw chyba('Neznámý příkaz náramku (zdravi, tep, tlak, kyslik, teplota, poloha, vypnout, vlastni).', 400);
+    if (!obsah) throw chyba('Neznámý příkaz náramku (zdravi, sos, tep, tlak, kyslik, teplota, poloha, vypnout, vlastni).', 400);
     const a = aktivni.get(String(id));
     if (!a || a.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
     const posli = async (co) => {

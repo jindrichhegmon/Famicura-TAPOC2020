@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.18 · 8. 10. 2026 · čísla SOS náramku z dispečinku
+
+- **Čísla SOS** (až tři) v záložce Náramek: uloží se ke kameře (akce
+  `setNaramekSos`, `Naramek.sos`, do historie) a server je pošle do náramku
+  příkazy `SOS1,číslo`, `SOS2,číslo`, `SOS3,číslo` (prázdné = smazat) s odstupem
+  1,5 s (`POST /api/naramek/sos`, jen poskytovatel). Když náramek zrovna není
+  připojený, pošlou se při jeho příštím ozvání (`Naramek.sosOdeslano`), u
+  formuláře je vidět „uloženo; pošle se, až se ozve“ / „odesláno … čas“.
+- Čísla: jen číslice, případně + na začátku (doporučeno +420…), mezery se
+  odstraní. Testy: akce, příkazy v pořadí, odeslání při ozvání jen jednou,
+  API 200/400/403.
+
 ## 3.17 · 8. 10. 2026 · grafy za 24 h a barevné meze hodnot
 
 - **Grafy vedle mapy** v záložce Náramek: tep, krevní tlak (horní a dolní),

@@ -946,3 +946,25 @@ test('slucMereni: hodnoty jedné sady (do 2 minut, bez překryvu) v jednom řád
   // dvě měření tepu po 30 s = dvě sady (překryv), nic se neztratí
   assert.equal(slucMereni([{ cas: t + 30_000, tep: 70 }, { cas: t, tep: 65 }]).length, 2);
 });
+
+test('čísla SOS přes API: uloží ke kameře, bez připojeného náramku čeká na ozvání, s připojeným pošle hned; rodina 403, špatné číslo 400', async () => {
+  const posl = [];
+  let pripojen = false;
+  const naramky = { stav() { return { port: 5093 }; }, pripojen: () => pripojen, async prikaz(id, nazev, o = {}) { posl.push([id, nazev, o.cislaSos]); return { ok: true, obsah: 'SOS1,+420722972596 + SOS2, + SOS3,' }; } };
+  const { h, uzivatele, vsichni } = handler({ naramky });
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
+  let r = await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['+420 722 972 596', '', ''] } }));
+  assert.equal(r.status, 200); let j = await r.json(); assert.deepEqual(j.cisla, ['+420722972596', '', '']); assert.equal(j.odeslano, false); assert.equal(posl.length, 0);
+  let st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
+  assert.deepEqual(st.patients[0].naramek.sos, ['+420722972596', '', '']); assert.equal(st.patients[0].naramek.sosOdeslano, null);
+  pripojen = true;
+  r = await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['+420722972596', '602520069', ''] } }));
+  j = await r.json(); assert.equal(j.odeslano, true); assert.deepEqual(posl[0], ['9705357211', 'sos', ['+420722972596', '602520069', '']]);
+  st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
+  assert.ok(st.patients[0].naramek.sosOdeslano > 0, 'sosOdeslano zapsáno');
+  assert.equal((await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['abc'] } }))).status, 400);
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000555', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  assert.equal((await h(req('POST', '/api/naramek/sos', { cookies: cookieRodina(T, rod.id).split(';')[0], body: { kamera: 'tapoc2020', cisla: [] } }))).status, 403);
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookieRodina(T, rod.id).split(';')[0], body: { akce: 'setNaramekSos', args: ['tapoc2020', []] } }))).status, 403);
+});
