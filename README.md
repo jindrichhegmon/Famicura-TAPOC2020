@@ -557,9 +557,15 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
    = číslo nebo kredit Twilia; v logu serveru (`pm2 logs famicura-tapo`)
    jsou řádky `[sms] …456: odesláno (…)` nebo důvod chyby (bez textu SMS).
 5. **Upozornění na události SMS a e-mailem.** V detailu kamery v dispečinku
-   (sekce Komunikace → Kontakty pro upozornění) jdou zadat až tři česká
-   mobilní čísla a tři e-maily; v sekci Nastavení se u každé události
-   zatrhne Nahrávat, SMS a E-mail (kritické mají SMS i e-mail předem).
+   (sekce Komunikace → Kontakty pro upozornění) jde zadat rodina až 5 lidí
+   (jméno + český mobil) a dvě sady e-mailů (čárkou oddělené, až 10 v sadě);
+   telefon dispečinku a telefon služby poskytovatele (vlastní, nebo zdroj
+   Péče doma / Péče doma plus → dosadí server) jsou v ⚙ Nastavení. V sekci
+   Nastavení kamery se u každé události zatrhne Nahrávat a vyberou příjemci:
+   SMS komu (`watch[kind].sms` = pole ID `r1`–`r5`, `dispecink`, `sluzba`) a
+   E-mail komu (`mail` = `s1`, `s2`); starší `true` = celá rodina / obě sady,
+   kritické události je mají předem. Uložený tvar `Kontakty = { rodina:
+   [{ jmeno, telefon }×5], maily1, maily2 }`, starší `{ sms, mail }` se čte.
    Server po každé zapsané události (skutečné z kamery i simulované; stav
    prototypu, `src/proto-stav.mjs`) pošle přes `src/upozorneni.mjs` SMS
    (bez diakritiky, do 160 znaků: klient, událost, čas, telefon dispečinku)

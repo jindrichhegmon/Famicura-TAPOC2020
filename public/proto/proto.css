@@ -131,6 +131,8 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .blok .list{margin-top:2px}
 .blok .chips{margin:4px 0 6px}
 .blok .chip{min-height:30px;padding:4px 10px;font-size:.8rem}
+.prij{display:flex;flex-wrap:wrap;gap:4px;max-width:260px}.prij .chip.pr{display:inline-flex;align-items:center;gap:4px;min-height:24px;padding:2px 8px;font-size:.75rem;cursor:pointer;white-space:nowrap}.prij .chip.pr input{margin:0}.prij .chip.pr:has(input:checked){background:var(--blue);color:#fff;border-color:var(--blue)}
+.kontakty .krodina{grid-template-columns:3fr 2fr 3fr 2fr}.kontakty .kmaily{grid-template-columns:1fr 1fr}.watch td.prij{min-width:190px}@media(max-width:700px){.kontakty .krodina{grid-template-columns:3fr 2fr}.kontakty .kmaily{grid-template-columns:1fr}}
 .kontakty{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .kontakty .kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .kontakty label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted);font-weight:600}

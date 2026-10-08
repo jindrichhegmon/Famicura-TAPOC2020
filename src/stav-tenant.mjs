@@ -190,7 +190,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
   /* ---------- upozornění SMS / e-mailem (mimo frontu, výsledek k události) ---------- */
   function upozorneni(ev) {
     if (!upozorni || !ev || !ev.id) return;
-    const p = Promise.resolve().then(() => upozorni.posli(data.state, ev)).then((vysledek) => {
+    const p = Promise.resolve().then(() => upozorni.posli(data.state, ev, { tenant })).then((vysledek) => {
       if (!vysledek) return;
       return serializovane(async () => {
         const e = data.state.events.find((x) => x.id === ev.id);

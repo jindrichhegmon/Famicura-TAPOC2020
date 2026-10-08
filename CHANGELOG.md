@@ -5,6 +5,28 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.21 · 8. 10. 2026 · nové kontakty: rodina 5×, telefony poskytovatele, dvě sady e-mailů, příjemci u každé události
+
+- **Kontakty kamery** (Komunikace): **rodina až 5 lidí** (jméno + mobil),
+  **e-maily sada 1 a sada 2** (adresy oddělené čárkou, až 10 v sadě).
+  Uložený tvar `Kontakty = { rodina: [{ jmeno, telefon }×5], maily1, maily2 }`;
+  starší `{ sms, mail }` se čte dál (čísla jako rodina bez jmen, adresy jako
+  sada 1), akce `setKontakty` přijímá oba tvary.
+- **Telefony poskytovatele** v ⚙ Nastavení: Telefon dispečinku (dřív
+  „Telefon“) a **Telefon služby** se zdrojem vlastní / Péče doma / Péče doma
+  plus (`poskytovatel.sluzbaTelefon`, `sluzbaZdroj`); číslo z Péče doma (plus)
+  dosadí server při každé události přes `src/sluzba.mjs`.
+- **Příjemci u každé události** (Nastavení kamery): místo zatržítek SMS a
+  E-mail jsou sloupce **SMS komu** (jednotliví lidé z rodiny, dispečink,
+  služba) a **E-mail komu** (sada 1, sada 2). `watch[kind].sms` je pole ID
+  (`r1`–`r5`, `dispecink`, `sluzba`), `mail` pole (`s1`, `s2`); starší `true`
+  = celá rodina / obě sady. Kritické události mají předem celou rodinu a obě
+  sady.
+- Výsledek upozornění u události nese `sms.komu` (jména příjemců); chybějící
+  číslo služby je u SMS jako „služba: číslo služby … není nastavené“.
+- Testy: `test/kontakty.test.mjs` (tvar, starší tvar, příjemci, dosazení
+  čísla služby při odeslání).
+
 ## 3.20 · 8. 10. 2026 · zdroje čísel SOS: Péče doma / Péče doma plus / vlastní, náhled kam volá
 
 - **Slot SOS má tři zdroje**: vlastní číslo, **Péče doma** (`pecedoma` =

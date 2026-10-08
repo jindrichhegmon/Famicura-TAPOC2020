@@ -67,7 +67,7 @@ test('tenant: kamery ze serveru dostanou řádek, akce zapisují jen změněné 
   const st2 = await s2.stav();
   const p = st2.state.patients[0];
   assert.deepEqual([p.consent.den, p.consent.noc, p.consent.nouze], ['blur', 'none', false]);
-  assert.deepEqual(p.kontakty, { sms: ['602520069'], mail: [] });
+  assert.equal(p.kontakty.rodina[0].telefon, '602520069'); assert.deepEqual(p.kontakty.maily1, []);   // starší { sms, mail } se uloží v novém tvaru
   assert.equal(p.note, 'Chodí s hůlkou.');
   assert.equal(st2.state.events.find((e) => e.id === pad.id).state, 'převzat');
   assert.equal(st2.state.events.find((e) => e.id === pad.id).takenAt, 1_700_000_005_000);
@@ -126,7 +126,7 @@ test('tenant: upozornění po události odejde a zapíše se k události v datab
   const u = tb.data[T].A_KAM_Udalost.find((x) => x.Id === ev.id);
   assert.match(u.Upozorneni, /"odeslano":1/);
   const { s: s2 } = stav(tb, { t0: 1_700_000_001_000 });
-  assert.deepEqual((await s2.stav()).state.events.find((e) => e.id === ev.id).upozorneni.sms, { prijemci: 1, odeslano: 1, chyba: null });
+  assert.deepEqual((await s2.stav()).state.events.find((e) => e.id === ev.id).upozorneni.sms, { prijemci: 1, odeslano: 1, chyba: null, komu: ['602 520 069'] });
 });
 
 test('událost mimo hlídané hodiny: jen řádek v deníku – bez alertu, bez SMS a e-mailu, bez nahrávky; simulace a vypnutý druh se zahodí', async () => {

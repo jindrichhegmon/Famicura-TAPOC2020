@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 /* Kdo je přihlášen (dispečer tenanta z Péče doma plus, nebo správce serveru se zvoleným tenantem) a jeho kamery; z /api/rodina/ja. */
 let JA = null;
 const ME = () => (JA && JA.role === 'dispecer' && JA.jmeno) || sim.poskytovatel.dispecer;
-const HL_POLE = ['nazev', 'telefon', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkaPredS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'];
+const HL_POLE = ['nazev', 'telefon', 'sluzbaTelefon', 'sluzbaZdroj', 'email', 'dispecer', 'smena', 'zaloha', 'zalohaTelefon', 'vedouci', 'vedouciTelefon', 'eskalaceMin', 'nahravkaS', 'nahravkaPredS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'];
 const hlPole = (k) => $('hl' + k[0].toUpperCase() + k.slice(1));
 function renderHlavicka() {
   const h = sim.poskytovatel;
@@ -512,10 +512,11 @@ function renderDetail(rebuild = false) {
           <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
         </div><div class="blok"><h3>Uživatelé rodiny</h3><p class="small muted">– kdo smí otevřít aplikaci rodiny k téhle kameře</p>
         <div id="dusers"></div>
-        </div><div class="blok"><h3>Kontakty pro upozornění</h3><p class="small muted">– až tři čísla na SMS a tři e-maily; na které události jdou, se zatrhává v Nastavení</p>
+        </div><div class="blok"><h3>Kontakty pro upozornění</h3><p class="small muted">– rodina: až pět lidí (jméno a mobil na SMS); dvě sady e-mailů oddělených čárkou. Telefon dispečinku a telefon služby poskytovatele jsou v ⚙ Nastavení. Kdo dostane kterou událost, se vybírá v Nastavení kamery.</p>
         <form class="kontakty" id="dkontakty">
-          <div class="kgrid">${[0, 1, 2].map((i) => `<label>SMS ${i + 1}<input type="tel" class="ksms" maxlength="20" placeholder="777 123 456" value="${esc(kon.sms[i] || '')}"></label>`).join('')}</div>
-          <div class="kgrid">${[0, 1, 2].map((i) => `<label>E-mail ${i + 1}<input type="email" class="kmail" maxlength="120" placeholder="dcera@example.cz" value="${esc(kon.mail[i] || '')}"></label>`).join('')}</div>
+          <div class="kgrid krodina">${Array.from({ length: KONTAKTY_RODINA_MAX }, (_, i) => `<label>Rodina ${i + 1} – jméno<input type="text" class="kjmeno" data-i="${i}" maxlength="40" placeholder="dcera Eva" value="${esc(kon.rodina[i]?.jmeno || '')}"></label><label>telefon<input type="tel" class="ksms" data-i="${i}" maxlength="20" placeholder="777 123 456" value="${esc(kon.rodina[i]?.telefon ? formatTelefon(kon.rodina[i].telefon) : '')}"></label>`).join('')}</div>
+          <div class="kgrid kmaily"><label>E-maily – sada 1 (oddělené čárkou)<input type="text" class="kmaily" data-s="1" maxlength="600" placeholder="dcera@example.cz, syn@example.cz" value="${esc(kon.maily1.join(', '))}"></label><label>E-maily – sada 2 (oddělené čárkou)<input type="text" class="kmaily" data-s="2" maxlength="600" placeholder="lekar@example.cz" value="${esc(kon.maily2.join(', '))}"></label></div>
+          <p class="small muted" id="dkontaktyPosk"></p>
           <div class="akce"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
           <p class="small bad hide" id="dkontaktyErr"></p>
         </form>
@@ -547,8 +548,8 @@ function renderDetail(rebuild = false) {
         <ul class="list" id="dnaramekPoplachy"></ul>
       </div></section>
       <section class="dsec hide" data-sec="nastaveni">
-        <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; SMS a E-mail jdou na kontakty z Komunikace</p>
-        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS</th><th>E-mail</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno"><input type="time" class="from"> – <input type="time" class="to"> <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide"><input type="time" class="from2"> – <input type="time" class="to2"></div><div class="okno hide"><input type="time" class="from3"> – <input type="time" class="to3"></div></td><td><input type="checkbox" class="rec"></td><td><input type="checkbox" class="sms"></td><td><input type="checkbox" class="mail"></td></tr>`).join('')}</tbody></table>
+        <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; ve sloupcích SMS komu a E-mail komu zatrhněte příjemce z Kontaktů (Komunikace) a telefony poskytovatele (⚙ Nastavení)</p>
+        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS komu</th><th>E-mail komu</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno"><input type="time" class="from"> – <input type="time" class="to"> <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide"><input type="time" class="from2"> – <input type="time" class="to2"></div><div class="okno hide"><input type="time" class="from3"> – <input type="time" class="to3"></div></td><td><input type="checkbox" class="rec"></td><td class="prij" data-t="sms"></td><td class="prij" data-t="mail"></td></tr>`).join('')}</tbody></table>
         <p class="small muted" id="dwatchPozn"></p>
       </div></section>`;
     detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
@@ -556,28 +557,42 @@ function renderDetail(rebuild = false) {
     const ukazTab = (t) => { dtab = t; tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t))); d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== t)); };
     tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => ukazTab(b.dataset.t); });
     ukazTab(dtab);
+    // příjemci upozornění: rodina (Kontakty), dispečink a služba (⚙ Nastavení) pro SMS; sada 1 / sada 2 pro e-mail
+    const volbyPrijemcu = (pp) => {
+      const kk = kontaktyPro(pp), rod = rodinaSTelefonem(pp), tp = telefonyPoskytovatele(sim.state);
+      const sms = [...rod.map((r) => ({ id: r.id, text: r.jmeno || formatTelefon(r.telefon), title: 'SMS ' + popisPrijemce(r) })),
+        ...(tp.dispecink ? [{ id: 'dispecink', text: 'dispečink', title: `SMS na telefon dispečinku ${formatTelefon(tp.dispecink)} (⚙ Nastavení)` }] : []),
+        ...(tp.sluzba || tp.sluzbaZdroj !== 'vlastni' ? [{ id: 'sluzba', text: 'služba', title: tp.sluzba ? `SMS na telefon služby ${formatTelefon(tp.sluzba)} (⚙ Nastavení)` : `SMS na telefon služby z ${tp.sluzbaZdroj === 'pecedoma' ? 'Péče doma' : 'Péče doma plus'} (dosadí server)` }] : [])];
+      const mail = [...(kk.maily1.length ? [{ id: 's1', text: 'sada 1', title: kk.maily1.join(', ') }] : []), ...(kk.maily2.length ? [{ id: 's2', text: 'sada 2', title: kk.maily2.join(', ') }] : [])];
+      return { sms, mail };
+    };
     const naplnWatch = () => {
-      const pp = sim.patient(p.id) || p, kk = kontaktyPro(pp);
+      const pp = sim.patient(p.id) || p, volby = volbyPrijemcu(pp);
+      const chips = (seznam, ids, t) => seznam.length ? seznam.map((v) => `<label class="chip pr" title="${esc(v.title)}"><input type="checkbox" data-t="${t}" data-id="${v.id}"${ids.includes(v.id) ? ' checked' : ''}> ${esc(v.text)}</label>`).join('') : '<span class="muted small">–</span>';
       d.querySelectorAll('#dwatch tr').forEach((tr) => {
         const k = tr.dataset.k, w = pp.watch?.[k] || { on: true, from: '', to: '', rec: false };
         if (document.activeElement && tr.contains(document.activeElement)) return;
         tr.querySelector('.on').checked = w.on; tr.querySelector('.from').value = w.from; tr.querySelector('.to').value = w.to; tr.querySelector('.rec').checked = w.rec;
         for (const n of [2, 3]) { const f = tr.querySelector('.from' + n), t = tr.querySelector('.to' + n); f.value = w['from' + n] || ''; t.value = w['to' + n] || ''; if (f.value || t.value) f.closest('.okno').classList.remove('hide'); }
-        const cs = tr.querySelector('.sms'), cm = tr.querySelector('.mail');
-        cs.checked = w.sms ?? upozorneniVychozi(k); cm.checked = w.mail ?? upozorneniVychozi(k);
-        cs.disabled = !kk.sms.length; cm.disabled = !kk.mail.length;
-        cs.title = kk.sms.length ? `SMS na ${kk.sms.length} ${kk.sms.length === 1 ? 'číslo' : 'čísla'}` : 'Nejdřív zadejte čísla v Komunikaci → Kontakty pro upozornění';
-        cm.title = kk.mail.length ? `E-mail na ${kk.mail.length} ${kk.mail.length === 1 ? 'adresu' : 'adresy'}` : 'Nejdřív zadejte e-maily v Komunikaci → Kontakty pro upozornění';
+        setHtml(tr.querySelector('.prij[data-t="sms"]'), chips(volby.sms, smsIdsPro(w, k, pp), 'sms'));
+        setHtml(tr.querySelector('.prij[data-t="mail"]'), chips(volby.mail, mailIdsPro(w, k), 'mail'));
       });
-      d.querySelector('#dwatchPozn').textContent = kk.sms.length || kk.mail.length
-        ? `Upozornění odejdou na: ${describeKontakty(pp)}. Zatržení platí pro události, které projdou sloupcem Hlídat a hodinami.`
-        : 'Kontakty pro upozornění nejsou zadané: sloupce SMS a E-mail se zapnou, jakmile je vyplníte v Komunikaci.';
+      d.querySelector('#dwatchPozn').textContent = volby.sms.length || volby.mail.length
+        ? `Příjemci: ${describeKontakty(pp) || 'bez kontaktů rodiny'}${volby.sms.some((v) => v.id === 'dispecink' || v.id === 'sluzba') ? ' · telefony poskytovatele: ' + volby.sms.filter((v) => v.id === 'dispecink' || v.id === 'sluzba').map((v) => v.title.replace(/^SMS na /, '')).join(', ') : ''}. Zatržení platí pro události, které projdou sloupcem Hlídat a hodinami.`
+        : 'Nejsou zadané žádné kontakty: vyplňte rodinu a e-maily v Komunikaci, telefon dispečinku a služby v ⚙ Nastavení.';
     };
     naplnWatch();
     d.querySelectorAll('#dwatch tr').forEach((tr) => {
       const k = tr.dataset.k;
-      const push = () => sim.setWatch(p.id, k, { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, from2: tr.querySelector('.from2').value, to2: tr.querySelector('.to2').value, from3: tr.querySelector('.from3').value, to3: tr.querySelector('.to3').value, rec: tr.querySelector('.rec').checked, sms: tr.querySelector('.sms').checked, mail: tr.querySelector('.mail').checked });
-      tr.querySelectorAll('input').forEach((i) => { i.onchange = push; });
+      const push = () => {
+        const volby = volbyPrijemcu(sim.patient(p.id) || p);
+        const ids = (t) => [...tr.querySelectorAll(`.prij input[data-t="${t}"]:checked`)].map((i) => i.dataset.id);
+        const patch = { on: tr.querySelector('.on').checked, from: tr.querySelector('.from').value, to: tr.querySelector('.to').value, from2: tr.querySelector('.from2').value, to2: tr.querySelector('.to2').value, from3: tr.querySelector('.from3').value, to3: tr.querySelector('.to3').value, rec: tr.querySelector('.rec').checked };
+        if (volby.sms.length) patch.sms = ids('sms');   // bez nabídky se uložená volba nechává (starší true = celá rodina, až bude vyplněná)
+        if (volby.mail.length) patch.mail = ids('mail');
+        return sim.setWatch(p.id, k, patch);
+      };
+      tr.addEventListener('change', push);
       // + odkryje další okno (druhé, pak třetí); okna se zapisují jen vyplněná celá
       tr.querySelector('.okno-dalsi').onclick = () => { const skryta = [...tr.querySelectorAll('.okno.hide')]; if (skryta.length) { skryta[0].classList.remove('hide'); skryta[0].querySelector('input').focus(); } if (skryta.length <= 1) tr.querySelector('.okno-dalsi').disabled = true; };
     });
@@ -587,14 +602,15 @@ function renderDetail(rebuild = false) {
     kf.onsubmit = async (e) => {
       e.preventDefault();
       const err = kf.querySelector('#dkontaktyErr'); err.classList.add('hide');
-      const sms = [...kf.querySelectorAll('.ksms')].map((i) => i.value.trim()).filter(Boolean);
-      const mail = [...kf.querySelectorAll('.kmail')].map((i) => i.value.trim()).filter(Boolean);
-      const spatne = sms.find((t) => !normalizeTelefonCz(t)), spatnyMail = mail.find((m) => !jeEmail(m));
-      if (spatne || spatnyMail) { err.textContent = spatne ? `„${spatne}“ není český mobil (9 číslic).` : `„${spatnyMail}“ není platná e-mailová adresa.`; err.classList.remove('hide'); return; }
+      const rodina = Array.from({ length: KONTAKTY_RODINA_MAX }, (_, i) => ({ jmeno: kf.querySelector(`.kjmeno[data-i="${i}"]`).value.trim(), telefon: kf.querySelector(`.ksms[data-i="${i}"]`).value.trim() }));
+      const maily1 = kf.querySelector('.kmaily[data-s="1"]').value, maily2 = kf.querySelector('.kmaily[data-s="2"]').value;
+      const spatne = rodina.find((r) => r.telefon && !normalizeTelefonCz(r.telefon)), bezTel = rodina.find((r) => r.jmeno && !r.telefon), spatnyMail = [...rozdelMaily(maily1), ...rozdelMaily(maily2)].find((m) => !jeEmail(m));
+      if (spatne || bezTel || spatnyMail) { err.textContent = spatne ? `„${spatne.telefon}“ není český mobil (9 číslic).` : bezTel ? `U jména „${bezTel.jmeno}“ chybí telefon.` : `„${spatnyMail}“ není platná e-mailová adresa.`; err.classList.remove('hide'); return; }
       try {
-        const r = await sim.setKontakty(p.id, { sms, mail }, ME());
-        if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo (zkontrolujte číslo a adresu).'; err.classList.remove('hide'); return; }
-        toast(sms.length || mail.length ? 'Kontakty uloženy. V Nastavení zatrhněte, na které události mají jít.' : 'Kontakty smazány.');
+        const r = await sim.setKontakty(p.id, { rodina, maily1, maily2 }, ME());
+        if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo (zkontrolujte čísla a adresy).'; err.classList.remove('hide'); return; }
+        const neco = rodina.some((x) => x.telefon) || rozdelMaily(maily1).length || rozdelMaily(maily2).length;
+        toast(neco ? 'Kontakty uloženy. V Nastavení zatrhněte u událostí, kdo je dostane.' : 'Kontakty smazány.');
         naplnWatch();
       } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
     };
@@ -734,7 +750,8 @@ function renderDetail(rebuild = false) {
   }
   nactiNahravky(p.id);
   d.querySelector('#dnoteKdo').textContent = `zapíše se jako ${ME()}, ${new Date().toLocaleDateString('cs-CZ')}`;
-  d.querySelector('#dkontaktyStav').textContent = describeKontakty(p) ? `Uloženo: ${describeKontakty(p)}` : 'Zatím žádné kontakty; bez nich SMS ani e-mail neodcházejí.';
+  d.querySelector('#dkontaktyStav').textContent = describeKontakty(p) ? `Uloženo: ${describeKontakty(p)}` : 'Zatím žádné kontakty rodiny.';
+  { const tp = telefonyPoskytovatele(sim.state); const pk = d.querySelector('#dkontaktyPosk'); if (pk) pk.textContent = `Telefony poskytovatele (⚙ Nastavení): dispečink ${tp.dispecink ? formatTelefon(tp.dispecink) : 'není'} · služba ${tp.sluzba ? formatTelefon(tp.sluzba) : tp.sluzbaZdroj === 'pecedoma' ? 'z Péče doma (dosadí server)' : tp.sluzbaZdroj === 'pecedomaplus' ? 'z Péče doma plus (dosadí server)' : 'není'}.`; }
   {
     const n = p.naramek;
     const stav = d.querySelector('#dnaramekStav'), info = d.querySelector('#dnaramekInfo');

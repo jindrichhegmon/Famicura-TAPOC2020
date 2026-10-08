@@ -70,46 +70,91 @@ export function defaultWatch() {
 }
 export function describeWatch(w) {
   const hodiny = (r) => { const t = oknaText(r); return t ? ` ${t}` : ''; };
-  const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : '') + (w[k].sms ? ' 📱' : '') + (w[k].mail ? ' ✉' : ''));
+  const ma = (v) => (Array.isArray(v) ? v.length > 0 : !!v);
+  const on = WATCH_KINDS.filter((k) => w[k]?.on).map((k) => KINDS[k].label.toLowerCase() + hodiny(w[k]) + (w[k].rec ? ' 🎞' : '') + (ma(w[k].sms) ? ' 📱' : '') + (ma(w[k].mail) ? ' ✉' : ''));
   return on.length ? on.join(', ') : 'nic';
 }
 
-/* ---------- kontakty kamery: až tři čísla na SMS a tři e-maily ----------
- * Zadává poskytovatel v dispečinku (Komunikace). Když jsou vyplněné, jde při
- * události, která má v Nastavení zatržené SMS nebo E-mail, upozornění ze
- * serveru (src/upozorneni.mjs). Prázdné kontakty = nic neodchází. */
-export const KONTAKTY_MAX = 3;
-export const prazdneKontakty = () => ({ sms: [], mail: [] });
+/* ---------- kontakty kamery: rodina (5× jméno + telefon), dvě sady e-mailů ----------
+ * Zadává poskytovatel v dispečinku (Komunikace). Příjemci upozornění se pak u každé
+ * události v Nastavení vybírají zvlášť: SMS = jednotliví lidé z rodiny, telefon
+ * dispečinku a telefon služby poskytovatele (⚙ Nastavení), e-mail = sada 1 / sada 2.
+ * Starší tvar { sms: [tel], mail: [adresa] } se čte dál: čísla jako rodina bez jmen,
+ * adresy jako sada 1; starší zatržení sms: true = celá rodina, mail: true = obě sady. */
+export const KONTAKTY_MAX = 3;            // starší limit (jen pro čtení starého tvaru)
+export const KONTAKTY_RODINA_MAX = 5;
+export const MAILY_SADA_MAX = 10;
+export const SMS_PRIJEMCI = ['r1', 'r2', 'r3', 'r4', 'r5', 'dispecink', 'sluzba'];
+export const MAIL_SADY = ['s1', 's2'];
+export const prazdneKontakty = () => ({ rodina: Array.from({ length: KONTAKTY_RODINA_MAX }, () => ({ jmeno: '', telefon: '' })), maily1: [], maily2: [] });
 export function normalizeTelefonCz(raw) {
   let d = String(raw ?? '').replace(/\D/g, '');
   if (d.startsWith('00420')) d = d.slice(5); else if (d.startsWith('420') && d.length === 12) d = d.slice(3);
   return /^[1-9]\d{8}$/.test(d) ? d : null;
 }
 export const jeEmail = (v) => /^[^\s@]{1,64}@[^\s@]{1,100}\.[a-z]{2,24}$/i.test(String(v || ''));
+/** Seznam e-mailů z textu odděleného čárkou, středníkem nebo mezerou (nebo z pole). */
+export const rozdelMaily = (v) => (Array.isArray(v) ? v : String(v ?? '').split(/[,;\s]+/)).map((m) => String(m || '').trim()).filter(Boolean);
+export const formatTelefon = (n) => String(n || '').replace(/^(\d{3})(\d{3})(\d{3})$/, '$1 $2 $3');
+/** Kontakty kamery v novém tvaru (rodina vždy 5 pozic, prázdné povolené). */
 export function kontaktyPro(p) {
   const k = p?.kontakty || {};
-  return { sms: Array.isArray(k.sms) ? k.sms.filter(Boolean) : [], mail: Array.isArray(k.mail) ? k.mail.filter(Boolean) : [] };
+  const z = prazdneKontakty();
+  const rodina = Array.isArray(k.rodina) ? k.rodina : Array.isArray(k.sms) ? k.sms.map((t) => ({ jmeno: '', telefon: t })) : [];
+  for (let i = 0; i < KONTAKTY_RODINA_MAX; i++) { const r = rodina[i]; if (r && typeof r === 'object') z.rodina[i] = { jmeno: String(r.jmeno || ''), telefon: String(r.telefon || '') }; }
+  z.maily1 = (Array.isArray(k.maily1) ? k.maily1 : Array.isArray(k.mail) ? k.mail : []).filter(Boolean);
+  z.maily2 = (Array.isArray(k.maily2) ? k.maily2 : []).filter(Boolean);
+  return z;
 }
+/** Členové rodiny s telefonem: [{ id: 'r1', jmeno, telefon }]. */
+export const rodinaSTelefonem = (p) => kontaktyPro(p).rodina.map((r, i) => ({ id: 'r' + (i + 1), ...r })).filter((r) => r.telefon);
+export const popisPrijemce = (r) => r.jmeno ? `${r.jmeno} ${formatTelefon(r.telefon)}` : formatTelefon(r.telefon);
 export function describeKontakty(p) {
   const k = kontaktyPro(p);
-  const t = (n) => n.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
   const casti = [];
-  if (k.sms.length) casti.push('SMS: ' + k.sms.map(t).join(', '));
-  if (k.mail.length) casti.push('e-mail: ' + k.mail.join(', '));
+  const rod = rodinaSTelefonem(p);
+  if (rod.length) casti.push('rodina: ' + rod.map(popisPrijemce).join(', '));
+  if (k.maily1.length) casti.push('e-maily 1: ' + k.maily1.join(', '));
+  if (k.maily2.length) casti.push('e-maily 2: ' + k.maily2.join(', '));
   return casti.join(' · ');
 }
-/** Komu a jak má jít upozornění na tuhle událost; null = nikomu. */
+/** Výchozí zatržení: kritické události upozorňují (celá rodina, obě sady), ostatní ne. */
 export const upozorneniVychozi = (kind) => KINDS[kind]?.level === 'crit';
+/** Seznam ID příjemců SMS z nastavení události: pole ID, nebo starší true = celá rodina. */
+export function smsIdsPro(w, kind, p) {
+  const v = w?.sms ?? upozorneniVychozi(kind);
+  if (Array.isArray(v)) return v.filter((x) => SMS_PRIJEMCI.includes(x));
+  return v ? rodinaSTelefonem(p).map((r) => r.id) : [];
+}
+export function mailIdsPro(w, kind) {
+  const v = w?.mail ?? upozorneniVychozi(kind);
+  if (Array.isArray(v)) return v.filter((x) => MAIL_SADY.includes(x));
+  return v ? [...MAIL_SADY] : [];
+}
+/** Telefony poskytovatele pro upozornění: dispečink (⚙ Telefon) a služba (⚙ Telefon služby, nebo zdroj Péče doma / Péče doma plus → dosadí server). */
+export function telefonyPoskytovatele(s) {
+  const posk = poskytovatel(s);
+  const zdroj = ['pecedoma', 'pecedomaplus'].includes(posk.sluzbaZdroj) ? posk.sluzbaZdroj : 'vlastni';
+  return { dispecink: normalizeTelefonCz(posk.telefon) || '', sluzba: zdroj === 'vlastni' ? (normalizeTelefonCz(posk.sluzbaTelefon) || '') : '', sluzbaZdroj: zdroj };
+}
+/** Komu a jak má jít upozornění na tuhle událost; null = nikomu.
+ *  sms = telefony (9 číslic), smsSluzba = zdroj čísla služby, které musí dosadit server ('pecedoma' | 'pecedomaplus'), mail = adresy. */
 export function upozorneniPro(s, ev) {
   if (!ev || ev.mimoHodiny) return null;
   const p = najdi(s, ev.patientId); if (!p) return null;
   const w = p.watch?.[ev.kind]; if (!w) return null;
   const k = kontaktyPro(p);
-  // starší uložený stav příznaky nemá: kritické události upozorňují, ostatní ne (jako defaultWatch)
-  const vychozi = KINDS[ev.kind]?.level === 'crit';
-  const sms = (w.sms ?? vychozi) ? k.sms : [], mail = (w.mail ?? vychozi) ? k.mail : [];
-  if (!sms.length && !mail.length) return null;
-  return { sms, mail, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
+  const ids = smsIdsPro(w, ev.kind, p), mids = mailIdsPro(w, ev.kind);
+  const tp = telefonyPoskytovatele(s);
+  const sms = []; const komu = []; let smsSluzba = null;
+  for (const id of ids) {
+    if (/^r[1-5]$/.test(id)) { const r = k.rodina[Number(id[1]) - 1]; if (r?.telefon) { sms.push(r.telefon); komu.push(r.jmeno || formatTelefon(r.telefon)); } }
+    else if (id === 'dispecink' && tp.dispecink) { sms.push(tp.dispecink); komu.push('dispečink'); }
+    else if (id === 'sluzba') { if (tp.sluzba) { sms.push(tp.sluzba); komu.push('služba'); } else if (tp.sluzbaZdroj !== 'vlastni') { smsSluzba = tp.sluzbaZdroj; komu.push('služba'); } }
+  }
+  const mail = [...new Set([...(mids.includes('s1') ? k.maily1 : []), ...(mids.includes('s2') ? k.maily2 : [])])];
+  if (!sms.length && !smsSluzba && !mail.length) return null;
+  return { sms: [...new Set(sms)], smsSluzba, mail, komu, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
 }
 
 /* Hodiny vždy pražské: server na VPS běží v UTC a „noc 22–6“ nebo „jen 7:00–20:00“
@@ -192,7 +237,7 @@ const FAKE = [
 
 /* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
  * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
-export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkaPredS: 5, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2 };
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', sluzbaTelefon: '', sluzbaZdroj: 'vlastni', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkaPredS: 5, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2 };
 export function poskytovatel(s) { const p = { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; p.eskalaceMin = Number(p.eskalaceMin) || POSKYTOVATEL_VYCHOZI.eskalaceMin; return p; }
 /** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
 export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
@@ -315,21 +360,32 @@ const akce = {
     const w = { ...p.watch[kind] };
     if ('on' in patch) w.on = bool(patch.on);
     if ('rec' in patch) w.rec = bool(patch.rec);
-    if ('sms' in patch) w.sms = bool(patch.sms);
-    if ('mail' in patch) w.mail = bool(patch.mail);
+    // příjemci: pole ID (r1–r5 rodina, dispecink, sluzba / s1, s2), nebo starší true/false (celá rodina / obě sady)
+    const prijemci = (v, povolene, nazev) => { if (Array.isArray(v)) { for (const x of v) if (!povolene.includes(x)) throw chyba(`Neznámý příjemce ${nazev}: ${x}.`); return [...new Set(v)]; } return bool(v); };
+    if ('sms' in patch) w.sms = prijemci(patch.sms, SMS_PRIJEMCI, 'SMS');
+    if ('mail' in patch) w.mail = prijemci(patch.mail, MAIL_SADY, 'e-mailu');
     for (const k of ['from', 'to', 'from2', 'to2', 'from3', 'to3']) if (k in patch) w[k] = hodina(patch[k]);
     for (const [f, t] of [['from', 'to'], ['from2', 'to2'], ['from3', 'to3']]) if (!!w[f] !== !!w[t]) throw chyba('Vyplňte začátek i konec okna, nebo ani jedno.');
     p.watch[kind] = w;
     return {};
   },
-  /** Kontakty pro upozornění: { sms: [tel…], mail: [adresa…] }, max 3 a 3; prázdné položky se vynechají, změna jde do logu kamery. */
+  /** Kontakty pro upozornění: { rodina: [{ jmeno, telefon }×5], maily1: 'a@b, c@d' | [], maily2 } (starší { sms, mail } se přijme také); změna jde do logu kamery. */
   setKontakty(s, now, patientId, kontakty, by) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
     if (!kontakty || typeof kontakty !== 'object') throw chyba('Chybí kontakty.');
-    const seznam = (v, nazev) => { if (v == null) return []; if (!Array.isArray(v) || v.length > KONTAKTY_MAX) throw chyba(`Nejvýš ${KONTAKTY_MAX} položky: ${nazev}.`); return v.map((x) => str(x, 120, nazev).trim()).filter(Boolean); };
-    const sms = seznam(kontakty.sms, 'SMS').map((t) => { const n = normalizeTelefonCz(t); if (!n) throw chyba(`Telefon „${t}“ není český mobil (9 číslic).`); return n; });
-    const mail = seznam(kontakty.mail, 'e-mail').map((m) => { if (!jeEmail(m)) throw chyba(`E-mail „${m}“ není platná adresa.`); return m.toLowerCase(); });
-    const nove = { sms: [...new Set(sms)], mail: [...new Set(mail)] };
+    const nove = prazdneKontakty();
+    const rodina = Array.isArray(kontakty.rodina) ? kontakty.rodina : Array.isArray(kontakty.sms) ? kontakty.sms.map((t) => ({ jmeno: '', telefon: t })) : [];
+    if (rodina.length > KONTAKTY_RODINA_MAX) throw chyba(`Nejvýš ${KONTAKTY_RODINA_MAX} lidí z rodiny.`);
+    rodina.forEach((r, i) => {
+      if (!r || typeof r !== 'object') return;
+      const jmeno = str(r.jmeno, 40, 'jméno').trim(), tel = str(r.telefon, 40, 'telefon').trim();
+      if (!tel) { if (jmeno) throw chyba(`U jména „${jmeno}“ chybí telefon.`); return; }
+      const n = normalizeTelefonCz(tel); if (!n) throw chyba(`Telefon „${tel}“ není český mobil (9 číslic).`);
+      nove.rodina[i] = { jmeno, telefon: n };
+    });
+    const sada = (v, nazev) => { const m = rozdelMaily(v); if (m.length > MAILY_SADA_MAX) throw chyba(`Nejvýš ${MAILY_SADA_MAX} adres: ${nazev}.`); for (const x of m) if (!jeEmail(x)) throw chyba(`E-mail „${x}“ není platná adresa.`); return [...new Set(m.map((x) => x.toLowerCase()))]; };
+    nove.maily1 = sada(kontakty.maily1 ?? kontakty.mail, 'e-maily 1');
+    nove.maily2 = sada(kontakty.maily2, 'e-maily 2');
     const stare = kontaktyPro(p);
     if (JSON.stringify(stare) === JSON.stringify(nove)) return { zmena: false, vysledek: nove };
     p.kontakty = nove;
@@ -520,6 +576,8 @@ const akce = {
     if ('eskalaceMin' in p) { const m = Number(p.eskalaceMin); if (!Number.isInteger(m) || m < 1 || m > 60) throw chyba('Eskalace: 1 až 60 minut.'); n.eskalaceMin = m; }
     if ('nahravkaS' in p) { const m = Number(p.nahravkaS); if (!Number.isInteger(m) || m < 5 || m > 60) throw chyba('Délka nahrávky: 5 až 60 sekund.'); n.nahravkaS = m; }
     if ('nahravkaPredS' in p) { const m = Number(p.nahravkaPredS); if (!Number.isInteger(m) || m < 0 || m > 10) throw chyba('Obraz před událostí: 0 až 10 sekund.'); n.nahravkaPredS = m; }
+    if (!['vlastni', 'pecedoma', 'pecedomaplus'].includes(n.sluzbaZdroj)) throw chyba('Telefon služby: zdroj vlastní, Péče doma, nebo Péče doma plus.');
+    if (n.sluzbaZdroj === 'vlastni' && n.sluzbaTelefon && !normalizeTelefonCz(n.sluzbaTelefon)) throw chyba(`Telefon služby „${n.sluzbaTelefon}“ není české číslo (9 číslic).`);
     if (!n.nazev) throw chyba('Název poskytovatele nesmí být prázdný.');
     if (!n.dispecer) throw chyba('Jméno dispečera nesmí být prázdné.');
     s.poskytovatel = n;

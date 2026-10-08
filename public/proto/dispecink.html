@@ -39,8 +39,12 @@
         <div class="sec">Poskytovatel</div>
         <div class="f3">
           <div class="fld"><label for="hlNazev">Název služby</label><input type="text" id="hlNazev" maxlength="80" required><div class="help">záhlaví, detail kamery, aplikace rodiny</div></div>
-          <div class="fld"><label for="hlTelefon">Telefon</label><input type="tel" id="hlTelefon" maxlength="40"><div class="help">rodina ho vidí u své kamery</div></div>
+          <div class="fld"><label for="hlTelefon">Telefon dispečinku</label><input type="tel" id="hlTelefon" maxlength="40"><div class="help">rodina ho vidí u své kamery; příjemce „dispečink“ u SMS v nastavení kamery</div></div>
           <div class="fld"><label for="hlEmail">E-mail</label><input type="email" id="hlEmail" maxlength="80"></div>
+        </div>
+        <div class="f2">
+          <div class="fld"><label for="hlSluzbaZdroj">Telefon služby – odkud</label><select id="hlSluzbaZdroj"><option value="vlastni">vlastní číslo (níže)</option><option value="pecedoma">Péče doma – kontaktní telefon poskytovatele</option><option value="pecedomaplus">Péče doma plus – telefon služby tenanta</option></select><div class="help">příjemce „služba“ u SMS v nastavení kamery; z Péče doma (plus) ho dosadí server při každé události</div></div>
+          <div class="fld"><label for="hlSluzbaTelefon">Telefon služby (vlastní)</label><input type="tel" id="hlSluzbaTelefon" maxlength="40" placeholder="777 123 456"><div class="help">platí, když je odkud = vlastní číslo</div></div>
         </div>
         <div class="sec">Dispečink</div>
         <div class="f2">
