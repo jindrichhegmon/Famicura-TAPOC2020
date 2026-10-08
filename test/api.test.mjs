@@ -69,7 +69,7 @@ function handler(over = {}) {
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
   const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null , naramky: over.naramky || null }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null , naramky: over.naramky || null, sluzba: over.sluzba || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -967,4 +967,21 @@ test('čísla SOS přes API: uloží ke kameře, bez připojeného náramku ček
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
   assert.equal((await h(req('POST', '/api/naramek/sos', { cookies: cookieRodina(T, rod.id).split(';')[0], body: { kamera: 'tapoc2020', cisla: [] } }))).status, 403);
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookieRodina(T, rod.id).split(';')[0], body: { akce: 'setNaramekSos', args: ['tapoc2020', []] } }))).status, 403);
+});
+
+test('číslo služby: slot „sluzba“ se dosadí z jhn-apps (Péče doma), GET /api/naramek/sluzba-telefon, bez nastavení srozumitelně', async () => {
+  const sluzba = { nastaveno: true, async telefon(t) { return { telefon: '+420602620069', zdroj: 'pecedoma', poskytovatel: 'Ing. Jindřich Hegmon', cas: Date.now() }; } };
+  const posl = [];
+  const naramky = { stav() { return { port: 5093 }; }, pripojen: () => true, async prikaz(id, nazev, o = {}) { posl.push(o.cislaSos); return { ok: true, obsah: 'x', cisla: ['+420602620069', '602520069', ''] }; } };
+  const { h } = handler({ naramky, sluzba });
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
+  let r = await h(req('GET', '/api/naramek/sluzba-telefon', { cookies: cookie() }));
+  assert.equal(r.status, 200); let j = await r.json(); assert.equal(j.telefon, '+420602620069'); assert.equal(j.zdroj, 'pecedoma'); assert.equal(j.nastaveno, true);
+  r = await h(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['sluzba', '602520069', ''] } }));
+  j = await r.json(); assert.equal(r.status, 200); assert.deepEqual(j.cisla, ['sluzba', '602520069', '']); assert.deepEqual(j.skutecna, ['+420602620069', '602520069', '']); assert.deepEqual(posl[0], ['sluzba', '602520069', '']);
+  const st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
+  assert.deepEqual(st.patients[0].naramek.sosOdeslaneCisla, ['+420602620069', '602520069', '']); assert.match(st.events[0].text, /číslo služby, 602520069/);
+  const { h: h2 } = handler({ naramky });
+  j = await (await h2(req('GET', '/api/naramek/sluzba-telefon', { cookies: cookie() }))).json();
+  assert.equal(j.nastaveno, false); assert.match(j.chyba, /JHN_APPS_TOKEN/);
 });

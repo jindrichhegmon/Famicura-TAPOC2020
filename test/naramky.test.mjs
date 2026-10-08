@@ -245,3 +245,34 @@ test('čísla SOS: akce setNaramekSos (ověření čísel, poznámka do historie
     k.konec();
   } finally { await n.stop(); }
 });
+
+test('číslo služby v náramku: „sluzba“ se dosadí před odesláním, při změně čísla v Péče doma tik pošle čísla znovu, bez čísla srozumitelná chyba', async () => {
+  const tb = createMockTabulky();
+  const { s, kamery, now, posun } = tenant(tb);
+  await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
+  let cislo = '+420602620069';
+  const sluzba = { nastaveno: true, volani: 0, async telefon() { this.volani++; return { telefon: cislo, zdroj: 'pecedoma', poskytovatel: 'X', cas: now() }; } };
+  const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho, prodlevaMs: 20, sluzba, sluzbaMs: 10 * 60 * 1000 });
+  const port = await n.start({ autoMs: 0 });
+  try {
+    const k = await spoj(port);
+    await k.posli(ram('LK,0,0,95'));
+    assert.ok(await cekej(() => n.pripojen(ID)));
+    const r = await n.prikaz(ID, 'sos', { cislaSos: ['sluzba', '', '602520069'], tenant: '22202480FAMICURA' });
+    assert.deepEqual(r.cisla, ['+420602620069', '', '602520069']);
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420602620069]`)), 'číslo služby dosazené do SOS1');
+    await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
+    await s.proved('setNaramekSos', ['tapoc2020', ['sluzba', '', '602520069'], 'Dispečer']);
+    await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
+    // tik: číslo stejné → nic; změna v Péče doma → po uplynutí sluzbaMs znovu odeslat
+    k.prijato(); let pred = k.prijato().length;
+    await n.tik(); assert.ok(!k.prijato().slice(pred).includes('SOS1'), 'stejné číslo se neposílá znovu');
+    cislo = '+420777000111'; posun(11 * 60 * 1000);
+    await n.tik();
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420777000111]`)), 'po změně čísla služby se SOS1 poslalo znovu');
+    assert.deepEqual((await s.stav()).state.patients[0].naramek.sosOdeslaneCisla, ['+420777000111', '', '602520069']);
+    cislo = ''; posun(11 * 60 * 1000);
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['sluzba'], tenant: '22202480FAMICURA' }), /není v Péče doma nastavené/);
+    k.konec();
+  } finally { await n.stop(); }
+});

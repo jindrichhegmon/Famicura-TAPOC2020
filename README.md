@@ -102,7 +102,7 @@ Záložka Náramek umí i **příkazy náramku** (jen poskytovatel, `POST
 /api/naramek/prikaz`): Změřit zdraví (`prikaz: 'zdravi'` = `hrtstart,1`,
 pak s odstupem 1,5 s `bphrt`, `oxygen`, `bodytemp2`; `hrtstart,1` zapne
 snímač, V48 jinak neodpoví; jednotlivě `tlak`, `kyslik`, `teplota`, `tep`
-zůstávají), čísla SOS (`POST /api/naramek/sos`, akce `setNaramekSos` → `SOS1,číslo`…`SOS3,číslo`, při nepřipojeném náramku se pošlou při příštím ozvání), Zjistit polohu (`CR`) a červené Vypnout
+zůstávají), čísla SOS (`POST /api/naramek/sos`, akce `setNaramekSos` → `SOS1,číslo`…`SOS3,číslo`, při nepřipojeném náramku se pošlou při příštím ozvání; hodnota `sluzba` = číslo služby poskytovatele z Péče doma plus `SLUZBA_TELEFON` nebo Péče doma `providers.contact_phone` přes aplikaci `pecedomaplus-sluzba-telefon` na jhn-apps, `src/sluzba.mjs`, při změně se pošle znovu do 10 min; `GET /api/naramek/sluzba-telefon`), Zjistit polohu (`CR`) a červené Vypnout
 náramek (`POWEROFF`, jen na heslo hlavní aplikace `FAMICURA_PASSWORD`,
 zapisuje se do historie). Vlastní příkaz (`prikaz: 'vlastni'`, písmena,
 číslice, čárky; do 60 znaků) zůstává v API pro ladění modelu. Příkaz jde

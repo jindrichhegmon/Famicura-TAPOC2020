@@ -109,7 +109,7 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null,
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null, sluzba = null,
                                 pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
@@ -436,12 +436,19 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const kdo = ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce');
         const v = await st.proved('setNaramekSos', [kamera, Array.isArray(cisla) ? cisla : [], kdo]);
         const p = (await st.stav()).state.patients.find((x) => x.id === kamera);
-        let odeslano = false, obsah = '';
+        let odeslano = false, obsah = '', skutecna = null;
         if (naramky && p?.naramek?.id && naramky.pripojen?.(p.naramek.id)) {
-          try { obsah = (await naramky.prikaz(p.naramek.id, 'sos', { cislaSos: p.naramek.sos || [] })).obsah; await st.naramek({ kameraId: kamera, sosOdeslano: Date.now() }); odeslano = true; }
+          try { const r = await naramky.prikaz(p.naramek.id, 'sos', { cislaSos: p.naramek.sos || [], tenant }); obsah = r.obsah; skutecna = r.cisla || null; await st.naramek({ kameraId: kamera, sosOdeslano: Date.now(), sosOdeslaneCisla: skutecna }); odeslano = true; }
           catch (e) { if (e.status !== 409) throw e; }
         }
-        return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah });
+        return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah, skutecna });
+      }
+      // Číslo služby poskytovatele (Péče doma plus SLUZBA_TELEFON, jinak Péče doma contact_phone) – pro volbu „číslo služby“ ve slotu SOS.
+      if (m === 'GET' && path === '/api/naramek/sluzba-telefon') {
+        if (rodina) return jenPoskytovatel();
+        if (!sluzba || !sluzba.nastaveno) return json({ ok: true, nastaveno: false, telefon: '', zdroj: '', poskytovatel: '', chyba: 'Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC, ./deploy/vps-env.sh).' });
+        try { const v = await sluzba.telefon(tenant, { cerstve: url.searchParams.get('cerstve') === '1' }); return json({ ok: true, nastaveno: true, telefon: v.telefon, zdroj: v.zdroj, poskytovatel: v.poskytovatel, duvod: v.duvod || '', zastarale: !!v.zastarale }); }
+        catch (e) { return json({ ok: true, nastaveno: true, telefon: '', zdroj: '', poskytovatel: '', chyba: e.message }); }
       }
       // Měření zdraví z náramku jedné kamery (jen poskytovatel), nejnovější první, nejvýš 2000 (stránkuje stránka); format=xlsx = sešit Excelu (až 10000).
       if (m === 'GET' && path === '/api/naramek/mereni') {

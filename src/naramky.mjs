@@ -158,11 +158,13 @@ export const jePolohovy = (typ) => /^(UD|AL|WT)/.test(typ);
  *   najemci.pro(tenant) → stav tenanta (stav(), proved(), naramek())
  *   kamery()            → kamery ze serveru (kvůli seznamu tenantů)
  */
-export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', now = Date.now, log = console, prodlevaMs = 1500 } = {}) {
+export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', now = Date.now, log = console, prodlevaMs = 1500, sluzba = null, sluzbaMs = 10 * 60 * 1000 } = {}) {
   const spojeni = new Set();
   const aktivni = new Map();       // id přívěsku → { socket, vyrobce, index, cas } – kudy mu poslat příkaz
   const posledniAuto = new Map();  // id → čas posledního automatického měření
   const sosPosilam = new Set();     // id → právě se posílají čísla SOS (ať se nepošlou dvakrát z rámců za sebou)
+  const posledniSluzba = new Map(); // id → kdy se naposledy kontrolovalo číslo služby ('sluzba' ve slotu SOS)
+  const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
   const cache = new Map();         // id přívěsku → { tenant, kameraId, do }
   const nezname = new Map();       // id → kdy naposledy zalogováno
   const posledniPoplach = new Map(); // id|druh → čas
@@ -215,7 +217,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
         const n = (await kam.stav.stav()).state.patients.find((x) => x.id === kam.kameraId)?.naramek;
         if (n && Array.isArray(n.sos) && !n.sosOdeslano) {
           sosPosilam.add(ramec.id);
-          try { await prikaz(ramec.id, 'sos', { cislaSos: n.sos }); await kam.stav.naramek({ kameraId: kam.kameraId, sosOdeslano: now() }); log.log(`[naramky] ${ramec.id} čísla SOS odeslána při ozvání`); }
+          try { const r = await prikaz(ramec.id, 'sos', { cislaSos: n.sos, tenant: kam.tenant }); await kam.stav.naramek({ kameraId: kam.kameraId, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); log.log(`[naramky] ${ramec.id} čísla SOS odeslána při ozvání`); }
           finally { sosPosilam.delete(ramec.id); }
         }
       } catch (e) { log.error('[naramky] čísla SOS:', e.message); }
@@ -271,21 +273,40 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   }
 
   /** Příkaz náramku: nazev z PRIKAZY, nebo 'vlastni' s textem (ladění modelu). Náramek musí být právě připojený. */
-  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false, cislaSos = [] } = {}) {
+  /** Skutečná čísla pro náramek: 'sluzba' → číslo služby tenanta (chyba 400, když není nastavené), ostatní ověřená a bez mezer. */
+  async function cislaSkutecna(tenant, cislaSos) {
+    const out = [];
+    for (let i = 0; i < 3; i++) {
+      const c = String((cislaSos || [])[i] ?? '').replace(/[\s-]/g, '');
+      if (c === 'sluzba') {
+        if (!sluzba || !sluzba.nastaveno) throw chyba('Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC).', 503);
+        if (!tenant) throw chyba('Číslo služby: chybí tenant.', 400);
+        const v = await sluzba.telefon(tenant);
+        if (!v.telefon) throw chyba(`Číslo služby není v Péče doma nastavené${v.duvod ? ' (' + v.duvod + ')' : ''}.`, 400);
+        out.push(v.telefon);
+      } else {
+        if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba('Číslo SOS: jen číslice, případně + na začátku.', 400);
+        out.push(c);
+      }
+    }
+    return out;
+  }
+
+  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false, cislaSos = [], tenant = '' } = {}) {
     const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
     if (nazev === 'sos') {
-      // čísla SOS: SOS1,číslo … SOS3,číslo (prázdné = smazat); zapsaná ve stavu kamery (setNaramekSos), sem už přijdou ověřená
+      // čísla SOS: SOS1,číslo … SOS3,číslo (prázdné = smazat); zapsaná ve stavu kamery (setNaramekSos), sem už přijdou ověřená;
+      // 'sluzba' = číslo služby poskytovatele (src/sluzba.mjs) – dosadí se tady, proto je potřeba tenant
       const a0 = aktivni.get(String(id));
       if (!a0 || a0.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
-      const cisla = [0, 1, 2].map((i) => String(cislaSos[i] ?? '').replace(/[\s-]/g, ''));
-      for (const c of cisla) if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba('Číslo SOS: jen číslice, případně + na začátku.', 400);
+      const cisla = await cislaSkutecna(tenant, cislaSos);
       const poslano = [];
       for (let i = 0; i < 3; i++) {
         if (poslano.length) await new Promise((r) => setTimeout(r, prodlevaMs));
         const r = await prikaz(id, 'vlastni', { vlastni: `SOS${i + 1},${cisla[i]}` });
         poslano.push(r.obsah);
       }
-      return { ok: true, obsah: poslano.join(' + ') };
+      return { ok: true, obsah: poslano.join(' + '), cisla };
     }
     if (nazev === 'zdravi') {
       const a0 = aktivni.get(String(id));
@@ -323,10 +344,26 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   async function tik() {
     let posl = 0;
     for (const t of await tenanti()) {
-      let st;
-      try { st = await (await najemci.pro(t)).stav(); } catch { continue; }
+      let s, st;
+      try { s = await najemci.pro(t); st = await s.stav(); } catch { continue; }
       for (const p of st.state.patients) {
-        const n = p.naramek; const auto = n?.auto;
+        const n = p.naramek;
+        // číslo služby ve slotu SOS: každých sluzbaMs porovnat s naposledy poslanými čísly a při změně poslat znovu
+        if (n?.id && Array.isArray(n.sos) && n.sos.includes('sluzba') && n.sosOdeslano && sluzba?.nastaveno) {
+          const a = aktivni.get(String(n.id));
+          if (a && !a.socket.destroyed && now() - (posledniSluzba.get(n.id) || 0) >= sluzbaMs && !sosPosilam.has(String(n.id))) {
+            posledniSluzba.set(n.id, now());
+            try {
+              const skut = await cislaSkutecna(t, n.sos);
+              if (JSON.stringify(skut) !== JSON.stringify(n.sosOdeslaneCisla || null)) {
+                sosPosilam.add(String(n.id));
+                try { const r = await prikaz(n.id, 'sos', { cislaSos: n.sos, tenant: t }); await s.naramek({ kameraId: p.id, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); posl++; log.log(`[naramky] ${n.id} číslo služby se změnilo – čísla SOS poslána znovu: ${r.cisla.join(', ')}`); }
+                finally { sosPosilam.delete(String(n.id)); }
+              }
+            } catch (e) { log.error('[naramky] číslo služby', n.id, e.message); }
+          }
+        }
+        const auto = n?.auto;
         if (!n?.id || !auto || !(auto.min > 0)) continue;
         const a = aktivni.get(String(n.id)); if (!a || a.socket.destroyed) continue;
         if (now() - (posledniAuto.get(n.id) || 0) < auto.min * 60 * 1000) continue;

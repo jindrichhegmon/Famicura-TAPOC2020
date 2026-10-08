@@ -534,9 +534,10 @@ function renderDetail(rebuild = false) {
         <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
-        <form class="kontakty" id="dnaramekSos"><div class="kgrid">${[0, 1, 2].map((i) => `<label>SOS ${i + 1}. číslo<input type="tel" class="nsos" data-i="${i}" maxlength="16" placeholder="+420…" value="${esc(p.naramek?.sos?.[i] || '')}"></label>`).join('')}</div>
+        <form class="kontakty" id="dnaramekSos"><div class="kgrid">${[0, 1, 2].map((i) => { const v = p.naramek?.sos?.[i] || ''; const sl = v === 'sluzba'; return `<label>SOS ${i + 1}. číslo<select class="nsosTyp" data-i="${i}"><option value="vlastni"${sl ? '' : ' selected'}>vlastní číslo</option><option value="sluzba"${sl ? ' selected' : ''}>číslo služby (Péče doma)</option></select><input type="tel" class="nsos${sl ? ' hide' : ''}" data-i="${i}" maxlength="16" placeholder="+420…" value="${esc(sl ? '' : v)}"></label>`; }).join('')}</div>
           <div class="akce"><button class="sm" type="submit">Uložit čísla SOS a poslat do náramku</button><span class="small muted" id="dnaramekSosStav"></span></div>
-          <p class="small muted">– čísla, která náramek po stisku SOS postupně volá (a posílá jim SMS); pořadí 1 → 2 → 3, prázdné pole číslo smaže</p></form>
+          <p class="small muted" id="dnaramekSluzba">– číslo služby se bere z Péče doma plus (SLUZBA_TELEFON), jinak z Péče doma (kontaktní telefon poskytovatele); zjišťuji…</p>
+          <p class="small muted">– čísla, která náramek po stisku SOS postupně volá (a posílá jim SMS); pořadí 1 → 2 → 3, prázdné pole číslo smaže; „číslo služby“ server dosadí sám a při změně v Péče doma ho do náramku pošle znovu (do 10 minut)</p></form>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
         <div class="akce"><label class="small">na stránku <select id="dnaramekNa">${[10, 20, 50, 100].map((v) => `<option value="${v}">${v}</option>`).join('')}</select></label><button type="button" class="sm sec" id="dnaramekPrev">‹ novější</button><span class="small muted" id="dnaramekStrana"></span><button type="button" class="sm sec" id="dnaramekNext">starší ›</button><button type="button" class="sm sec" id="dnaramekExcel">Stáhnout do Excelu</button></div>
         <div id="dnaramekMereni"></div>
@@ -638,13 +639,20 @@ function renderDetail(rebuild = false) {
       const a = document.createElement('a'); a.href = `/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}&format=xlsx`; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
       toast('Stahuji sešit Excelu s měřením…');
     };
+    d.querySelectorAll('.nsosTyp').forEach((sel) => { sel.onchange = () => { const i = d.querySelector(`.nsos[data-i="${sel.dataset.i}"]`); i.classList.toggle('hide', sel.value === 'sluzba'); if (sel.value !== 'sluzba') i.focus(); }; });
+    // číslo služby poskytovatele (jednou za otevření detailu, obnovit lze znovuotevřením)
+    if (!d.__sluzbaDotaz && sim.naServeru) {
+      d.__sluzbaDotaz = true;
+      apiJson('/api/naramek/sluzba-telefon').then((r) => { const el = d.querySelector('#dnaramekSluzba'); if (!el) return; d.__sluzba = r;
+        el.textContent = !r.nastaveno ? `– číslo služby: ${r.chyba || 'není nastavené'}` : r.telefon ? `– číslo služby teď: ${r.telefon} (${r.zdroj === 'pecedomaplus' ? 'Péče doma plus, SLUZBA_TELEFON' : 'Péče doma, kontaktní telefon poskytovatele'}${r.poskytovatel ? ' – ' + r.poskytovatel : ''}${r.zastarale ? '; poslední známé, jhn-apps neodpovídá' : ''})` : `– číslo služby zatím není v Péče doma nastavené${r.duvod || r.chyba ? ' (' + (r.duvod || r.chyba) + ')' : ''}; vyplňte kontaktní telefon poskytovatele v Péče doma, nebo SLUZBA_TELEFON v Péče doma plus`; }).catch(() => {});
+    }
     d.querySelector('#dnaramekSos').onsubmit = async (e) => {
       e.preventDefault();
-      const cisla = [...d.querySelectorAll('.nsos')].map((i) => i.value.trim());
+      const cisla = [0, 1, 2].map((i) => (d.querySelector(`.nsosTyp[data-i="${i}"]`).value === 'sluzba' ? 'sluzba' : d.querySelector(`.nsos[data-i="${i}"]`).value.trim()));
       const st = d.querySelector('#dnaramekSosStav'); st.textContent = 'ukládám…';
       try {
         const r = await post('/api/naramek/sos', { kamera: p.id, cisla });
-        st.textContent = r.odeslano ? `odesláno do náramku ${fmtDT(Date.now())}` : 'uloženo; do náramku se pošle, až se ozve';
+        st.textContent = r.odeslano ? `odesláno do náramku ${fmtDT(Date.now())}${Array.isArray(r.skutecna) ? ': ' + r.skutecna.map((c) => c || '–').join(', ') : ''}` : 'uloženo; do náramku se pošle, až se ozve';
         toast(r.odeslano ? 'Čísla SOS odeslána do náramku.' : 'Čísla SOS uložena, pošlou se při příštím ozvání náramku.');
       } catch (ex) { st.textContent = ''; toast(`Čísla SOS: ${ex.message}`, 'crit'); }
     };
@@ -736,8 +744,8 @@ function renderDetail(rebuild = false) {
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
     const sf = d.querySelector('#dnaramekSos');
     if (sf && !sf.contains(document.activeElement)) {
-      d.querySelectorAll('.nsos').forEach((i) => { i.value = n?.sos?.[Number(i.dataset.i)] || ''; });
-      d.querySelector('#dnaramekSosStav').textContent = !n?.sos ? '' : n.sosOdeslano ? `odesláno do náramku ${fmtDT(n.sosOdeslano)}` : 'uloženo; do náramku se pošle, až se ozve';
+      d.querySelectorAll('.nsos').forEach((i) => { const v = n?.sos?.[Number(i.dataset.i)] || ''; const sl = v === 'sluzba'; i.value = sl ? '' : v; i.classList.toggle('hide', sl); const sel = d.querySelector(`.nsosTyp[data-i="${i.dataset.i}"]`); if (sel) sel.value = sl ? 'sluzba' : 'vlastni'; });
+      d.querySelector('#dnaramekSosStav').textContent = !n?.sos ? '' : n.sosOdeslano ? `odesláno do náramku ${fmtDT(n.sosOdeslano)}${Array.isArray(n.sosOdeslaneCisla) ? ': ' + n.sosOdeslaneCisla.map((c) => c || '–').join(', ') : ''}` : 'uloženo; do náramku se pošle, až se ozve';
     }
     const as = d.querySelector('#dnaramekAutoStav');
     if (as && !d.querySelector('#dnaramekAuto').contains(document.activeElement)) as.textContent = n?.auto?.min > 0 ? `uloženo: každých ${n.auto.min} min` : 'vypnuto';

@@ -47,6 +47,7 @@ const { createUzivatele } = await import('./src/uzivatele.mjs');
 const { createSms } = await import('./src/sms.mjs');
 const { createUpozorneni } = await import('./src/upozorneni.mjs');
 const { createDisk } = await import('./src/disk.mjs');
+const { createSluzba } = await import('./src/sluzba.mjs');
 const { createNahravky } = await import('./src/nahravky.mjs');
 const { createUloziste } = await import('./src/uloziste.mjs');
 const { createPtz } = await import('./src/ptz.mjs');
@@ -79,6 +80,7 @@ const sms = createSms();
 const go2rtc = createGo2rtc();
 // Nahrávky na Google Disk poskytovatele (účet z Péče doma plus přes jhn-apps); bez klíče jen hlásí, že nejsou nastavené.
 const disk = createDisk();
+const sluzba = createSluzba();   // číslo služby poskytovatele pro náramky SOS (jhn-apps)
 if (!disk.nastaveno) console.error('[famicura-tapo] Nahrávky na Google Disk nejsou nastavené (JHN_APPS_TOKEN, FAMICURA_KAMERA_KLIC) – spusťte ./deploy/vps-env.sh.');
 // Úložiště nahrávek na serveru: šifrované soubory v DATA_DIR/nahravky (klíč NAHRAVKY_KLIC). Pojistka disku: NAHRAVKY_MIN_VOLNE_GB (výchozí 5).
 const uloziste = createUloziste({ dir: path.join(process.env.DATA_DIR || path.join(ROOT, 'data'), 'nahravky') });
@@ -101,10 +103,10 @@ const ptz = createPtz({ kamery: nactiKamery });
 // Náramky a přívěsky SOS (ReachFar V48 a další s protokolem hodinek) se připojují mobilními daty přímo sem: TCP port NARAMKY_PORT (výchozí 5093, 0 = vypnuto).
 const { createNaramky } = await import('./src/naramky.mjs');
 const NARAMKY_PORT = process.env.NARAMKY_PORT === undefined ? 5093 : Number(process.env.NARAMKY_PORT) || 0;
-const naramky = pdp.nastaveno && NARAMKY_PORT > 0 ? createNaramky({ najemci, kamery: kameryTenanty, port: NARAMKY_PORT }) : null;
+const naramky = pdp.nastaveno && NARAMKY_PORT > 0 ? createNaramky({ najemci, kamery: kameryTenanty, port: NARAMKY_PORT, sluzba }) : null;
 if (naramky) naramky.start().then((p) => console.log(`[famicura-tapo] náramky a přívěsky: poslouchám na TCP ${p}`)).catch((e) => console.error('[famicura-tapo] náramky:', e.message));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { naramky?.stop().catch(() => {}); });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik, naramky });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik, naramky, sluzba });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

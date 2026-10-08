@@ -5,6 +5,25 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.19 · 8. 10. 2026 · číslo služby z Péče doma ve slotu SOS
+
+- **Slot SOS může být „číslo služby (Péče doma)“** místo pevného čísla
+  (hodnota `sluzba` v `Naramek.sos`). Server ho dosadí z Péče doma plus
+  (`SLUZBA_TELEFON` v `A_MSPPP_Nastaveni` tenanta), jinak z Péče doma
+  (`providers.contact_phone` poskytovatele, na kterého tenant ukazuje přes
+  `Tenants.FamicuraProviderID`). Číslo zná aplikace
+  `pecedomaplus-sluzba-telefon` na jhn-apps (klíč `FAMICURA_KAMERA_KLIC`,
+  stejně jako Google Disk); server kamer ji volá přes `src/sluzba.mjs`
+  (cache 10 min, při výpadku poslední známé číslo).
+- **Automatická změna**: server každých 10 minut porovná číslo služby
+  s naposledy poslanými čísly (`Naramek.sosOdeslaneCisla`) a při změně pošle
+  SOS1–SOS3 do náramku znovu (log „číslo služby se změnilo“).
+- `GET /api/naramek/sluzba-telefon` (poskytovatel) ukáže aktuální číslo,
+  zdroj a poskytovatele; v záložce Náramek je pod formulářem čísel SOS.
+  Stav u formuláře uvádí skutečně poslaná čísla.
+- Nasazení: nejdřív jhn-apps z repozitáře WEB-PeceDomaPlus
+  (`./deploy-jhn-apps.sh`), pak tento server.
+
 ## 3.18 · 8. 10. 2026 · čísla SOS náramku z dispečinku
 
 - **Čísla SOS** (až tři) v záložce Náramek: uloží se ke kameře (akce
