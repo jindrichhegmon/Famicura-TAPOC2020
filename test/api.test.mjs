@@ -897,7 +897,12 @@ test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený ná
   r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'tep' } }));
   assert.equal(r.status, 200); assert.equal((await r.json()).obsah, 'hrtstart,1');
   assert.deepEqual(posl[0], ['9705357211', 'tep', '']);
+  // vypnutí jen na heslo hlavní aplikace: bez hesla a se špatným 401 (nic se neposlalo), se správným 200
   r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'vypnout' } }));
+  assert.equal(r.status, 401); assert.match((await r.json()).error, /heslo hlavní aplikace/);
+  r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'vypnout', heslo: 'spatne' } }));
+  assert.equal(r.status, 401); assert.ok(!posl.some(([, n]) => n === 'vypnout'), 'bez správného hesla se POWEROFF neposílá');
+  r = await h(req('POST', '/api/naramek/prikaz', { cookies: cookie(), body: { kamera: 'tapoc2020', prikaz: 'vypnout', heslo: 'spravne-heslo' } }));
   assert.equal(r.status, 200);
   const st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
   assert.match(st.events[0].text, /poslán příkaz POWEROFF/);

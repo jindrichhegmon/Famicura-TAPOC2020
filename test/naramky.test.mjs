@@ -174,6 +174,8 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     // tlak/kyslík/teplota: napřed hrtstart,1 (zapne snímač V48), po prodlevě vlastní příkaz
     k.prijato(); assert.deepEqual(await n.prikaz(ID, 'tlak'), { ok: true, obsah: 'bphrt', predtim: 'hrtstart,1' });
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*000A*hrtstart,1][3G*${ID}*0005*bphrt]`)), 'před bphrt jde hrtstart,1');
+    k.prijato(); assert.equal((await n.prikaz(ID, 'teplota')).obsah, 'bodytemp2');
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0009*bodytemp2]`)), 'teplota = bodytemp2 (btemp2 je jen hlášení)');
     await n.prikaz(ID, 'vypnout');
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0008*POWEROFF]`)));
     await assert.rejects(() => n.prikaz(ID, 'neco'), /Neznámý příkaz/);

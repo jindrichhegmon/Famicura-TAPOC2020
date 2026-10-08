@@ -29,7 +29,8 @@ const OZVANI_MS = 5 * 60 * 1000; // ozvání bez změny baterie se zapisuje nejv
 const CACHE_MS = 60 * 1000;      // přiřazení ID → kamera se hledá znovu po minutě
 const MERENI_MS = 60 * 60 * 1000; // řádek s měřením do historie nejvýš jednou za hodinu
 /** Příkazy serveru náramku (protokol hodinek / SeTracker; V48 dtto): jedno měření, poloha, vypnutí. */
-export const PRIKAZY = { tep: 'hrtstart,1', tlak: 'bphrt', kyslik: 'oxygen', teplota: 'btemp2', poloha: 'CR', vypnout: 'POWEROFF' };
+// teplota: příkaz k okamžitému změření je bodytemp2 (Beesure/SeTracker); btemp2 je jen rámec, kterým náramek teplotu hlásí.
+export const PRIKAZY = { tep: 'hrtstart,1', tlak: 'bphrt', kyslik: 'oxygen', teplota: 'bodytemp2', poloha: 'CR', vypnout: 'POWEROFF' };
 
 /* ---------- rámce ---------- */
 
@@ -271,7 +272,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       log.log(`[naramky] ${id} ← příkaz ${co}`);
     };
     // Měření tlaku, kyslíku a teploty vrací ReachFar V48 jen tehdy, když mu těsně předtím přišlo hrtstart,1
-    // (zapne snímač); samotné bphrt/oxygen/btemp2 nechá bez odpovědi. Proto se posílá dvojice.
+    // (zapne snímač); samotné bphrt/oxygen nechá bez odpovědi. Proto se posílá dvojice.
     const predtim = ['tlak', 'kyslik', 'teplota'].includes(nazev) ? PRIKAZY.tep : null;
     if (predtim) { await posli(predtim); await new Promise((r) => setTimeout(r, prodlevaMs)); }
     await posli(obsah);

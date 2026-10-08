@@ -532,7 +532,7 @@ function renderDetail(rebuild = false) {
         </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <p id="dnaramekInfo"></p>
         <div class="mapa hide" id="dnaramekMapa"></div>
-        <div class="akce"><button type="button" class="sm" data-nprikaz="tlak">Změřit tep a tlak</button><button type="button" class="sm" data-nprikaz="kyslik">Změřit kyslík</button><button type="button" class="sm" data-nprikaz="teplota">Změřit teplotu</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm sec" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
+        <div class="akce"><button type="button" class="sm" data-nprikaz="tlak">Změřit tep a tlak</button><button type="button" class="sm" data-nprikaz="kyslik">Změřit kyslík</button><button type="button" class="sm" data-nprikaz="teplota">Změřit teplotu</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label>${['tlak', 'kyslik', 'teplota'].map((k) => `<label class="small"><input type="checkbox" class="nauto" data-k="${k}" ${p.naramek?.auto?.[k] ? 'checked' : ''}> ${({ tlak: 'tep a tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]}</label>`).join('')}<button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
         <div id="dnaramekMereni"></div>
@@ -605,15 +605,24 @@ function renderDetail(rebuild = false) {
     };
     // příkazy náramku (změřit, poloha, vypnout, vlastní) a automatické měření
     const nstav = d.querySelector('#dnaramekPrikazStav');
-    const poslatPrikaz = async (prikaz, vlastni) => {
+    const poslatPrikaz = async (prikaz, vlastni, heslo) => {
       nstav.textContent = 'posílám…';
       try {
-        const r = await post('/api/naramek/prikaz', { kamera: p.id, prikaz, vlastni });
+        const r = await post('/api/naramek/prikaz', { kamera: p.id, prikaz, vlastni, heslo });
         nstav.textContent = `odesláno (${r.predtim ? r.predtim + " + " : ""}${r.obsah}); výsledek měření dorazí do minuty`;
         toast(prikaz === 'vypnout' ? 'Příkaz k vypnutí odeslán.' : 'Příkaz odeslán náramku.');
       } catch (e) { nstav.textContent = ''; toast(`Náramek: ${e.message}`, 'crit'); }
     };
-    d.querySelectorAll('[data-nprikaz]').forEach((b) => { b.onclick = () => { if (b.dataset.nprikaz === 'vypnout' && !confirm('Vypnout náramek? Zapne se zase jen tlačítkem na náramku.')) return; poslatPrikaz(b.dataset.nprikaz); }; });
+    d.querySelectorAll('[data-nprikaz]').forEach((b) => {
+      b.onclick = () => {
+        if (b.dataset.nprikaz !== 'vypnout') return poslatPrikaz(b.dataset.nprikaz);
+        // vypnutí: zapne se zase jen tlačítkem na náramku, proto jen na heslo hlavní aplikace (ověřuje server)
+        const heslo = prompt('Vypnout náramek? Zapne se zase jen tlačítkem na náramku.\nZadejte heslo hlavní aplikace Famicura:');
+        if (heslo === null) return;
+        if (!heslo) { toast('Bez hesla hlavní aplikace se náramek nevypne.', 'crit'); return; }
+        poslatPrikaz('vypnout', undefined, heslo);
+      };
+    });
     d.querySelector('#dnaramekAuto').onsubmit = async (e) => {
       e.preventDefault();
       const auto = { min: Number(d.querySelector('#dnaramekAutoMin').value) || 0 };

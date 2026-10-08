@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.14 · 8. 10. 2026 · teplota bodytemp2, vypnutí náramku na heslo
+
+- **Změřit teplotu posílá `bodytemp2`** (Beesure/SeTracker: příkaz k okamžitému
+  měření); `btemp2` je jen rámec, kterým náramek teplotu hlásí, a jako příkaz
+  ho V48 ignoroval.
+- **Vypnout náramek** je červené tlačítko a chce **heslo hlavní aplikace
+  Famicura** (`FAMICURA_PASSWORD`); `POST /api/naramek/prikaz` s `vypnout`
+  bez správného `heslo` vrací 401 a nic neposílá, pokusy brzdí stejný limiter
+  jako přihlášení (429).
+- Testy: `bodytemp2` do spojení, vypnutí bez hesla / se špatným heslem 401,
+  se správným 200.
+
 ## 3.13 · 8. 10. 2026 · tep a tlak jedním tlačítkem, odkaz na mapu u poplachu
 
 - **Změřit tep a tlak** je jedno tlačítko (`bphrt`): ReachFar V48 příkaz

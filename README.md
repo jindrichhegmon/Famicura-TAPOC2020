@@ -99,17 +99,19 @@ poplach z téhož zařízení do minuty se počítá jednou. Neznámé ID server
 potvrdí a zapíše do logu (`[naramky] neznámý přívěsek …`), nic nezakládá.
 
 Záložka Náramek umí i **příkazy náramku** (jen poskytovatel, `POST
-/api/naramek/prikaz`): Změřit tep (`hrtstart,1`), tlak (`bphrt`), kyslík
-(`oxygen`), teplotu (`btemp2`), Zjistit polohu (`CR`), Vypnout náramek
-(`POWEROFF`, zapisuje se do historie) a vlastní příkaz pro ladění modelu
-(písmena, číslice, čárky; do 60 znaků, zapisuje se do historie). Příkaz jde
+/api/naramek/prikaz`): Změřit tep a tlak (`bphrt`), kyslík (`oxygen`),
+teplotu (`bodytemp2`) – před každým měřením jde `hrtstart,1`, které zapne
+snímač (V48 jinak neodpoví) –, Zjistit polohu (`CR`) a červené Vypnout
+náramek (`POWEROFF`, jen na heslo hlavní aplikace `FAMICURA_PASSWORD`,
+zapisuje se do historie). Vlastní příkaz (`prikaz: 'vlastni'`, písmena,
+číslice, čárky; do 60 znaků) zůstává v API pro ladění modelu. Příkaz jde
 jen do právě připojeného náramku (jinak 409), ve stejném rámci
 `[3G*ID*DÉLKA*příkaz]`. **Automatické měření** (akce `setNaramekAuto`,
 `Naramek.auto`: interval v minutách a veličiny): server každou minutu
 zkontroluje připojené náramky a po uplynutí intervalu pošle zvolená měření za
 sebou. Názvy `hrtstart,1`, `CR`, `UPLOAD`, `POWEROFF` jsou z dokumentace
-protokolu SeTracker/Beesure; `bphrt`, `oxygen`, `btemp2` jsou názvy, pod
-kterými V48 hodnoty posílá, a jako příkazy je ověřte v logu (náramek příkaz
+protokolu SeTracker/Beesure; `bphrt` a `oxygen` jako příkazy V48 přijímá
+(ověřeno v logu), `btemp2` je jen hlášení teploty (náramek příkaz
 po přijetí zopakuje jako potvrzení). Mapa poslední polohy je z dlaždic
 OpenStreetMap (CSP `img-src tile.openstreetmap.org`), bez vlastního klíče.
 

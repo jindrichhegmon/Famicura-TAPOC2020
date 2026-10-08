@@ -427,12 +427,19 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         await ptz.pohni(kamera, String(smer || ''), { rychlost: Number(rychlost) || 0.5, ms: Number(ms) || 400 });
         return json({ ok: true });
       }
-      // Příkaz náramku/přívěsku (jen poskytovatel): změřit tep / tlak / kyslík / teplotu, zjistit polohu, vypnout; vlastní text pro ladění modelu.
+      // Příkaz náramku/přívěsku (jen poskytovatel): změřit tep / tlak / kyslík / teplotu, zjistit polohu, vypnout (jen na heslo hlavní aplikace); vlastní text pro ladění modelu.
       if (m === 'POST' && path === '/api/naramek/prikaz') {
         if (rodina) return jenPoskytovatel();
-        const { kamera, prikaz, vlastni } = await telo(req);
+        const { kamera, prikaz, vlastni, heslo } = await telo(req);
         if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         if (!naramky) return json({ ok: false, error: 'Příjem náramků není na serveru zapnutý (NARAMKY_PORT).' }, 503);
+        if (prikaz === 'vypnout') {   // vypnutí jen na heslo hlavní aplikace (FAMICURA_PASSWORD), se stejnou brzdou pokusů jako přihlášení
+          const ip = klientIp(req);
+          const cekat = limiter.blokovano(ip);
+          if (cekat) return json({ ok: false, error: `Příliš mnoho pokusů. Zkuste to za ${Math.ceil(cekat / 60)} min.` }, 429);
+          if (typeof heslo !== 'string' || !hesloSedi(heslo)) { limiter.chyba(ip); return json({ ok: false, error: 'Vypnutí náramku jde jen na heslo hlavní aplikace Famicura; heslo nesedí.' }, 401); }
+          limiter.uspech(ip);
+        }
         const st = await stavTenanta();
         const p = (await st.stav()).state.patients.find((x) => x.id === kamera);
         if (!p?.naramek?.id) return json({ ok: false, error: 'Ke kameře není přiřazen náramek.' }, 400);
