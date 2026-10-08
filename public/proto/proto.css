@@ -480,9 +480,6 @@ html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
 .mereni{width:100%;border-collapse:collapse;font-size:.9rem}
 .mereni th,.mereni td{padding:4px 8px;text-align:left;border-bottom:1px solid var(--soft);white-space:nowrap}
 .mereni th{font-weight:600;color:var(--muted,#5b6b78)}
-.prikazy td.wrap{white-space:normal}
-.prikazy a{text-decoration:none}
-.prikazy code{background:var(--soft);padding:1px 5px;border-radius:4px}
 /* záložka Náramek: mapa poslední polohy (dlaždice OpenStreetMap) */
 .mapa{position:relative;width:100%;height:320px;overflow:hidden;border-radius:12px;background:#e8eef2;margin:8px 0}
 .mapa img{position:absolute;width:256px;height:256px;max-width:none}

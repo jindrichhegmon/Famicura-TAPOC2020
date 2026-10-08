@@ -162,7 +162,7 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
   const tb = createMockTabulky();
   const { s, kamery, now, posun } = tenant(tb);
   await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
-  const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho });
+  const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho, prodlevaMs: 20 });
   const port = await n.start({ autoMs: 0 });
   try {
     await assert.rejects(() => n.prikaz(ID, 'tep'), /není připojený/);
@@ -171,6 +171,9 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     assert.ok(await cekej(() => n.pripojen(ID)), 'po prvním rámci je náramek připojený');
     assert.deepEqual(await n.prikaz(ID, 'tep'), { ok: true, obsah: 'hrtstart,1' });
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*000A*hrtstart,1]`)), 'příkaz dorazil do spojení náramku');
+    // tlak/kyslík/teplota: napřed hrtstart,1 (zapne snímač V48), po prodlevě vlastní příkaz
+    k.prijato(); assert.deepEqual(await n.prikaz(ID, 'tlak'), { ok: true, obsah: 'bphrt', predtim: 'hrtstart,1' });
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*000A*hrtstart,1][3G*${ID}*0005*bphrt]`)), 'před bphrt jde hrtstart,1');
     await n.prikaz(ID, 'vypnout');
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0008*POWEROFF]`)));
     await assert.rejects(() => n.prikaz(ID, 'neco'), /Neznámý příkaz/);

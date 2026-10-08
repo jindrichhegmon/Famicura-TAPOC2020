@@ -5,6 +5,22 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.13 · 8. 10. 2026 · tep a tlak jedním tlačítkem, odkaz na mapu u poplachu
+
+- **Změřit tep a tlak** je jedno tlačítko (`bphrt`): ReachFar V48 příkaz
+  `hrtstart,1` přijme, ale hodnotu tepu neposílá; `bphrt` vrací tlak i tep.
+  V automatickém měření je proto jedna volba „tep a tlak“. `btemp2` (teplota)
+  V48 neodpovídá – tlačítko zůstává pro jiné modely.
+- **Před měřením tlaku, kyslíku a teploty server pošle `hrtstart,1`** a po
+  1,5 s vlastní příkaz (z logu: V48 odpovídá na `bphrt`/`oxygen` jen v sekvenci
+  za `hrtstart,1`, samotné nechá bez odpovědi); tlačítka tak dávají výsledek
+  stejně jako automatické měření. Odpověď API nese `predtim`.
+- **Odkaz „mapa“** místo surové adresy Google Map v textu poplachu z náramku
+  (záložka Náramek, fronta alertů, historie, aplikace rodiny); otevírá se
+  v novém okně (`escOdkazy` v sim.js).
+- Pole pro vlastní příkaz a tabulka příkazů (3.12) v dispečinku zrušené;
+  `POST /api/naramek/prikaz` s `vlastni` zůstává pro ladění.
+
 ## 3.12 · 8. 10. 2026 · seznam příkazů náramku
 
 - **Tabulka příkazů** v záložce Náramek pod polem pro vlastní příkaz: bphrt,

@@ -175,6 +175,8 @@ pripojit();
 export const fmtT = (ms) => new Date(ms).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
 export const fmtDT = (ms) => new Date(ms).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** Jako esc, ale odkaz na mapu (maps.google.com/?q=…) v textu události se ukáže jako „mapa“ otevírající se v novém okně. */
+export const escOdkazy = (v) => esc(v).replace(/https:\/\/maps\.google\.com\/\?q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m) => `<a href="${m}" target="_blank" rel="noopener">mapa ↗</a>`);
 export function eventText(e) {
   if (e.kind === 'consent' || e.kind === 'poznamka') return e.text;
   const k = KINDS[e.kind];

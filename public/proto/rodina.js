@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
+import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina dostane své kamery ze serveru
@@ -409,7 +409,7 @@ function render() {
     const tail = e.state && e.state !== 'uzavřen' && k ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : '';
     const rec = e.nahravka && e.nahravka.url ? ` · <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" class="small">🎞 nahrávka</a>` : e.nahravka && e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? ` · <a href="#" class="small" data-prehrat="${esc(e.nahravka.id)}">🎞 nahrávka${e.nahravka.delkaS ? ' ' + e.nahravka.delkaS + ' s' : ''}${e.nahravka.zamek ? ' 🔒' : ''}</a>` : '';
     const cls = e.kind === 'consent' ? 'consent' : urovenUdalosti(e);
-    return `<li class="${cls}"><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge} ${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''}${tail}${rec}</span></li>`;
+    return `<li class="${cls}"><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge} ${escOdkazy(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''}${tail}${rec}</span></li>`;
   }).join('') || '<li class="muted">Zatím nic.</li>');
   prehravaniOvladani($('history'));
   nactiNahravky();

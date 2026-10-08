@@ -438,7 +438,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!p?.naramek?.id) return json({ ok: false, error: 'Ke kameře není přiřazen náramek.' }, 400);
         const r = await naramky.prikaz(p.naramek.id, String(prikaz || ''), { vlastni: typeof vlastni === 'string' ? vlastni : '' });
         if (prikaz === 'vypnout' || prikaz === 'vlastni') await st.proved('poznamka', [kamera, `Náramek ${p.naramek.id}: poslán příkaz ${r.obsah}.`, ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce')]).catch(() => {});
-        return json({ ok: true, obsah: r.obsah });
+        return json({ ok: true, obsah: r.obsah, ...(r.predtim ? { predtim: r.predtim } : {}) });
       }
 
       // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.

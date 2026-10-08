@@ -155,7 +155,7 @@ export const jePolohovy = (typ) => /^(UD|AL|WT)/.test(typ);
  *   najemci.pro(tenant) → stav tenanta (stav(), proved(), naramek())
  *   kamery()            → kamery ze serveru (kvůli seznamu tenantů)
  */
-export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', now = Date.now, log = console } = {}) {
+export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', now = Date.now, log = console, prodlevaMs = 1500 } = {}) {
   const spojeni = new Set();
   const aktivni = new Map();       // id přívěsku → { socket, vyrobce, index, cas } – kudy mu poslat příkaz
   const posledniAuto = new Map();  // id → čas posledního automatického měření
@@ -266,9 +266,16 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
     if (!obsah) throw chyba('Neznámý příkaz náramku (tep, tlak, kyslik, teplota, poloha, vypnout, vlastni).', 400);
     const a = aktivni.get(String(id));
     if (!a || a.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
-    await new Promise((res, rej) => a.socket.write(slozRamec({ vyrobce: a.vyrobce, id: String(id), index: a.index }, obsah), 'latin1', (e) => (e ? rej(e) : res())));
-    log.log(`[naramky] ${id} ← příkaz ${obsah}`);
-    return { ok: true, obsah };
+    const posli = async (co) => {
+      await new Promise((res, rej) => a.socket.write(slozRamec({ vyrobce: a.vyrobce, id: String(id), index: a.index }, co), 'latin1', (e) => (e ? rej(e) : res())));
+      log.log(`[naramky] ${id} ← příkaz ${co}`);
+    };
+    // Měření tlaku, kyslíku a teploty vrací ReachFar V48 jen tehdy, když mu těsně předtím přišlo hrtstart,1
+    // (zapne snímač); samotné bphrt/oxygen/btemp2 nechá bez odpovědi. Proto se posílá dvojice.
+    const predtim = ['tlak', 'kyslik', 'teplota'].includes(nazev) ? PRIKAZY.tep : null;
+    if (predtim) { await posli(predtim); await new Promise((r) => setTimeout(r, prodlevaMs)); }
+    await posli(obsah);
+    return { ok: true, obsah, ...(predtim ? { predtim } : {}) };
   }
 
   /** Automatické měření: u náramků s nastavením auto (min > 0) pošle zvolená měření, když uplynul interval a náramek je připojený. */
@@ -286,7 +293,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
         for (const k of ['tep', 'tlak', 'kyslik', 'teplota']) {
           if (!auto[k]) continue;
           try { await prikaz(n.id, k); posl++; } catch (e) { log.error('[naramky] automatické měření', n.id, k, e.message); }
-          await new Promise((r) => setTimeout(r, 1500));   // měření se nemají překrývat
+          await new Promise((r) => setTimeout(r, prodlevaMs));   // měření se nemají překrývat
         }
       }
     }

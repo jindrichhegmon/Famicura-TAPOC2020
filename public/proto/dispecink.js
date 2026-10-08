@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -474,7 +474,7 @@ function renderQueue() {
       : e.state === 'převzat' ? `<button class="sm" data-solve="${e.id}">Řeším</button>`
       : `<select class="sm"><option>planý poplach</option><option>vyřešeno na dálku</option><option>výjezd pečovatele</option><option>záchranná služba</option><option>předáno rodině</option></select><button class="sm ok" data-close="${e.id}">Uzavřít</button>`;
     return `<li><div class="head"><span><span class="badge ${k.level}">${esc(LEVEL_LABEL[k.level])}</span> <strong>${esc(p?.name)}</strong></span><span class="small muted">${fmtT(e.at)} · ${agoSpan(e.at)}</span></div>
-      <div class="small">${esc(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''} · <em>${esc(e.state)}</em>${e.by ? ' – ' + esc(e.by) : ''}${e.escalated ? ' · <span class="esc">eskalováno</span>' : ''}</div>
+      <div class="small">${escOdkazy(eventText(e))}${e.real ? ' <span class="badge ok">skutečná</span>' : ''} · <em>${esc(e.state)}</em>${e.by ? ' – ' + esc(e.by) : ''}${e.escalated ? ' · <span class="esc">eskalováno</span>' : ''}</div>
       <div class="row">${btn}<button class="sm sec" data-open="${e.patientId}">Otevřít</button></div></li>`;
   }).join('') || '<li class="muted">Žádný otevřený alert. Klid.</li>';
   // hromadné uzavření: tlačítko v hlavičce fronty (jen když je co uzavřít)
@@ -532,33 +532,8 @@ function renderDetail(rebuild = false) {
         </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <p id="dnaramekInfo"></p>
         <div class="mapa hide" id="dnaramekMapa"></div>
-        <div class="akce"><button type="button" class="sm" data-nprikaz="tep">Změřit tep</button><button type="button" class="sm" data-nprikaz="tlak">Změřit tlak</button><button type="button" class="sm" data-nprikaz="kyslik">Změřit kyslík</button><button type="button" class="sm" data-nprikaz="teplota">Změřit teplotu</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm sec" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
-        <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label>${['tep', 'tlak', 'kyslik', 'teplota'].map((k) => `<label class="small"><input type="checkbox" class="nauto" data-k="${k}" ${p.naramek?.auto?.[k] ? 'checked' : ''}> ${({ tep: 'tep', tlak: 'tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]}</label>`).join('')}<button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
-        <form class="kontakty" id="dnaramekVlastni"><div class="akce"><label class="small">příkaz pro náramek (pokročilé, podle dokumentace modelu) <input type="text" id="dnaramekVlastniText" maxlength="60" placeholder="např. hrtstart,1"></label><button class="sm sec" type="submit">Odeslat</button></div></form>
-        <p class="small muted">Příkazy, které náramek (protokol hodinek, ReachFar V48) přijímá – klepnutím se vloží do pole; ✔ = ověřeno u V48, ? = podle dokumentace, zatím neověřeno. Náramek přijatý příkaz zopakuje, vidíte to v logu serveru.</p>
-        <table class="mereni prikazy"><thead><tr><th>příkaz</th><th>co udělá</th><th></th></tr></thead><tbody>${[
-          ['bphrt', 'změří krevní tlak a tep (výsledek do tabulky Měření zdraví)', '✔'],
-          ['oxygen', 'změří kyslík v krvi', '✔'],
-          ['hrtstart,1', 'jedno měření tepu (hodnota přijde jako rámec heart)', '✔ přijato'],
-          ['hrtstart,300', 'měřit tep opakovaně každých 300 s; hrtstart,0 opakování vypne', '?'],
-          ['btemp2', 'změří teplotu', '?'],
-          ['CR', 'pošle polohu hned', '?'],
-          ['UPLOAD,600', 'interval hlášení polohy v sekundách (600 = 10 min)', '?'],
-          ['FIND', 'náramek zazvoní (hledání)', '?'],
-          ['CALL,+420', 'náramek zavolá na číslo (doplňte číslo)', '?'],
-          ['MONITOR,+420', 'náramek zavolá na číslo bez zvonění (poslech okolí)', '?'],
-          ['SOS1,+420', 'číslo, které náramek volá při SOS (SOS2, SOS3 další)', '?'],
-          ['CENTER,+420', 'hlavní číslo (centrum), ze kterého náramek bere příkazy', '?'],
-          ['LOWBAT,1', 'hlásit slabou baterii (0 vypne)', '?'],
-          ['REMOVE,1', 'hlásit sejmutí náramku (0 vypne)', '?'],
-          ['PEDO,1', 'krokoměr zapnout (0 vypne)', '?'],
-          ['LZ,0,1', 'jazyk (0 angličtina) a časové pásmo (1 = střední Evropa, v létě 2)', '?'],
-          ['VERNO', 'verze firmware', '?'],
-          ['TS', 'stav zařízení (IMEI, verze, baterie…)', '?'],
-          ['RESET', 'restart náramku', '?'],
-          ['POWEROFF', 'vypne náramek (zapne se jen tlačítkem)', '✔'],
-        ].map(([k, t, o]) => `<tr><td><a href="#" data-nvzor="${k}"><code>${k}</code></a></td><td class="wrap">${t}</td><td>${o}</td></tr>`).join('')}</tbody></table>
-        <p class="small muted">Neposílejte IP (adresa serveru), PW (heslo) ani FACTORY – náramek by se od serveru odpojil nebo přišel o nastavení.</p>
+        <div class="akce"><button type="button" class="sm" data-nprikaz="tlak">Změřit tep a tlak</button><button type="button" class="sm" data-nprikaz="kyslik">Změřit kyslík</button><button type="button" class="sm" data-nprikaz="teplota">Změřit teplotu</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm sec" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
+        <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label>${['tlak', 'kyslik', 'teplota'].map((k) => `<label class="small"><input type="checkbox" class="nauto" data-k="${k}" ${p.naramek?.auto?.[k] ? 'checked' : ''}> ${({ tlak: 'tep a tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]}</label>`).join('')}<button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
         <div id="dnaramekMereni"></div>
         </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
@@ -634,13 +609,11 @@ function renderDetail(rebuild = false) {
       nstav.textContent = 'posílám…';
       try {
         const r = await post('/api/naramek/prikaz', { kamera: p.id, prikaz, vlastni });
-        nstav.textContent = `odesláno (${r.obsah}); výsledek měření dorazí do minuty`;
+        nstav.textContent = `odesláno (${r.predtim ? r.predtim + " + " : ""}${r.obsah}); výsledek měření dorazí do minuty`;
         toast(prikaz === 'vypnout' ? 'Příkaz k vypnutí odeslán.' : 'Příkaz odeslán náramku.');
       } catch (e) { nstav.textContent = ''; toast(`Náramek: ${e.message}`, 'crit'); }
     };
     d.querySelectorAll('[data-nprikaz]').forEach((b) => { b.onclick = () => { if (b.dataset.nprikaz === 'vypnout' && !confirm('Vypnout náramek? Zapne se zase jen tlačítkem na náramku.')) return; poslatPrikaz(b.dataset.nprikaz); }; });
-    d.querySelector('#dnaramekVlastni').onsubmit = (e) => { e.preventDefault(); const t = d.querySelector('#dnaramekVlastniText').value.trim(); if (t) poslatPrikaz('vlastni', t); };
-    d.querySelectorAll('[data-nvzor]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); const i = d.querySelector('#dnaramekVlastniText'); i.value = a.dataset.nvzor; i.focus(); if (/\+420$/.test(i.value)) i.setSelectionRange(i.value.length, i.value.length); }; });
     d.querySelector('#dnaramekAuto').onsubmit = async (e) => {
       e.preventDefault();
       const auto = { min: Number(d.querySelector('#dnaramekAutoMin').value) || 0 };
@@ -735,7 +708,7 @@ function renderDetail(rebuild = false) {
       : '<p class="small muted">Zatím žádné měření.</p>');
     const popl = sim.state.events.filter((e) => e.patientId === p.id && ['sos', 'devfall', 'battery'].includes(e.kind)).slice(0, 20);
     setHtml(d.querySelector('#dnaramekPoplachy'), popl.length
-      ? popl.map((e) => `<li><span class="badge ${esc(urovenUdalosti(e) || 'info')}">${esc(KINDS[e.kind]?.source || 'náramek')}</span><span class="when">${esc(fmtDT(e.at))}</span><span class="grow">${esc(eventText(e))}${e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''}</span></li>`).join('')
+      ? popl.map((e) => `<li><span class="badge ${esc(urovenUdalosti(e) || 'info')}">${esc(KINDS[e.kind]?.source || 'náramek')}</span><span class="when">${esc(fmtDT(e.at))}</span><span class="grow">${escOdkazy(eventText(e))}${e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''}</span></li>`).join('')
       : '<li class="muted">Zatím žádný poplach z náramku.</li>');
     if (n?.id && !d.querySelector('#dnaramek').contains(document.activeElement)) d.querySelector('#dnaramekId').value = n.id;
   }
@@ -825,7 +798,7 @@ function renderHistorie(d, p, s) {
     const u = e.upozorneni;
     const upoz = u ? [u.sms?.prijemci ? `📱 ${u.sms.odeslano}/${u.sms.prijemci}` : '', u.mail?.prijemci ? `✉ ${u.mail.odeslano}/${u.mail.prijemci}` : ''].filter(Boolean).join(' ') : '';
     const chyba = u && (u.sms?.chyba || u.mail?.chyba);
-    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${esc(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}${upoz ? ` · <span class="${chyba ? 'bad' : 'muted'}" title="${esc(chyba || 'odeslaná upozornění SMS / e-mail')}">${upoz}${chyba ? ' ⚠' : ''}</span>` : ''}${nahr}</span></li>`;
+    return `<li><span class="when">${fmtDT(e.at)}</span><span class="grow">${badge}${escOdkazy(eventText(e))}${e.kind === 'poznamka' ? ` · <span class="muted">${esc(e.by)}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : e.state && e.state !== 'uzavřen' && k ? ` · <em>${esc(e.state)}</em>` : ''}${upoz ? ` · <span class="${chyba ? 'bad' : 'muted'}" title="${esc(chyba || 'odeslaná upozornění SMS / e-mail')}">${upoz}${chyba ? ' ⚠' : ''}</span>` : ''}${nahr}</span></li>`;
   }).join('') || `<li class="muted">${dfiltr === 'all' ? 'Zatím žádná událost.' : 'Mezi posledními událostmi není žádná tohoto typu – zkuste zvolit období.'}</li>`);
 }
 
