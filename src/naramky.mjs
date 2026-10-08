@@ -89,6 +89,8 @@ export function rozeberObsah(obsah) {
     const b = Number(pole[3]); if (Number.isFinite(b) && pole.length >= 4) out.baterie = b;
     return out;
   }
+  // některý firmware posílá nouzové tlačítko jako samostatný typ (SOS / sos) bez polohy
+  if (typ === 'SOS') { out.poplachy.push('sos'); return out; }
   if (typ === 'UD' || typ === 'UD2' || typ === 'AL' || typ === 'WT' || typ === 'UD_LTE') {
     // datum, čas, A/V, lat, N/S, lon, E/W, rychlost, kurz, výška, satelity, signál, baterie, kroky, převrácení, status
     const [datum, cas, platne, lat, ns, lon, ew, rychlost, , , , , baterie, , , status] = pole.slice(1);
@@ -159,6 +161,9 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   async function zpracuj(ramec, socket) {
     stat.prijato++; stat.posledni = now();
     const r = rozeberObsah(ramec.obsah);
+    // diagnostika: každý rámec jedním řádkem (u polohových typů bez souřadnic, u ostatních i obsah), ať jde doladit model
+    const sPolohou = r.typ === 'UD' || r.typ === 'UD2' || r.typ === 'AL' || r.typ === 'WT' || r.typ === 'UD_LTE';
+    log.log(`[naramky] ${ramec.id} ${r.typ}${ramec.index ? ' #' + ramec.index : ''} stav=${r.status === null ? '-' : r.status.toString(16).padStart(8, '0')} baterie=${r.baterie ?? '-'} poloha=${r.poloha ? 'ano' : 'ne'} poplachy=${r.poplachy.join(',') || '-'}${sPolohou ? '' : ' obsah=' + ramec.obsah.slice(0, 80)}`);
     // potvrzení: LK, AL, TKQ – jinak zařízení poplach opakuje a ozvání považuje za ztracené
     if (r.typ === 'LK' || r.typ === 'AL' || r.typ === 'TKQ' || r.typ === 'TKQ2') {
       try { socket.write(slozRamec(ramec, r.typ)); } catch { /* spojení už není */ }

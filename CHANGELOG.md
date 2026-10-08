@@ -23,6 +23,7 @@ dispečinku. Postup nové verze je v README, část „Verze“.
 - V Komunikaci je vidět poslední ozvání, baterie a odkaz na poslední polohu;
   `/api/health` má `naramky` (port, spojení, přijato, poplachy).
 - Rodina náramek přiřadit nemůže (403), jen poskytovatel.
+- Diagnostika: každý přijatý rámec jde do logu serveru jedním řádkem (`[naramky] ID TYP stav= baterie= poloha= poplachy=`, u polohových typů bez souřadnic); samostatný typ `SOS` se bere jako nouzové tlačítko.
 
 ## Nasazení · 8. 10. 2026 · další kamera za stejnou bránou
 
