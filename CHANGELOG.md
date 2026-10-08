@@ -5,6 +5,17 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## Nasazení · 8. 10. 2026 · další kamera za stejnou bránou
+
+- **`./deploy/wireguard-vps.sh <IP> --misto N --dalsi`**: další kamera na
+  Wi-Fi téhož Manga (nebo za týmž Raspberry Pi). Tunel na VPS pouštěl jen
+  adresu kamery z instalace (AllowedIPs peeru), druhá kamera byla ze serveru
+  nedosažitelná („go2rtc vrátil 500“, ping bez odpovědi). Nový
+  `deploy/wireguard/vps-dalsi-kamera.sh` přidá adresu do AllowedIPs místa
+  i do běžícího tunelu (`wg set`, cesta), bez nových klíčů a bez zásahu do
+  zařízení; skript vypíše pravidlo firewallu pro Mango. Kontrola „stejná
+  kamera na dvou místech“ počítá s více kamerami na místě. README 2d.
+
 ## 3.8 · 7. 10. 2026 · návrat kamery na původní záběr, deaktivace bez zamrznutí
 
 - **Po aktivaci se kamera vrací na záběr, který měla před deaktivací.** Server si

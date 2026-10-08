@@ -63,7 +63,7 @@ fi
 for f in "$MISTA"/*.kamera; do
   [ -s "$f" ] || continue
   n=$(basename "$f" .kamera); [ "$n" = "$MISTO" ] && continue
-  if [ "$(cat "$f")" = "$KAMERA" ] && [ "$REZIM" = linux ]; then log "Kameru $KAMERA už má místo $n. Druhé zařízení musí mít kameru na jiné adrese (v Mangu kameře zamkněte jinou IP, nebo Mangu dejte jinou síť, např. 192.168.9.1)."; exit 1; fi
+  if grep -qw "$KAMERA" "$f" && [ "$REZIM" = linux ]; then log "Kameru $KAMERA už má místo $n. Druhé zařízení musí mít kameru na jiné adrese (v Mangu kameře zamkněte jinou IP, nebo Mangu dejte jinou síť, např. 192.168.9.1)."; exit 1; fi
 done
 
 # Klíč zařízení vzniká tady, aby se celé nastavení dalo udělat jedním příkazem.

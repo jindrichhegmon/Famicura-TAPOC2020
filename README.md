@@ -687,8 +687,13 @@ nevypadne); stejné číslo znovu vydá tomu místu nový klíč.
    toho poskytovatele, místo, účet kamery. Dispečink poskytovatele kameru
    ukáže hned (`?tenant=<jeho ID>`).
 
-Více kamer na jednom místě (stejné Mango): jen `vps-kamera.sh` s další
-IP a ID; v Mangu přidejte pravidlo firewallu i pro její IP (krok 5 v 2c).
+Více kamer na jednom místě (stejné Mango): tunel na VPS pouští jen adresy
+kamer, které zná, takže další kameru nejdřív přidejte do tunelu
+(`./deploy/wireguard-vps.sh <IP další kamery> --misto N --dalsi`; klíče ani
+zařízení se nemění, jen [Peer] místa dostane další adresu), v Mangu přidejte
+pravidlo firewallu i pro její IP (příkaz skript vypíše; krok 5 v 2c) a pak
+`vps-kamera.sh` s její IP a jiným ID. Místo poznáte podle adresy v tunelu:
+`wg show wg-famicura` ukazuje u každého peeru `10.77.0.(N+1)`.
 Windows server jako brána dalšího místa: `--windows --misto N`, go2rtc pak
 chodí na `10.77.0.(N+1)`.
 
