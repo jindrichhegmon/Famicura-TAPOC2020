@@ -122,6 +122,9 @@ test('server náramků: ozvání se zapíše ke kameře, SOS a pád jdou do fron
     const z = (await s.stav()).state.patients[0].naramek.zdravi;
     assert.equal(z.tlakS, 122); assert.equal(z.tlakD, 75); assert.equal(z.tep, 73); assert.equal(z.spo2, 97);
     assert.equal((await s.stav()).state.events.filter((e) => e.kind === 'mereni').length, 1, 'jen jeden řádek měření za hodinu');
+    const vm = await s.vypisMereni({ kameraId: 'tapoc2020' });
+    assert.equal(vm.length, 3, 'každé hlášení je řádek v A_KAM_Mereni');
+    assert.ok(vm.some((r) => r.teplota === 36.6) && vm.some((r) => r.tlakS === 122 && r.tlakD === 75 && r.tep === 73) && vm.some((r) => r.spo2 === 97), 'teplota, tlak s tepem a kyslík každý ve svém řádku');
     assert.match((await s.stav()).state.events.find((e) => e.kind === 'mereni').text, /tep 73, tlak 122\/75/);
     await k.posli(ram('heart,71'));
     assert.ok(await cekej(async () => (await s.stav()).state.patients[0].naramek.zdravi?.tep === 71), 'tep se přepíše, ostatní zůstane');
@@ -174,6 +177,9 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     // tlak/kyslík/teplota: napřed hrtstart,1 (zapne snímač V48), po prodlevě vlastní příkaz
     k.prijato(); assert.deepEqual(await n.prikaz(ID, 'tlak'), { ok: true, obsah: 'bphrt', predtim: 'hrtstart,1' });
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*000A*hrtstart,1][3G*${ID}*0005*bphrt]`)), 'před bphrt jde hrtstart,1');
+    // Změřit zdraví: hrtstart,1 jen jednou, pak tlak, kyslík, teplota s prodlevou
+    k.prijato(); assert.deepEqual(await n.prikaz(ID, 'zdravi'), { ok: true, obsah: 'hrtstart,1 + bphrt + oxygen + bodytemp2' });
+    assert.ok(await cekej(() => k.prijato().endsWith(`[3G*${ID}*000A*hrtstart,1][3G*${ID}*0005*bphrt][3G*${ID}*0006*oxygen][3G*${ID}*0009*bodytemp2]`)), 'sada zdraví v pořadí, hrtstart,1 jen jednou');
     k.prijato(); assert.equal((await n.prikaz(ID, 'teplota')).obsah, 'bodytemp2');
     assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0009*bodytemp2]`)), 'teplota = bodytemp2 (btemp2 je jen hlášení)');
     await n.prikaz(ID, 'vypnout');
@@ -183,14 +189,15 @@ test('příkazy náramku: změřit tep → hrtstart,1 do spojení, vypnout → P
     assert.equal((await n.prikaz(ID, 'vlastni', { vlastni: 'hrtstart,300' })).obsah, 'hrtstart,300');
     // automatické měření: každých 10 min tep a tlak; první tik pošle hned, druhý až po intervalu
     await assert.rejects(() => s.proved('setNaramekAuto', ['tapoc2020', { min: 5000 }, 'x']), /0 \(vypnuto\) až 1440/);
-    await s.proved('setNaramekAuto', ['tapoc2020', { min: 10, tep: true, tlak: true }, 'Dispečer']);
-    assert.match((await s.stav()).state.events[0].text, /každých 10 min: tep, tlak/);
+    await s.proved('setNaramekAuto', ['tapoc2020', { min: 10, zdravi: true, tep: true, tlak: true }, 'Dispečer']);
+    assert.match((await s.stav()).state.events[0].text, /každých 10 min: zdraví \(tep, tlak, kyslík, teplota\)/);
     k.prijato(); const pred = k.prijato().length;
-    assert.equal(await n.tik(), 2);
-    assert.ok(await cekej(() => k.prijato().slice(pred).includes('hrtstart,1') && k.prijato().slice(pred).includes('*bphrt]')), 'tep i tlak odeslány');
+    assert.equal(await n.tik(), 1, 'zdraví = jedna sada, jednotlivé volby se neposílají zvlášť');
+    assert.ok(await cekej(() => k.prijato().slice(pred).includes('hrtstart,1') && k.prijato().slice(pred).includes('*bphrt]') && k.prijato().slice(pred).includes('*oxygen]') && k.prijato().slice(pred).includes('*bodytemp2]')), 'celá sada odeslána');
+    assert.equal((k.prijato().slice(pred).match(/hrtstart,1/g) || []).length, 1, 'hrtstart,1 jen jednou');
     assert.equal(await n.tik(), 0, 'před uplynutím intervalu nic');
     posun(11 * 60 * 1000);
-    assert.equal(await n.tik(), 2, 'po intervalu znovu');
+    assert.equal(await n.tik(), 1, 'po intervalu znovu');
     await s.proved('setNaramekAuto', ['tapoc2020', { min: 0 }, 'Dispečer']);
     posun(11 * 60 * 1000);
     assert.equal(await n.tik(), 0, 'vypnuto');

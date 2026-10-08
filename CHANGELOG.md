@@ -5,6 +5,25 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.15 · 8. 10. 2026 · měření zdraví: jedno tlačítko, stránkování, Excel
+
+- **Změřit zdraví (tep, tlak, kyslík, teplotu)** je jedno tlačítko: server pošle
+  `hrtstart,1` a pak s odstupem 1,5 s `bphrt`, `oxygen`, `bodytemp2`
+  (`prikaz: 'zdravi'`). V automatickém měření je jedno zatržítko „měřit
+  zdraví“ (`auto.zdravi`), které pošle celou sadu; staré volby tep/tlak/kyslík/
+  teplota zůstávají v datech a fungují, ale zatržítko zdraví má přednost.
+- **Tabulka A_KAM_Mereni**: každé hlášení náramku (tep, tlak, kyslík,
+  teplota) je trvale řádek s časem a ID náramku (dřív jen posledních 48
+  u kamery). `GET /api/naramek/mereni?kamera=…` (poskytovatel) vrací
+  nejnovějších až 2000, `&format=xlsx` sešit Excelu (list Měření: datum, čas,
+  tep, tlak horní/dolní, kyslík, teplota; list Info) až 10000 řádků.
+- **Stránkování** v záložce Náramek: na stránku 10 (výchozí), 20, 50, 100
+  (volba si pamatuje prohlížeč), tlačítka novější/starší, počet měření,
+  tlačítko **Stáhnout do Excelu**. Tabulka se načítá ze serveru jen když
+  přibylo měření.
+- Testy: sada zdraví v pořadí s jedním `hrtstart,1`, automatické měření jako
+  jedna sada, řádky v A_KAM_Mereni, API seznam + xlsx + 403 rodina + 404.
+
 ## 3.14 · 8. 10. 2026 · teplota bodytemp2, vypnutí náramku na heslo
 
 - **Změřit teplotu posílá `bodytemp2`** (Beesure/SeTracker: příkaz k okamžitému

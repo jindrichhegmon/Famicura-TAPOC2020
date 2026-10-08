@@ -341,10 +341,10 @@ const akce = {
     if (!auto || typeof auto !== 'object') throw chyba('Chybí nastavení měření.');
     const min = Number(auto.min);
     if (!Number.isInteger(min) || min < 0 || min > 1440) throw chyba('Interval měření: 0 (vypnuto) až 1440 minut.');
-    const nove = { min, tep: bool(auto.tep), tlak: bool(auto.tlak), kyslik: bool(auto.kyslik), teplota: bool(auto.teplota) };
+    const nove = { min, zdravi: bool(auto.zdravi), tep: bool(auto.tep), tlak: bool(auto.tlak), kyslik: bool(auto.kyslik), teplota: bool(auto.teplota) };
     if (JSON.stringify(p.naramek.auto || null) === JSON.stringify(nove)) return { zmena: false, vysledek: nove };
     p.naramek = { ...p.naramek, auto: nove };
-    const co = ['tep', 'tlak', 'kyslik', 'teplota'].filter((k) => nove[k]).map((k) => ({ tep: 'tep', tlak: 'tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]);
+    const co = ['zdravi', 'tep', 'tlak', 'kyslik', 'teplota'].filter((k) => nove[k]).map((k) => ({ zdravi: 'zdraví (tep, tlak, kyslík, teplota)', tep: 'tep', tlak: 'tlak', kyslik: 'kyslík', teplota: 'teplota' })[k]);
     s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink',
       text: min > 0 && co.length ? `Automatické měření náramku každých ${min} min: ${co.join(', ')}.` : 'Automatické měření náramku vypnuto.', note: '' });
     if (s.events.length > 400) s.events.length = 400;

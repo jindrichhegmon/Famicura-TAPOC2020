@@ -320,10 +320,21 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
           const zaznam = { cas: z.cas };
           for (const k of ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota']) if (Number.isFinite(Number(zdravi[k])) && zdravi[k] !== null) zaznam[k] = Number(zdravi[k]);
           n.mereni = [zaznam, ...(Array.isArray(n.mereni) ? n.mereni : [])].slice(0, 48);
+          // trvale do A_KAM_Mereni (stránkování a export v záložce Náramek)
+          await tabulky.vloz(tenant, 'A_KAM_Mereni', { Id: `m-${z.cas}-${Math.random().toString(36).slice(2, 8)}`, KameraID: kameraId, NaramekId: String(n.id).slice(0, 20), Cas: z.cas,
+            Tep: zaznam.tep ?? null, TlakS: zaznam.tlakS ?? null, TlakD: zaznam.tlakD ?? null, Spo2: zaznam.spo2 ?? null, Teplota: zaznam.teplota != null ? String(zaznam.teplota) : null })
+            .catch((e) => log.error('[stav] zápis měření:', e.message));
         }
         p.naramek = n;
         data.v++; await uloz();
         return { v: data.v };
+      });
+    },
+    /** Měření zdraví jedné kamery z A_KAM_Mereni, nejnovější první (tabulka a export v záložce Náramek). */
+    vypisMereni({ kameraId, limit = 2000 } = {}) {
+      return serializovane(async () => {
+        const r = await tabulky.vyber(tenant, 'A_KAM_Mereni', { kde: { KameraID: kameraId }, razeni: [['Cas', 'DESC']], limit: Math.min(10000, Math.max(1, limit)) });
+        return r.map((x) => ({ cas: x.Cas, tep: x.Tep ?? null, tlakS: x.TlakS ?? null, tlakD: x.TlakD ?? null, spo2: x.Spo2 ?? null, teplota: x.Teplota != null && x.Teplota !== '' ? Number(x.Teplota) : null, naramek: x.NaramekId || '' }));
       });
     },
     odemknutiNahravky({ id, kameraId, cas, delkaS, kdo }) {

@@ -59,7 +59,7 @@ import { createAsistent } from './asistent.mjs';
 import { createUpozorneni } from './upozorneni.mjs';
 import { createPdp } from './pdp.mjs';
 import { createNajemci } from './najemci.mjs';
-import { zacatekDne, konecDne, logXlsx } from './log-udalosti.mjs';
+import { zacatekDne, konecDne, logXlsx, mereniXlsx } from './log-udalosti.mjs';
 import { createDispecer } from './dispecer.mjs';
 import { normTenant } from './tabulky.mjs';
 import { createLimiter } from './limit.mjs';
@@ -426,6 +426,23 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (await deaktivovana(kamera)) return json({ ok: false, error: 'Kamera je deaktivovaná rodinou a míří do stropu; otáčet půjde až po aktivaci.', deaktivace: true }, 423);
         await ptz.pohni(kamera, String(smer || ''), { rychlost: Number(rychlost) || 0.5, ms: Number(ms) || 400 });
         return json({ ok: true });
+      }
+      // Měření zdraví z náramku jedné kamery (jen poskytovatel), nejnovější první, nejvýš 2000 (stránkuje stránka); format=xlsx = sešit Excelu (až 10000).
+      if (m === 'GET' && path === '/api/naramek/mereni') {
+        if (rodina) return jenPoskytovatel();
+        const kam = url.searchParams.get('kamera') || '';
+        if (!isDeviceId(kam) || !(await smiKameruId(kam))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        const st = await stavTenanta();
+        const xl = url.searchParams.get('format') === 'xlsx';
+        const radky = await st.vypisMereni({ kameraId: kam, limit: xl ? 10000 : 2000 });
+        if (xl) {
+          const sv = (await st.stav()).state; const p = sv.patients.find((x) => x.id === kam);
+          const kamNazev = p?.name || (await kamery()).find((c) => c.id === kam)?.name || kam;
+          const data = mereniXlsx(radky, { poskytovatel: sv.poskytovatel?.nazev || tenant, kamera: kamNazev, naramek: p?.naramek?.id || '' });
+          const nazev = `famicura-mereni_${kamNazev.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-')}.xlsx`;
+          return new Response(data, { status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="${nazev}"`, 'Cache-Control': 'private, no-store', 'Content-Length': String(data.length) } });
+        }
+        return json({ ok: true, kamera: kam, mereni: radky });
       }
       // Příkaz náramku/přívěsku (jen poskytovatel): změřit tep / tlak / kyslík / teplotu, zjistit polohu, vypnout (jen na heslo hlavní aplikace); vlastní text pro ladění modelu.
       if (m === 'POST' && path === '/api/naramek/prikaz') {

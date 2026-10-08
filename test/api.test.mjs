@@ -913,3 +913,22 @@ test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený ná
   assert.equal((await h(req('POST', '/api/naramek/prikaz', { cookies: rc, body: { kamera: 'tapoc2020', prikaz: 'tep' } }))).status, 403);
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: rc, body: { akce: 'setNaramekAuto', args: ['tapoc2020', { min: 10, tep: true }] } }))).status, 403);
 });
+
+test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, export do Excelu, rodina 403, cizí kamera 404', async () => {
+  const tabulky = createMockTabulky();
+  for (const [i, r] of [[1, { Tep: 70, TlakS: 120, TlakD: 80 }], [2, { Spo2: 97 }], [3, { Teplota: '36.6' }]].entries()) {
+    await tabulky.vloz(T, 'A_KAM_Mereni', { Id: 'm' + i, KameraID: 'tapoc2020', NaramekId: '9705357211', Cas: 1_700_000_000_000 + r[0] * 60_000, ...r[1] });
+  }
+  await tabulky.vloz(T, 'A_KAM_Mereni', { Id: 'mx', KameraID: 'jina', NaramekId: '1', Cas: 1_700_000_000_000, Tep: 1 });
+  const { h, uzivatele, vsichni } = handler({ tabulky });
+  let r = await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: cookie() }));
+  assert.equal(r.status, 200); const m = (await r.json()).mereni;
+  assert.equal(m.length, 3); assert.equal(m[0].teplota, 36.6); assert.equal(m[2].tep, 70); assert.equal(m[1].spo2, 97); assert.ok(m[0].cas > m[1].cas, 'nejnovější první');
+  r = await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020&format=xlsx', { cookies: cookie() }));
+  assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /spreadsheetml/); assert.match(r.headers.get('content-disposition'), /famicura-mereni_.*\.xlsx/);
+  const buf = Buffer.from(await r.arrayBuffer()); assert.equal(buf.subarray(0, 2).toString(), 'PK', 'sešit je zip');
+  assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=cizi', { cookies: cookie() }))).status, 404);
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000444', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: cookieRodina(T, rod.id).split(';')[0] }))).status, 403);
+});

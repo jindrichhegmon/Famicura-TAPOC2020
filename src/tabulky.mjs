@@ -58,6 +58,12 @@ export const SCHEMA = {
     sloupce: { Id: ['c', 40], NahravkaId: ['c', 40], KameraID: ['c', 40], Cas: ['i'], Kdo: ['s', 80], Role: ['c', 12], Adresa: ['s', 60] },
     indexy: [['Cas'], ['NahravkaId']],
   },
+  // Měření zdraví z náramku (src/naramky.mjs → stav-tenant.naramek): jeden řádek na každé hlášení; teplota jako text („36.6“).
+  A_KAM_Mereni: {
+    klic: ['Id'],
+    sloupce: { Id: ['c', 40], KameraID: ['c', 40], NaramekId: ['c', 20], Cas: ['i'], Tep: ['i'], TlakS: ['i'], TlakD: ['i'], Spo2: ['i'], Teplota: ['s', 10] },
+    indexy: [['KameraID', 'Cas']],
+  },
   A_KAM_UzivatelRodiny: {
     klic: ['Id'],
     sloupce: { Id: ['c', 16], Jmeno: ['s', 60], Telefon: ['c', 9], HesloHash: ['s', 200], Kamery: ['s', 0], PozvankaHash: ['s', 100], PozvankaDo: ['i'],

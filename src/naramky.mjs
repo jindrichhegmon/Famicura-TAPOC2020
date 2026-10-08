@@ -31,6 +31,8 @@ const MERENI_MS = 60 * 60 * 1000; // řádek s měřením do historie nejvýš j
 /** Příkazy serveru náramku (protokol hodinek / SeTracker; V48 dtto): jedno měření, poloha, vypnutí. */
 // teplota: příkaz k okamžitému změření je bodytemp2 (Beesure/SeTracker); btemp2 je jen rámec, kterým náramek teplotu hlásí.
 export const PRIKAZY = { tep: 'hrtstart,1', tlak: 'bphrt', kyslik: 'oxygen', teplota: 'bodytemp2', poloha: 'CR', vypnout: 'POWEROFF' };
+/** „Změřit zdraví“: celá sada za sebou – hrtstart,1 (zapne snímač), tlak + tep, kyslík, teplota. */
+export const MERENI_VSE = ['tlak', 'kyslik', 'teplota'];
 
 /* ---------- rámce ---------- */
 
@@ -257,14 +259,26 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   }
 
   /** Příkaz náramku: nazev z PRIKAZY, nebo 'vlastni' s textem (ladění modelu). Náramek musí být právě připojený. */
-  async function prikaz(id, nazev, { vlastni = '' } = {}) {
+  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false } = {}) {
     const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
+    if (nazev === 'zdravi') {
+      const a0 = aktivni.get(String(id));
+      if (!a0 || a0.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
+      const poslano = [];
+      for (const k of MERENI_VSE) {
+        if (poslano.length) await new Promise((r) => setTimeout(r, prodlevaMs));
+        const r = await prikaz(id, k, { bezPredtim: poslano.length > 0 });
+        if (r.predtim) poslano.push(r.predtim);
+        poslano.push(r.obsah);
+      }
+      return { ok: true, obsah: poslano.join(' + ') };
+    }
     let obsah = PRIKAZY[nazev];
     if (nazev === 'vlastni') {
       obsah = String(vlastni || '').trim();
       if (!/^[A-Za-z0-9_,.:+\- ]{1,60}$/.test(obsah)) throw chyba('Příkaz: 1 až 60 znaků (písmena, číslice, čárky, tečky), bez hranatých závorek a hvězdiček.', 400);
     }
-    if (!obsah) throw chyba('Neznámý příkaz náramku (tep, tlak, kyslik, teplota, poloha, vypnout, vlastni).', 400);
+    if (!obsah) throw chyba('Neznámý příkaz náramku (zdravi, tep, tlak, kyslik, teplota, poloha, vypnout, vlastni).', 400);
     const a = aktivni.get(String(id));
     if (!a || a.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
     const posli = async (co) => {
@@ -273,7 +287,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
     };
     // Měření tlaku, kyslíku a teploty vrací ReachFar V48 jen tehdy, když mu těsně předtím přišlo hrtstart,1
     // (zapne snímač); samotné bphrt/oxygen nechá bez odpovědi. Proto se posílá dvojice.
-    const predtim = ['tlak', 'kyslik', 'teplota'].includes(nazev) ? PRIKAZY.tep : null;
+    const predtim = ['tlak', 'kyslik', 'teplota'].includes(nazev) && !bezPredtim ? PRIKAZY.tep : null;
     if (predtim) { await posli(predtim); await new Promise((r) => setTimeout(r, prodlevaMs)); }
     await posli(obsah);
     return { ok: true, obsah, ...(predtim ? { predtim } : {}) };
@@ -291,8 +305,8 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
         const a = aktivni.get(String(n.id)); if (!a || a.socket.destroyed) continue;
         if (now() - (posledniAuto.get(n.id) || 0) < auto.min * 60 * 1000) continue;
         posledniAuto.set(n.id, now());
-        for (const k of ['tep', 'tlak', 'kyslik', 'teplota']) {
-          if (!auto[k]) continue;
+        for (const k of ['zdravi', 'tep', 'tlak', 'kyslik', 'teplota']) {
+          if (!auto[k] || (auto.zdravi && k !== 'zdravi')) continue;   // zdraví = celá sada, jednotlivé volby už nejsou třeba
           try { await prikaz(n.id, k); posl++; } catch (e) { log.error('[naramky] automatické měření', n.id, k, e.message); }
           await new Promise((r) => setTimeout(r, prodlevaMs));   // měření se nemají překrývat
         }

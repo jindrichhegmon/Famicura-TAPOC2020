@@ -58,3 +58,13 @@ export function logXlsx(radky, { poskytovatel = '', od = '', do: doDne = '', kam
     { nazev: 'Období', hlavicka: ['Poskytovatel', 'Od', 'Do', 'Kamera', 'Událostí', 'Vytvořeno'], radky: [[poskytovatel, od, doDne, kamera || 'všechny kamery', radky.length, fmtDT.format(new Date())]] },
   ]);
 }
+
+/** Sešit .xlsx s měřením zdraví z náramku: list Měření + list Info. */
+export function mereniXlsx(radky, { poskytovatel = '', kamera = '', naramek = '' } = {}) {
+  const t = (v) => (v == null ? '' : v);
+  return xlsx([
+    { nazev: 'Měření', hlavicka: ['Datum', 'Čas', 'Tep (/min)', 'Tlak horní', 'Tlak dolní', 'Kyslík (%)', 'Teplota (°C)'],
+      radky: radky.map((r) => [fmtDatum.format(new Date(r.cas)), fmtCas.format(new Date(r.cas)), t(r.tep), t(r.tlakS), t(r.tlakD), t(r.spo2), t(r.teplota)]) },
+    { nazev: 'Info', hlavicka: ['Poskytovatel', 'Kamera', 'Náramek', 'Měření', 'Vytvořeno'], radky: [[poskytovatel, kamera, naramek, radky.length, fmtDT.format(new Date())]] },
+  ]);
+}
