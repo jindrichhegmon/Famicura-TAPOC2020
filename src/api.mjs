@@ -435,25 +435,27 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const st = await stavTenanta();
         const kdo = ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce');
         const v = await st.proved('setNaramekSos', [kamera, Array.isArray(cisla) ? cisla : [], kdo]);
-        const p = (await st.stav()).state.patients.find((x) => x.id === kamera);
+        const sv = (await st.stav()).state; const p = sv.patients.find((x) => x.id === kamera);
         let odeslano = false, obsah = '', skutecna = null;
         if (naramky && p?.naramek?.id && naramky.pripojen?.(p.naramek.id)) {
-          try { const r = await naramky.prikaz(p.naramek.id, 'sos', { cislaSos: p.naramek.sos || [], tenant }); obsah = r.obsah; skutecna = r.cisla || null; await st.naramek({ kameraId: kamera, sosOdeslano: Date.now(), sosOdeslaneCisla: skutecna }); odeslano = true; }
+          try { const r = await naramky.prikaz(p.naramek.id, 'sos', { cislaSos: p.naramek.sos || [], tenant, state: sv, patient: p }); obsah = r.obsah; skutecna = r.cisla || null; await st.naramek({ kameraId: kamera, sosOdeslano: Date.now(), sosOdeslaneCisla: skutecna }); odeslano = true; }
           catch (e) { if (e.status !== 409) throw e; }
         }
         return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah, skutecna });
       }
-      // Čísla služby poskytovatele: Péče doma (contact_phone poskytovatele, bez tenanta) a Péče doma plus (SLUZBA_TELEFON tenanta); POST { telefon } zapíše to v Plus.
+      // Telefony poskytovatele z Péče doma (contact_phone poskytovatele, bez tenanta) a Péče doma plus (SLUZBA_TELEFON / DISPECINK_TELEFON / ADMINISTRACE_TELEFON tenanta);
+      // POST { telefon, role } zapíše telefon role v Plus (role sluzba = výchozí).
       if ((m === 'GET' || m === 'POST') && path === '/api/naramek/sluzba-telefon') {
         if (rodina) return jenPoskytovatel();
-        const prazdne = { poskytovatel: '', pecedoma: { telefon: '', poskytovatel: '', duvod: '' }, pecedomaplus: { telefon: '' } };
-        if (!sluzba || !sluzba.nastaveno) return json({ ok: true, nastaveno: false, ...prazdne, chyba: 'Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC, ./deploy/vps-env.sh).' });
+        const prazdne = { poskytovatel: '', pecedoma: { telefon: '', poskytovatel: '', duvod: '' }, pecedomaplus: { telefon: '', sluzba: { telefon: '' }, dispecink: { telefon: '' }, administrace: { telefon: '' } } };
+        if (!sluzba || !sluzba.nastaveno) return json({ ok: true, nastaveno: false, ...prazdne, chyba: 'Čísla z Péče doma (plus) nejsou na serveru nastavená (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC, ./deploy/vps-env.sh).' });
         try {
           let v;
-          if (m === 'POST') {   // zápis telefonu služby do Péče doma plus (SLUZBA_TELEFON tenanta), do historie každé kamery s náramkem se nepíše – je to nastavení poskytovatele
-            const { telefon } = await telo(req);
+          if (m === 'POST') {   // zápis telefonu role do Péče doma plus, do historie každé kamery s náramkem se nepíše – je to nastavení poskytovatele
+            const { telefon, role } = await telo(req);
             if (typeof telefon !== 'string') return json({ ok: false, error: 'Zadejte telefon (prázdný = smazat).' }, 400);
-            v = await sluzba.nastav(tenant, telefon);
+            if (role !== undefined && !['sluzba', 'dispecink', 'administrace'].includes(role)) return json({ ok: false, error: 'Role: sluzba, dispecink, nebo administrace.' }, 400);
+            v = await sluzba.nastav(tenant, telefon, role || 'sluzba');
           } else v = await sluzba.telefon(tenant, { cerstve: url.searchParams.get('cerstve') === '1' });
           return json({ ok: true, nastaveno: true, poskytovatel: v.poskytovatel, pecedoma: v.pecedoma, pecedomaplus: v.pecedomaplus, zastarale: !!v.zastarale });
         } catch (e) { if (m === 'POST') throw e; return json({ ok: true, nastaveno: true, ...prazdne, chyba: e.message }); }

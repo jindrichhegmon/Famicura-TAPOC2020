@@ -20,7 +20,8 @@
  * Přijímá se jen od ID, které některý poskytovatel přiřadil; neznámé ID se jen zaloguje
  * (jednou za hodinu), ať se dá přiřadit. Žádná data se neposílají zpět kromě potvrzení.
  */
-import { ZDROJE_SOS, POPIS_ZDROJE, cisloZdroje } from './sluzba.mjs';
+import { POPIS_ZDROJE, cisloZdroje } from './sluzba.mjs';
+import { cisloSosPro, POPIS_ROLE } from '../public/proto/sim-core.js';
 import net from 'node:net';
 
 const MAX_RAMEC = 4096;          // delší obsah (obrázky, záznamy) nás nezajímá
@@ -215,10 +216,10 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
     // čekající čísla SOS (setNaramekSos, když náramek nebyl připojený): poslat při prvním ozvání
     if (!sosPosilam.has(ramec.id)) {
       try {
-        const n = (await kam.stav.stav()).state.patients.find((x) => x.id === kam.kameraId)?.naramek;
+        const sv = (await kam.stav.stav()).state; const pac = sv.patients.find((x) => x.id === kam.kameraId); const n = pac?.naramek;
         if (n && Array.isArray(n.sos) && !n.sosOdeslano) {
           sosPosilam.add(ramec.id);
-          try { const r = await prikaz(ramec.id, 'sos', { cislaSos: n.sos, tenant: kam.tenant }); await kam.stav.naramek({ kameraId: kam.kameraId, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); log.log(`[naramky] ${ramec.id} čísla SOS odeslána při ozvání`); }
+          try { const r = await prikaz(ramec.id, 'sos', { cislaSos: n.sos, tenant: kam.tenant, state: sv, patient: pac }); await kam.stav.naramek({ kameraId: kam.kameraId, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); log.log(`[naramky] ${ramec.id} čísla SOS odeslána při ozvání`); }
           finally { sosPosilam.delete(ramec.id); }
         }
       } catch (e) { log.error('[naramky] čísla SOS:', e.message); }
@@ -274,34 +275,45 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
   }
 
   /** Příkaz náramku: nazev z PRIKAZY, nebo 'vlastni' s textem (ladění modelu). Náramek musí být právě připojený. */
-  /** Skutečná čísla pro náramek: 'pecedoma' / 'pecedomaplus' ('sluzba' starší zápis) → číslo služby tenanta (chyba 400, když není), ostatní ověřená a bez mezer. */
-  async function cislaSkutecna(tenant, cislaSos) {
+  /** Slot SOS → co znamená pro kameru (sim-core cisloSosPro): 'r1'–'r5' a 'dispecink' / 'sluzba' / 'administrace' potřebují stav a kameru (Kontakty), starší zápisy ne. */
+  function slotSos(c, state, patient) {
+    if (/^r[1-5]$/.test(c) || ['dispecink', 'sluzba', 'administrace'].includes(c)) {
+      if (!state || !patient) throw chyba(`Číslo SOS „${c}“: chybí kontakty kamery.`, 400);
+      return cisloSosPro(state, patient, c);
+    }
+    if (c === 'pecedoma' || c === 'pecedomaplus') return { telefon: '', zdroj: c, role: 'sluzba', popis: `číslo služby (${POPIS_ZDROJE[c]})` };
+    if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba('Číslo SOS: jen číslice, případně + na začátku.', 400);
+    return { telefon: c, zdroj: null, role: null, popis: c };
+  }
+  /** Skutečná čísla pro náramek: ID z Kontaktů (člověk z rodiny, telefon poskytovatele) → číslo; zdroj Péče doma / Péče doma plus → číslo tenanta
+   *  přes src/sluzba.mjs (chyba 400, když není); starší zápisy (číslo napřímo, 'pecedoma' / 'pecedomaplus') se berou dál. Prázdný slot = ''. */
+  async function cislaSkutecna(tenant, cislaSos, { state = null, patient = null } = {}) {
     const out = [];
     for (let i = 0; i < 3; i++) {
       const c = String((cislaSos || [])[i] ?? '').replace(/[\s-]/g, '');
-      if (ZDROJE_SOS.includes(c)) {
-        if (!sluzba || !sluzba.nastaveno) throw chyba('Číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC).', 503);
-        if (!tenant) throw chyba('Číslo služby: chybí tenant.', 400);
+      const sl = slotSos(c, state, patient);
+      if (sl.zdroj) {
+        if (!sluzba || !sluzba.nastaveno) throw chyba('Číslo z Péče doma (plus) není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC).', 503);
+        if (!tenant) throw chyba('Číslo z Péče doma (plus): chybí tenant.', 400);
         const v = await sluzba.telefon(tenant);
-        const tel = cisloZdroje(v, c);
-        if (!tel) throw chyba(`${POPIS_ZDROJE[c]}: číslo služby není nastavené${c !== 'pecedomaplus' && v.pecedoma?.duvod ? ' (' + v.pecedoma.duvod + ')' : c === 'pecedomaplus' ? ' (vyplňte Telefon služby v Péče doma plus pod čísly SOS)' : ''}.`, 400);
+        const tel = cisloZdroje(v, sl.zdroj, sl.role);
+        if (!tel) throw chyba(`${POPIS_ZDROJE[sl.zdroj]}: telefon (${POPIS_ROLE[sl.role] || sl.role}) není nastavený${sl.zdroj === 'pecedoma' && v.pecedoma?.duvod ? ' (' + v.pecedoma.duvod + ')' : sl.zdroj === 'pecedomaplus' ? ' (vyplňte ho v Kontaktech → Poskytovatel)' : ''}.`, 400);
         out.push(tel);
-      } else {
-        if (c && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba('Číslo SOS: jen číslice, případně + na začátku.', 400);
-        out.push(c);
-      }
+      } else out.push(sl.telefon);
     }
     return out;
   }
+  /** Potřebuje některý slot SOS číslo z Péče doma (plus)? (kvůli omezení dotazů na jhn-apps v tik) */
+  const slotyZeZdroje = (cislaSos, state, patient) => (cislaSos || []).some((c) => { try { return !!slotSos(String(c ?? '').replace(/[\s-]/g, ''), state, patient).zdroj; } catch { return false; } });
 
-  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false, cislaSos = [], tenant = '' } = {}) {
+  async function prikaz(id, nazev, { vlastni = '', bezPredtim = false, cislaSos = [], tenant = '', state = null, patient = null } = {}) {
     const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
     if (nazev === 'sos') {
-      // čísla SOS: SOS1,číslo … SOS3,číslo (prázdné = smazat); zapsaná ve stavu kamery (setNaramekSos), sem už přijdou ověřená;
-      // 'pecedoma' / 'pecedomaplus' = číslo služby poskytovatele (src/sluzba.mjs) – dosadí se tady, proto je potřeba tenant
+      // čísla SOS: SOS1,číslo … SOS3,číslo (prázdné = smazat); zapsaná ve stavu kamery (setNaramekSos) jako ID z Kontaktů, sem už přijdou ověřená;
+      // skutečná čísla dosadí cislaSkutecna (kontakty kamery ze stavu, Péče doma / Péče doma plus přes src/sluzba.mjs – proto je potřeba tenant a stav)
       const a0 = aktivni.get(String(id));
       if (!a0 || a0.socket.destroyed) throw chyba('Náramek teď není připojený k serveru (ozývá se v intervalech; zkuste to za chvíli).', 409);
-      const cisla = await cislaSkutecna(tenant, cislaSos);
+      const cisla = await cislaSkutecna(tenant, cislaSos, { state, patient });
       const poslano = [];
       for (let i = 0; i < 3; i++) {
         if (poslano.length) await new Promise((r) => setTimeout(r, prodlevaMs));
@@ -350,19 +362,22 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
       try { s = await najemci.pro(t); st = await s.stav(); } catch { continue; }
       for (const p of st.state.patients) {
         const n = p.naramek;
-        // číslo služby ve slotu SOS: každých sluzbaMs porovnat s naposledy poslanými čísly a při změně poslat znovu
-        if (n?.id && Array.isArray(n.sos) && n.sos.some((c) => ZDROJE_SOS.includes(c)) && n.sosOdeslano && sluzba?.nastaveno) {
+        // čísla SOS odvozená z Kontaktů: každý tik porovnat skutečná čísla s naposledy poslanými a při změně (kontakt, telefon poskytovatele) poslat znovu;
+        // sloty ze zdroje Péče doma (plus) se ověřují nejvýš jednou za sluzbaMs (dotaz na jhn-apps)
+        if (n?.id && Array.isArray(n.sos) && n.sos.some(Boolean) && n.sosOdeslano && Array.isArray(n.sosOdeslaneCisla)) {
           const a = aktivni.get(String(n.id));
-          if (a && !a.socket.destroyed && now() - (posledniSluzba.get(n.id) || 0) >= sluzbaMs && !sosPosilam.has(String(n.id))) {
-            posledniSluzba.set(n.id, now());
+          const zeZdroje = slotyZeZdroje(n.sos, st.state, p);
+          const naRade = !zeZdroje || now() - (posledniSluzba.get(n.id) || 0) >= sluzbaMs;
+          if (a && !a.socket.destroyed && naRade && !sosPosilam.has(String(n.id)) && (!zeZdroje || sluzba?.nastaveno)) {
+            if (zeZdroje) posledniSluzba.set(n.id, now());
             try {
-              const skut = await cislaSkutecna(t, n.sos);
-              if (JSON.stringify(skut) !== JSON.stringify(n.sosOdeslaneCisla || null)) {
+              const skut = await cislaSkutecna(t, n.sos, { state: st.state, patient: p });
+              if (JSON.stringify(skut) !== JSON.stringify(n.sosOdeslaneCisla)) {
                 sosPosilam.add(String(n.id));
-                try { const r = await prikaz(n.id, 'sos', { cislaSos: n.sos, tenant: t }); await s.naramek({ kameraId: p.id, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); posl++; log.log(`[naramky] ${n.id} číslo služby se změnilo – čísla SOS poslána znovu: ${r.cisla.join(', ')}`); }
+                try { const r = await prikaz(n.id, 'sos', { cislaSos: n.sos, tenant: t, state: st.state, patient: p }); await s.naramek({ kameraId: p.id, sosOdeslano: now(), sosOdeslaneCisla: r.cisla }); posl++; log.log(`[naramky] ${n.id} čísla SOS se změnila – poslána znovu: ${r.cisla.join(', ')}`); }
                 finally { sosPosilam.delete(String(n.id)); }
               }
-            } catch (e) { log.error('[naramky] číslo služby', n.id, e.message); }
+            } catch (e) { log.error('[naramky] čísla SOS', n.id, e.message); }
           }
         }
         const auto = n?.auto;

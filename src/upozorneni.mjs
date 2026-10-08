@@ -1,7 +1,7 @@
 /**
  * Upozornění na událost kamery na kontakty, které poskytovatel zadal
  * v dispečinku (rodina 5× jméno + telefon, dvě sady e-mailů, sim-core setKontakty)
- * a telefony poskytovatele (dispečink, služba – ⚙ Nastavení), podle příjemců
+ * a telefony poskytovatele (dispečink, služba, administrace – Kontakty → Poskytovatel), podle příjemců
  * zvolených u události v Nastavení (watch[kind].sms = ID příjemců, mail = sady).
  * Číslo služby ze zdroje Péče doma / Péče doma plus dosadí src/sluzba.mjs.
  *
@@ -10,7 +10,7 @@
  * webhookem Make jako pozvánky (src/sms.mjs); výsledek se zapíše k události
  * (ev.upozorneni), aby dispečink viděl, kolik zpráv odešlo a proč ne.
  */
-import { upozorneniPro, casText, normalizeTelefonCz } from '../public/proto/sim-core.js';
+import { upozorneniPro, casText, normalizeTelefonCz, telefonyPoskytovatele, POPIS_ROLE } from '../public/proto/sim-core.js';
 import { cisloZdroje } from './sluzba.mjs';
 
 const bezDiakritiky = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -38,16 +38,20 @@ export function createUpozorneni({ sms, sluzba = null, log = console, odkaz = pr
       const u = upozorneniPro(state, ev);
       if (!u) return null;
       const posk = state.poskytovatel || {};
-      const spolecne = { jmeno: u.patient.name, misto: u.patient.place, label: u.label, uroven: UROVEN[u.level], cas: casText(ev.at), text: ev.text, poskytovatel: posk.nazev, telefon: posk.telefon, odkaz };
-      const vysledek = { sms: { prijemci: u.sms.length + (u.smsSluzba ? 1 : 0), odeslano: 0, chyba: null, komu: u.komu }, mail: { prijemci: u.mail.length, odeslano: 0, chyba: null } };
-      // číslo služby ze zdroje Péče doma / Péče doma plus (⚙ Telefon služby): dosadí se tady, ať platí vždy to aktuální
-      if (u.smsSluzba) {
+      const tp = telefonyPoskytovatele(state);
+      // telefon dispečinku do textu zpráv: vlastní číslo, nebo ze zdroje Péče doma (plus) – když se nepodaří, zpráva jde bez něj
+      let telDisp = tp.dispecink.telefon || '';
+      if (!telDisp && tp.dispecink.zdroj !== 'vlastni' && sluzba?.nastaveno) { try { telDisp = cisloZdroje(await sluzba.telefon(tenant), tp.dispecink.zdroj, 'dispecink'); } catch { /* bez telefonu */ } }
+      const spolecne = { jmeno: u.patient.name, misto: u.patient.place, label: u.label, uroven: UROVEN[u.level], cas: casText(ev.at), text: ev.text, poskytovatel: posk.nazev, telefon: telDisp, odkaz };
+      const vysledek = { sms: { prijemci: u.sms.length + u.smsZdroje.length, odeslano: 0, chyba: null, komu: u.komu }, mail: { prijemci: u.mail.length, odeslano: 0, chyba: null } };
+      // telefony poskytovatele ze zdroje Péče doma / Péče doma plus (Kontakty → Poskytovatel): dosadí se tady, ať platí vždy to aktuální
+      for (const z of u.smsZdroje) {
         try {
-          if (!sluzba || !sluzba.nastaveno) throw new Error('číslo služby není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC)');
-          const tel = normalizeTelefonCz(cisloZdroje(await sluzba.telefon(tenant), u.smsSluzba));
-          if (!tel) throw new Error(`číslo služby (${u.smsSluzba === 'pecedoma' ? 'Péče doma' : 'Péče doma plus'}) není nastavené`);
+          if (!sluzba || !sluzba.nastaveno) throw new Error('číslo z Péče doma (plus) není na serveru nastavené (JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC)');
+          const tel = normalizeTelefonCz(cisloZdroje(await sluzba.telefon(tenant), z.zdroj, z.id));
+          if (!tel) throw new Error(`telefon (${z.zdroj === 'pecedoma' ? 'Péče doma' : 'Péče doma plus'}) není nastavený`);
           if (!u.sms.includes(tel)) u.sms.push(tel);
-        } catch (e) { vysledek.sms.chyba = 'služba: ' + e.message; }
+        } catch (e) { vysledek.sms.chyba = `${POPIS_ROLE[z.id] || z.id}: ${e.message}`; }
       }
       if (!sms || !sms.nastaveno) {
         const chyba = 'SMS a e-mail nejsou na serveru nastavené (SMS_WEBHOOK_URL).';

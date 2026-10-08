@@ -75,16 +75,25 @@ export function describeWatch(w) {
   return on.length ? on.join(', ') : 'nic';
 }
 
-/* ---------- kontakty kamery: rodina (5× jméno + telefon), dvě sady e-mailů ----------
- * Zadává poskytovatel v dispečinku (Komunikace). Příjemci upozornění se pak u každé
- * události v Nastavení vybírají zvlášť: SMS = jednotliví lidé z rodiny, telefon
- * dispečinku a telefon služby poskytovatele (⚙ Nastavení), e-mail = sada 1 / sada 2.
+/* ---------- kontakty kamery: rodina (5× jméno + telefon), telefony poskytovatele, dvě sady e-mailů ----------
+ * Zadává poskytovatel v dispečinku (Komunikace → Kontakty, sekce Rodina / Poskytovatel /
+ * E-maily). Telefony poskytovatele (dispečink, služba, administrace) jsou společné pro
+ * všechny kamery (s.poskytovatel) a každý má zdroj: vlastní číslo, Péče doma (kontaktní
+ * telefon poskytovatele v databázi Péče doma, bez tenanta) nebo Péče doma plus (telefon
+ * v nastavení tenanta; dosadí server, src/sluzba.mjs). Příjemci upozornění se pak u každé
+ * události v Nastavení vybírají zvlášť: SMS = jednotliví lidé z rodiny, dispečink, služba,
+ * administrace; e-mail = sada 1 / sada 2. Čísla SOS náramku se vybírají ze stejné nabídky.
  * Starší tvar { sms: [tel], mail: [adresa] } se čte dál: čísla jako rodina bez jmen,
  * adresy jako sada 1; starší zatržení sms: true = celá rodina, mail: true = obě sady. */
 export const KONTAKTY_MAX = 3;            // starší limit (jen pro čtení starého tvaru)
 export const KONTAKTY_RODINA_MAX = 5;
 export const MAILY_SADA_MAX = 10;
-export const SMS_PRIJEMCI = ['r1', 'r2', 'r3', 'r4', 'r5', 'dispecink', 'sluzba'];
+export const ROLE_POSKYTOVATELE = ['dispecink', 'sluzba', 'administrace'];
+export const POPIS_ROLE = { dispecink: 'dispečink', sluzba: 'služba', administrace: 'administrace' };
+export const ZDROJE_TELEFONU = ['vlastni', 'pecedoma', 'pecedomaplus'];
+export const POPIS_ZDROJE_TELEFONU = { vlastni: 'vlastní číslo', pecedoma: 'Péče doma', pecedomaplus: 'Péče doma plus' };
+export const SMS_PRIJEMCI = ['r1', 'r2', 'r3', 'r4', 'r5', ...ROLE_POSKYTOVATELE];
+export const SOS_VOLBY = SMS_PRIJEMCI;    // slot SOS náramku: tytéž ID (člověk z rodiny, nebo telefon poskytovatele)
 export const MAIL_SADY = ['s1', 's2'];
 export const prazdneKontakty = () => ({ rodina: Array.from({ length: KONTAKTY_RODINA_MAX }, () => ({ jmeno: '', telefon: '' })), maily1: [], maily2: [] });
 export function normalizeTelefonCz(raw) {
@@ -131,14 +140,41 @@ export function mailIdsPro(w, kind) {
   if (Array.isArray(v)) return v.filter((x) => MAIL_SADY.includes(x));
   return v ? [...MAIL_SADY] : [];
 }
-/** Telefony poskytovatele pro upozornění: dispečink (⚙ Telefon) a služba (⚙ Telefon služby, nebo zdroj Péče doma / Péče doma plus → dosadí server). */
+/** Pole poskytovatele pro roli: { telefon: klíč vlastního čísla, zdroj: klíč zdroje }. */
+export const POLE_ROLE = { dispecink: { telefon: 'telefon', zdroj: 'dispecinkZdroj' }, sluzba: { telefon: 'sluzbaTelefon', zdroj: 'sluzbaZdroj' }, administrace: { telefon: 'administraceTelefon', zdroj: 'administraceZdroj' } };
+/** Telefony poskytovatele (Kontakty → Poskytovatel): { dispecink: { zdroj, telefon }, sluzba: …, administrace: … };
+ *  telefon = vlastní číslo (9 číslic) jen u zdroje vlastní, u Péče doma / Péče doma plus '' – dosadí server (src/sluzba.mjs). */
 export function telefonyPoskytovatele(s) {
-  const posk = poskytovatel(s);
-  const zdroj = ['pecedoma', 'pecedomaplus'].includes(posk.sluzbaZdroj) ? posk.sluzbaZdroj : 'vlastni';
-  return { dispecink: normalizeTelefonCz(posk.telefon) || '', sluzba: zdroj === 'vlastni' ? (normalizeTelefonCz(posk.sluzbaTelefon) || '') : '', sluzbaZdroj: zdroj };
+  const posk = poskytovatel(s); const out = {};
+  for (const role of ROLE_POSKYTOVATELE) {
+    const zdroj = ['pecedoma', 'pecedomaplus'].includes(posk[POLE_ROLE[role].zdroj]) ? posk[POLE_ROLE[role].zdroj] : 'vlastni';
+    out[role] = { zdroj, telefon: zdroj === 'vlastni' ? (normalizeTelefonCz(posk[POLE_ROLE[role].telefon]) || '') : '' };
+  }
+  return out;
+}
+/** Popis telefonu poskytovatele pro roli do textu: „312 123 456“, „z Péče doma plus“, „není“. */
+export function popisTelefonuRole(tp, role) {
+  const t = tp[role]; if (!t) return 'není';
+  return t.telefon ? formatTelefon(t.telefon) : t.zdroj !== 'vlastni' ? `z ${POPIS_ZDROJE_TELEFONU[t.zdroj]}` : 'není';
+}
+/** Co znamená hodnota slotu SOS pro tuhle kameru: { telefon: '+420…' | '', zdroj: 'pecedoma' | 'pecedomaplus' | null, role, popis }.
+ *  'r1'–'r5' = člověk z rodiny (jeho mobil), 'dispecink' / 'sluzba' / 'administrace' = telefon poskytovatele (vlastní, nebo zdroj → dosadí server),
+ *  starší zápisy: číslo napřímo, 'pecedoma' / 'pecedomaplus' = číslo služby z daného zdroje. telefon i zdroj prázdné = slot prázdný. */
+export function cisloSosPro(s, p, v) {
+  const c = String(v ?? '').replace(/[\s-]/g, '');
+  const mezin = (t) => (t ? '+420' + t : '');
+  if (!c) return { telefon: '', zdroj: null, role: null, popis: '' };
+  if (/^r[1-5]$/.test(c)) { const r = kontaktyPro(p).rodina[Number(c[1]) - 1]; return { telefon: mezin(r?.telefon || ''), zdroj: null, role: null, popis: r?.telefon ? popisPrijemce(r) : 'rodina ' + c[1] + ' (bez telefonu)' }; }
+  if (ROLE_POSKYTOVATELE.includes(c)) {
+    const t = telefonyPoskytovatele(s)[c];
+    if (t.zdroj === 'vlastni') return { telefon: mezin(t.telefon), zdroj: null, role: c, popis: `${POPIS_ROLE[c]} ${t.telefon ? formatTelefon(t.telefon) : '(bez telefonu)'}` };
+    return { telefon: '', zdroj: t.zdroj, role: c, popis: `${POPIS_ROLE[c]} (${POPIS_ZDROJE_TELEFONU[t.zdroj]})` };
+  }
+  if (c === 'pecedoma' || c === 'pecedomaplus') return { telefon: '', zdroj: c, role: 'sluzba', popis: `číslo služby (${POPIS_ZDROJE_TELEFONU[c]})` };
+  return { telefon: c, zdroj: null, role: null, popis: c };
 }
 /** Komu a jak má jít upozornění na tuhle událost; null = nikomu.
- *  sms = telefony (9 číslic), smsSluzba = zdroj čísla služby, které musí dosadit server ('pecedoma' | 'pecedomaplus'), mail = adresy. */
+ *  sms = telefony (9 číslic), smsZdroje = telefony poskytovatele, které musí dosadit server [{ id: role, zdroj: 'pecedoma' | 'pecedomaplus' }], mail = adresy. */
 export function upozorneniPro(s, ev) {
   if (!ev || ev.mimoHodiny) return null;
   const p = najdi(s, ev.patientId); if (!p) return null;
@@ -146,15 +182,18 @@ export function upozorneniPro(s, ev) {
   const k = kontaktyPro(p);
   const ids = smsIdsPro(w, ev.kind, p), mids = mailIdsPro(w, ev.kind);
   const tp = telefonyPoskytovatele(s);
-  const sms = []; const komu = []; let smsSluzba = null;
+  const sms = []; const komu = []; const smsZdroje = [];
   for (const id of ids) {
     if (/^r[1-5]$/.test(id)) { const r = k.rodina[Number(id[1]) - 1]; if (r?.telefon) { sms.push(r.telefon); komu.push(r.jmeno || formatTelefon(r.telefon)); } }
-    else if (id === 'dispecink' && tp.dispecink) { sms.push(tp.dispecink); komu.push('dispečink'); }
-    else if (id === 'sluzba') { if (tp.sluzba) { sms.push(tp.sluzba); komu.push('služba'); } else if (tp.sluzbaZdroj !== 'vlastni') { smsSluzba = tp.sluzbaZdroj; komu.push('služba'); } }
+    else if (ROLE_POSKYTOVATELE.includes(id)) {
+      const t = tp[id];
+      if (t.telefon) { sms.push(t.telefon); komu.push(POPIS_ROLE[id]); }
+      else if (t.zdroj !== 'vlastni') { smsZdroje.push({ id, zdroj: t.zdroj }); komu.push(POPIS_ROLE[id]); }
+    }
   }
   const mail = [...new Set([...(mids.includes('s1') ? k.maily1 : []), ...(mids.includes('s2') ? k.maily2 : [])])];
-  if (!sms.length && !smsSluzba && !mail.length) return null;
-  return { sms: [...new Set(sms)], smsSluzba, mail, komu, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
+  if (!sms.length && !smsZdroje.length && !mail.length) return null;
+  return { sms: [...new Set(sms)], smsZdroje, mail, komu, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
 }
 
 /* Hodiny vždy pražské: server na VPS běží v UTC a „noc 22–6“ nebo „jen 7:00–20:00“
@@ -237,7 +276,7 @@ const FAKE = [
 
 /* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
  * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
-export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', sluzbaTelefon: '', sluzbaZdroj: 'vlastni', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkaPredS: 5, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2 };
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', dispecinkZdroj: 'vlastni', sluzbaTelefon: '', sluzbaZdroj: 'vlastni', administraceTelefon: '', administraceZdroj: 'vlastni', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkaPredS: 5, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2 };
 export function poskytovatel(s) { const p = { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; p.eskalaceMin = Number(p.eskalaceMin) || POSKYTOVATEL_VYCHOZI.eskalaceMin; return p; }
 /** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
 export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
@@ -360,7 +399,7 @@ const akce = {
     const w = { ...p.watch[kind] };
     if ('on' in patch) w.on = bool(patch.on);
     if ('rec' in patch) w.rec = bool(patch.rec);
-    // příjemci: pole ID (r1–r5 rodina, dispecink, sluzba / s1, s2), nebo starší true/false (celá rodina / obě sady)
+    // příjemci: pole ID (r1–r5 rodina, dispecink, sluzba, administrace / s1, s2), nebo starší true/false (celá rodina / obě sady)
     const prijemci = (v, povolene, nazev) => { if (Array.isArray(v)) { for (const x of v) if (!povolene.includes(x)) throw chyba(`Neznámý příjemce ${nazev}: ${x}.`); return [...new Set(v)]; } return bool(v); };
     if ('sms' in patch) w.sms = prijemci(patch.sms, SMS_PRIJEMCI, 'SMS');
     if ('mail' in patch) w.mail = prijemci(patch.mail, MAIL_SADY, 'e-mailu');
@@ -407,17 +446,19 @@ const akce = {
     if (s.events.length > 400) s.events.length = 400;
     return { vysledek: p.naramek || null };
   },
-  /** Čísla SOS náramku (až 3): ukládají se ke kameře, server je pošle do náramku příkazy SOS1–SOS3 (src/naramky.mjs) a zapíše sosOdeslano
-   *  a sosOdeslaneCisla (skutečně poslaná). Hodnota 'pecedoma' / 'pecedomaplus' = číslo služby poskytovatele z Péče doma / Péče doma plus, server ho dosadí a hlídá změnu. */
+  /** Čísla SOS náramku (až 3): slot = ID z Kontaktů ('r1'–'r5' člověk z rodiny, 'dispecink' / 'sluzba' / 'administrace' telefon poskytovatele; prázdné = smazat).
+   *  Ukládají se ke kameře, server dosadí skutečná čísla (cisloSosPro + src/sluzba.mjs), pošle je do náramku příkazy SOS1–SOS3 (src/naramky.mjs), zapíše sosOdeslano
+   *  a sosOdeslaneCisla (skutečně poslaná) a při změně kontaktu nebo čísla v Péče doma (plus) je pošle znovu. Starší zápisy (číslo napřímo, 'pecedoma' / 'pecedomaplus') se přijmou dál. */
   setNaramekSos(s, now, patientId, cisla, by) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
     if (!p.naramek?.id) throw chyba('Nejdřív přiřaďte náramek (ID zařízení).');
     if (!Array.isArray(cisla) || cisla.length > 3) throw chyba('Zadejte nejvýš tři čísla SOS.');
     const nova = [0, 1, 2].map((i) => String(cisla[i] ?? '').replace(/[\s-]/g, ''));
-    for (const c of nova) if (c && !['pecedoma', 'pecedomaplus', 'sluzba'].includes(c) && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba(`Číslo SOS „${c}“: jen číslice, případně + na začátku (např. +420722972596), nebo zdroj „pecedoma“ / „pecedomaplus“ = číslo služby poskytovatele.`);
+    for (const c of nova) if (c && !SOS_VOLBY.includes(c) && !['pecedoma', 'pecedomaplus'].includes(c) && !/^\+?[0-9]{6,15}$/.test(c)) throw chyba(`Číslo SOS „${c}“: vyberte člověka z rodiny (r1–r5) nebo telefon poskytovatele (dispecink, sluzba, administrace) z Kontaktů.`);
+    for (const c of nova) if (/^r[1-5]$/.test(c) && !kontaktyPro(p).rodina[Number(c[1]) - 1]?.telefon) throw chyba(`Číslo SOS: rodina ${c[1]} nemá v Kontaktech telefon.`);
     if (JSON.stringify(p.naramek.sos || ['', '', '']) === JSON.stringify(nova)) return { zmena: false, vysledek: nova };
     p.naramek = { ...p.naramek, sos: nova, sosOdeslano: null, sosOdeslaneCisla: null };
-    const seznam = nova.filter(Boolean).map((c) => ({ pecedoma: 'číslo služby (Péče doma)', pecedomaplus: 'číslo služby (Péče doma plus)', sluzba: 'číslo služby' })[c] || c);
+    const seznam = nova.filter(Boolean).map((c) => cisloSosPro(s, p, c).popis);
     s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink',
       text: seznam.length ? `Čísla SOS náramku: ${seznam.join(', ')} (pošlou se do náramku).` : 'Čísla SOS náramku smazána (pošle se do náramku).', note: '' });
     if (s.events.length > 400) s.events.length = 400;
@@ -576,8 +617,11 @@ const akce = {
     if ('eskalaceMin' in p) { const m = Number(p.eskalaceMin); if (!Number.isInteger(m) || m < 1 || m > 60) throw chyba('Eskalace: 1 až 60 minut.'); n.eskalaceMin = m; }
     if ('nahravkaS' in p) { const m = Number(p.nahravkaS); if (!Number.isInteger(m) || m < 5 || m > 60) throw chyba('Délka nahrávky: 5 až 60 sekund.'); n.nahravkaS = m; }
     if ('nahravkaPredS' in p) { const m = Number(p.nahravkaPredS); if (!Number.isInteger(m) || m < 0 || m > 10) throw chyba('Obraz před událostí: 0 až 10 sekund.'); n.nahravkaPredS = m; }
-    if (!['vlastni', 'pecedoma', 'pecedomaplus'].includes(n.sluzbaZdroj)) throw chyba('Telefon služby: zdroj vlastní, Péče doma, nebo Péče doma plus.');
-    if (n.sluzbaZdroj === 'vlastni' && n.sluzbaTelefon && !normalizeTelefonCz(n.sluzbaTelefon)) throw chyba(`Telefon služby „${n.sluzbaTelefon}“ není české číslo (9 číslic).`);
+    for (const role of ROLE_POSKYTOVATELE) {
+      const { telefon, zdroj } = POLE_ROLE[role]; const nazev = `Telefon (${POPIS_ROLE[role]})`;
+      if (!ZDROJE_TELEFONU.includes(n[zdroj])) throw chyba(`${nazev}: zdroj vlastní, Péče doma, nebo Péče doma plus.`);
+      if (n[zdroj] === 'vlastni' && n[telefon] && !normalizeTelefonCz(n[telefon])) throw chyba(`${nazev} „${n[telefon]}“ není české číslo (9 číslic).`);
+    }
     if (!n.nazev) throw chyba('Název poskytovatele nesmí být prázdný.');
     if (!n.dispecer) throw chyba('Jméno dispečera nesmí být prázdné.');
     s.poskytovatel = n;

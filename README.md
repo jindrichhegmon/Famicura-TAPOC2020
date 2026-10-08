@@ -102,7 +102,7 @@ Záložka Náramek umí i **příkazy náramku** (jen poskytovatel, `POST
 /api/naramek/prikaz`): Změřit zdraví (`prikaz: 'zdravi'` = `hrtstart,1`,
 pak s odstupem 1,5 s `bphrt`, `oxygen`, `bodytemp2`; `hrtstart,1` zapne
 snímač, V48 jinak neodpoví; jednotlivě `tlak`, `kyslik`, `teplota`, `tep`
-zůstávají), čísla SOS (`POST /api/naramek/sos`, akce `setNaramekSos` → `SOS1,číslo`…`SOS3,číslo`, při nepřipojeném náramku se pošlou při příštím ozvání; hodnota `pecedoma` = kontaktní telefon poskytovatele v Péče doma (`providers.contact_phone`, bez tenanta), `pecedomaplus` = telefon služby tenanta v Péče doma plus (`SLUZBA_TELEFON`), obojí přes aplikaci `pecedomaplus-sluzba-telefon` na jhn-apps, `src/sluzba.mjs`, při změně se pošle znovu do 10 min; `GET /api/naramek/sluzba-telefon` obě čísla, `POST { telefon }` zapíše to v Plus), Zjistit polohu (`CR`) a červené Vypnout
+zůstávají), čísla SOS (`POST /api/naramek/sos`, akce `setNaramekSos` → `SOS1,číslo`…`SOS3,číslo`, při nepřipojeném náramku se pošlou při příštím ozvání; slot je ID z Kontaktů kamery: `r1`–`r5` člověk z rodiny, `dispecink` / `sluzba` / `administrace` telefon poskytovatele – vlastní číslo, nebo zdroj `pecedoma` = kontaktní telefon poskytovatele v Péče doma (`providers.contact_phone`, bez tenanta) / `pecedomaplus` = `SLUZBA_TELEFON`, `DISPECINK_TELEFON`, `ADMINISTRACE_TELEFON` tenanta v Péče doma plus; skutečná čísla dosadí `cisloSosPro` (sim-core) a `src/sluzba.mjs` přes aplikaci `pecedomaplus-sluzba-telefon` na jhn-apps, `tik` je každou minutu porovná s naposledy poslanými (zdroje Péče doma nejvýš jednou za 10 min) a při změně pošle znovu; `GET /api/naramek/sluzba-telefon` čísla z obou zdrojů, `POST { telefon, role }` zapíše číslo role v Plus; starší zápisy – číslo napřímo, `pecedoma`, `pecedomaplus` – se berou dál), Zjistit polohu (`CR`) a červené Vypnout
 náramek (`POWEROFF`, jen na heslo hlavní aplikace `FAMICURA_PASSWORD`,
 zapisuje se do historie). Vlastní příkaz (`prikaz: 'vlastni'`, písmena,
 číslice, čárky; do 60 znaků) zůstává v API pro ladění modelu. Příkaz jde
@@ -557,12 +557,14 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
    = číslo nebo kredit Twilia; v logu serveru (`pm2 logs famicura-tapo`)
    jsou řádky `[sms] …456: odesláno (…)` nebo důvod chyby (bez textu SMS).
 5. **Upozornění na události SMS a e-mailem.** V detailu kamery v dispečinku
-   (sekce Komunikace → Kontakty pro upozornění) jde zadat rodina až 5 lidí
-   (jméno + český mobil) a dvě sady e-mailů (čárkou oddělené, až 10 v sadě);
-   telefon dispečinku a telefon služby poskytovatele (vlastní, nebo zdroj
-   Péče doma / Péče doma plus → dosadí server) jsou v ⚙ Nastavení. V sekci
-   Nastavení kamery se u každé události zatrhne Nahrávat a vyberou příjemci:
-   SMS komu (`watch[kind].sms` = pole ID `r1`–`r5`, `dispecink`, `sluzba`) a
+   (sekce Komunikace → Kontakty pro upozornění, oddíly Rodina / Poskytovatel /
+   E-maily) jde zadat rodina až 5 lidí (jméno + český mobil), telefony
+   poskytovatele dispečink, služba a administrace (společné pro všechny
+   kamery; každý vlastní číslo, nebo zdroj Péče doma / Péče doma plus → dosadí
+   server, `telefonyPoskytovatele` v sim-core) a dvě sady e-mailů (čárkou
+   oddělené, až 10 v sadě). V sekci Nastavení kamery se u každé události
+   zatrhne Nahrávat a vyberou příjemci: SMS komu (`watch[kind].sms` = pole ID
+   `r1`–`r5`, `dispecink`, `sluzba`, `administrace`) a
    E-mail komu (`mail` = `s1`, `s2`); starší `true` = celá rodina / obě sady,
    kritické události je mají předem. Uložený tvar `Kontakty = { rodina:
    [{ jmeno, telefon }×5], maily1, maily2 }`, starší `{ sms, mail }` se čte.

@@ -246,35 +246,67 @@ test('čísla SOS: akce setNaramekSos (ověření čísel, poznámka do historie
   } finally { await n.stop(); }
 });
 
-test('číslo služby v náramku: „sluzba“ se dosadí před odesláním, při změně čísla v Péče doma tik pošle čísla znovu, bez čísla srozumitelná chyba', async () => {
+test('čísla SOS z Kontaktů: rodina a telefony poskytovatele se dosadí před odesláním (Péče doma / Péče doma plus přes sluzba), tik pošle čísla znovu při změně kontaktu i čísla v Péče doma, bez čísla srozumitelná chyba', async () => {
   const tb = createMockTabulky();
   const { s, kamery, now, posun } = tenant(tb);
   await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
+  await s.proved('setKontakty', ['tapoc2020', { rodina: [{ jmeno: 'Eva', telefon: '602 520 069' }] }, 'Dispečer']);
+  await s.proved('setPoskytovatel', [{ telefon: '312 123 456', dispecinkZdroj: 'vlastni', sluzbaZdroj: 'pecedomaplus', administraceZdroj: 'pecedoma' }]);
   let cislo = '+420602620069', plus = '+420111222333';
-  const sluzba = { nastaveno: true, volani: 0, async telefon() { this.volani++; return { poskytovatel: 'X', pecedoma: { telefon: cislo, poskytovatel: 'X', duvod: cislo ? '' : 'Poskytovatel nemá v Péče doma vyplněný kontaktní telefon.' }, pecedomaplus: { telefon: plus }, cas: now() }; } };
+  const sluzba = { nastaveno: true, volani: 0, async telefon() { this.volani++; return { poskytovatel: 'X', pecedoma: { telefon: cislo, poskytovatel: 'X', duvod: cislo ? '' : 'Poskytovatel nemá v Péče doma vyplněný kontaktní telefon.' }, pecedomaplus: { telefon: plus, sluzba: { telefon: plus }, dispecink: { telefon: '' }, administrace: { telefon: '' } }, cas: now() }; } };
   const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho, prodlevaMs: 20, sluzba, sluzbaMs: 10 * 60 * 1000 });
+  const port = await n.start({ autoMs: 0 });
+  const stavP = async () => { const sv = (await s.stav()).state; return { state: sv, patient: sv.patients[0] }; };
+  try {
+    const k = await spoj(port);
+    await k.posli(ram('LK,0,0,95'));
+    assert.ok(await cekej(() => n.pripojen(ID)));
+    const r = await n.prikaz(ID, 'sos', { cislaSos: ['r1', 'sluzba', 'administrace'], tenant: '22202480FAMICURA', ...(await stavP()) });
+    assert.deepEqual(r.cisla, ['+420602520069', '+420111222333', '+420602620069'], 'rodina 1 do SOS1, služba z Péče doma plus do SOS2, administrace z Péče doma do SOS3');
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420602520069]`) && k.prijato().includes(`[3G*${ID}*0012*SOS2,+420111222333]`) && k.prijato().includes(`[3G*${ID}*0012*SOS3,+420602620069]`)), 'čísla dosazená');
+    assert.deepEqual((await n.prikaz(ID, 'sos', { cislaSos: ['dispecink'], tenant: '22202480FAMICURA', ...(await stavP()) })).cisla, ['+420312123456', '', ''], 'vlastní telefon dispečinku s +420');
+    assert.deepEqual((await n.prikaz(ID, 'sos', { cislaSos: ['pecedoma', 'pecedomaplus', '602520069'], tenant: '22202480FAMICURA' })).cisla, ['+420602620069', '+420111222333', '602520069'], 'starší zápisy bez stavu');
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['r1'], tenant: '22202480FAMICURA' }), /chybí kontakty kamery/);
+    await s.proved('setNaramekSos', ['tapoc2020', ['r1', 'sluzba', 'administrace'], 'Dispečer']);
+    await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
+    // tik: nic se nezměnilo → nic; změna v Péče doma → po uplynutí sluzbaMs znovu odeslat
+    k.prijato(); let pred = k.prijato().length;
+    await n.tik(); assert.ok(!k.prijato().slice(pred).includes('SOS1'), 'stejná čísla se neposílají znovu');
+    cislo = '+420777000111'; posun(11 * 60 * 1000);
+    await n.tik();
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS3,+420777000111]`)), 'po změně čísla v Péče doma se SOS3 poslalo znovu');
+    assert.deepEqual((await s.stav()).state.patients[0].naramek.sosOdeslaneCisla, ['+420602520069', '+420111222333', '+420777000111']);
+    // změna mobilu v Kontaktech → po uplynutí sluzbaMs (slot ze zdroje) se pošle znovu i SOS1
+    await s.proved('setKontakty', ['tapoc2020', { rodina: [{ jmeno: 'Eva', telefon: '602 999 999' }] }, 'Dispečer']);
+    posun(11 * 60 * 1000); await n.tik();
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420602999999]`)), 'po změně mobilu v Kontaktech se SOS1 poslalo znovu');
+    cislo = ''; plus = ''; posun(11 * 60 * 1000);
+    const sp = await stavP();
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['administrace'], tenant: '22202480FAMICURA', ...sp }), /Péče doma: telefon \(administrace\) není nastavený \(Poskytovatel nemá/);
+    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['sluzba'], tenant: '22202480FAMICURA', ...sp }), /Péče doma plus: telefon \(služba\) není nastavený \(vyplňte ho v Kontaktech/);
+    k.konec();
+  } finally { await n.stop(); }
+});
+
+test('čísla SOS jen z Kontaktů (bez zdroje Péče doma): tik pošle znovu hned po změně telefonu poskytovatele', async () => {
+  const tb = createMockTabulky();
+  const { s, kamery, now } = tenant(tb);
+  await s.proved('setNaramek', ['tapoc2020', ID, 'Dispečer']);
+  await s.proved('setPoskytovatel', [{ telefon: '312 123 456', dispecinkZdroj: 'vlastni' }]);
+  const n = createNaramky({ najemci: { pro: async () => s }, kamery, port: 0, host: '127.0.0.1', now, log: ticho, prodlevaMs: 20, sluzba: null });
   const port = await n.start({ autoMs: 0 });
   try {
     const k = await spoj(port);
     await k.posli(ram('LK,0,0,95'));
     assert.ok(await cekej(() => n.pripojen(ID)));
-    const r = await n.prikaz(ID, 'sos', { cislaSos: ['pecedoma', 'pecedomaplus', '602520069'], tenant: '22202480FAMICURA' });
-    assert.deepEqual(r.cisla, ['+420602620069', '+420111222333', '602520069'], 'Péče doma do SOS1, Péče doma plus do SOS2');
-    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420602620069]`) && k.prijato().includes(`[3G*${ID}*0012*SOS2,+420111222333]`)), 'čísla služby dosazená');
-    assert.deepEqual((await n.prikaz(ID, 'sos', { cislaSos: ['sluzba'], tenant: '22202480FAMICURA' })).cisla, ['+420111222333', '', ''], 'starší zápis sluzba = Péče doma plus');
+    await s.proved('setNaramekSos', ['tapoc2020', ['dispecink'], 'Dispečer']);
+    const sv = (await s.stav()).state;
+    const r = await n.prikaz(ID, 'sos', { cislaSos: ['dispecink'], tenant: '22202480FAMICURA', state: sv, patient: sv.patients[0] });
+    assert.deepEqual(r.cisla, ['+420312123456', '', '']);
     await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
-    await s.proved('setNaramekSos', ['tapoc2020', ['pecedoma', 'pecedomaplus', '602520069'], 'Dispečer']);
-    await s.naramek({ kameraId: 'tapoc2020', sosOdeslano: now(), sosOdeslaneCisla: r.cisla });
-    // tik: číslo stejné → nic; změna v Péče doma → po uplynutí sluzbaMs znovu odeslat
-    k.prijato(); let pred = k.prijato().length;
-    await n.tik(); assert.ok(!k.prijato().slice(pred).includes('SOS1'), 'stejné číslo se neposílá znovu');
-    cislo = '+420777000111'; posun(11 * 60 * 1000);
+    await s.proved('setPoskytovatel', [{ telefon: '313 000 000' }]);
     await n.tik();
-    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420777000111]`)), 'po změně čísla služby se SOS1 poslalo znovu');
-    assert.deepEqual((await s.stav()).state.patients[0].naramek.sosOdeslaneCisla, ['+420777000111', '+420111222333', '602520069']);
-    cislo = ''; plus = ''; posun(11 * 60 * 1000);
-    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['pecedoma'], tenant: '22202480FAMICURA' }), /Péče doma: číslo služby není nastavené \(Poskytovatel nemá/);
-    await assert.rejects(() => n.prikaz(ID, 'sos', { cislaSos: ['pecedomaplus'], tenant: '22202480FAMICURA' }), /Péče doma plus: číslo služby není nastavené/);
+    assert.ok(await cekej(() => k.prijato().includes(`[3G*${ID}*0012*SOS1,+420313000000]`)), 'nový telefon dispečinku odešel hned v dalším tiku');
     k.konec();
   } finally { await n.stop(); }
 });

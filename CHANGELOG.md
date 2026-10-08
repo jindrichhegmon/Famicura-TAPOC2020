@@ -5,6 +5,39 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.22 · 8. 10. 2026 · telefony poskytovatele (dispečink, služba, administrace) v Kontaktech, čísla SOS jen z kontaktů, záložka Náramek za Monitoringem
+
+- **Kontakty kamery** (Komunikace) mají tři oddělené sekce: **Rodina** (5× jméno
+  + mobil), **Poskytovatel** a **E-maily** (sada 1, sada 2).
+- **Poskytovatel**: tři telefony – **dispečink, služba, administrace** (společné
+  pro všechny kamery, `poskytovatel.telefon` / `dispecinkZdroj`, `sluzbaTelefon`
+  / `sluzbaZdroj`, `administraceTelefon` / `administraceZdroj`). Každý má
+  zdroj **vlastní číslo / Péče doma / Péče doma plus** jako dřív číslo SOS:
+  Péče doma = `providers.contact_phone` (bez tenanta, jedno číslo pro všechny
+  tři), Péče doma plus = `SLUZBA_TELEFON`, `DISPECINK_TELEFON`,
+  `ADMINISTRACE_TELEFON` v nastavení tenanta (zadává se tady, uloží se přes
+  `POST /api/naramek/sluzba-telefon { telefon, role }`). Vedle každého je
+  náhled skutečného čísla a odkud je. Pole v ⚙ Nastavení jsou zrušená.
+- **Čísla SOS náramku** se už nepíší ručně: ve třech výběrech se vybírá z
+  Kontaktů (lidé z rodiny s mobilem, dispečink, služba, administrace). Slot
+  `naramek.sos[i]` je ID (`r1`–`r5`, `dispecink`, `sluzba`, `administrace`),
+  skutečné číslo dosadí server (`cisloSosPro` v sim-core + `src/sluzba.mjs`)
+  a při změně kontaktu nebo čísla v Péče doma (plus) ho do náramku pošle znovu
+  (`tik` každou minutu; sloty ze zdroje Péče doma nejvýš jednou za 10 min).
+  Starší uložené hodnoty (číslo napřímo, `pecedoma`, `pecedomaplus`) se berou
+  dál a ve výběru jsou jako „dřívější“.
+- **Příjemci SMS** u událostí: k rodině, dispečinku a službě přibyla
+  **administrace** (`watch[kind].sms` může obsahovat `administrace`);
+  `upozorneniPro` vrací `smsZdroje` (telefony, které dosadí server) místo
+  `smsSluzba`. Telefon dispečinku v textu SMS/e-mailu se bere i ze zdroje.
+- Záložky detailu kamery: **Monitoring, Náramek, Komunikace, Nastavení**.
+- jhn-apps `pecedomaplus-sluzba-telefon`: odpověď `pecedomaplus` má
+  `sluzba`, `dispecink`, `administrace` (+ `telefon` = služba pro starší
+  volání), akce `nastav` má `role`. **Nasadit jhn-apps před serverem.**
+- Testy: `test/kontakty.test.mjs` (role, `cisloSosPro`, dosazení při
+  odeslání), `test/naramky.test.mjs` (SOS z Kontaktů, opakované odeslání po
+  změně kontaktu), `test/api.test.mjs` (role v `sluzba-telefon`, SOS se stavem).
+
 ## 3.21 · 8. 10. 2026 · nové kontakty: rodina 5×, telefony poskytovatele, dvě sady e-mailů, příjemci u každé události
 
 - **Kontakty kamery** (Komunikace): **rodina až 5 lidí** (jméno + mobil),
