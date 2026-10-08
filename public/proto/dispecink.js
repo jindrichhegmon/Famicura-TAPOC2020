@@ -534,16 +534,16 @@ function renderDetail(rebuild = false) {
         <div class="notes"><ul id="dnotes"></ul></div>
       </div></section>
       <section class="dsec hide" data-sec="naramek">
-        <div class="blok"><h3>Náramek / přívěsek SOS</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
-        <form class="kontakty" id="dnaramek">
-          <div class="kgrid"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label></div>
-          <div class="akce"><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekStav"></span></div>
-          <p class="small bad hide" id="dnaramekErr"></p>
-        </form>
-        </div><div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
+        <div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <div class="naramekVyp hide" id="dnaramekVyp"></div>
         <p id="dnaramekInfo"></p>
         <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
+        </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
+        <div class="akce"><label class="small">na stránku <select id="dnaramekNa">${[10, 20, 50, 100].map((v) => `<option value="${v}">${v}</option>`).join('')}</select></label><button type="button" class="sm sec" id="dnaramekPrev">‹ novější</button><span class="small muted" id="dnaramekStrana"></span><button type="button" class="sm sec" id="dnaramekNext">starší ›</button><button type="button" class="sm sec" id="dnaramekExcel">Stáhnout do Excelu</button></div>
+        <div id="dnaramekMereni"></div>
+        </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
+        <ul class="list" id="dnaramekPoplachy"></ul>
+        </div><div class="blok"><h3>Ovládání a nastavení náramku</h3><p class="small muted">– příkazy do náramku, automatické měření a čísla, která náramek po stisku SOS volá</p>
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         <form class="kontakty" id="dnaramekSos"><div class="kgrid">${[0, 1, 2].map((i) => `<label>SOS ${i + 1}. číslo<select class="nsos" data-i="${i}">${volbySos(p, p.naramek?.sos?.[i] || '')}</select></label>`).join('')}</div>
@@ -551,11 +551,12 @@ function renderDetail(rebuild = false) {
           <p class="small" id="dnaramekVola"></p>
           <div class="small muted" id="dnaramekSluzba"></div>
           <p class="small muted">– čísla, která náramek po stisku SOS postupně volá (a posílá jim SMS); pořadí 1 → 2 → 3, prázdná volba číslo smaže. Vybírá se z Kontaktů kamery (Komunikace): lidé z rodiny s mobilem a telefony poskytovatele (dispečink, služba, administrace); číslo z Péče doma (plus) dosadí server sám a při změně kontaktu nebo čísla je do náramku pošle znovu (do 10 minut)</p></form>
-        </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
-        <div class="akce"><label class="small">na stránku <select id="dnaramekNa">${[10, 20, 50, 100].map((v) => `<option value="${v}">${v}</option>`).join('')}</select></label><button type="button" class="sm sec" id="dnaramekPrev">‹ novější</button><span class="small muted" id="dnaramekStrana"></span><button type="button" class="sm sec" id="dnaramekNext">starší ›</button><button type="button" class="sm sec" id="dnaramekExcel">Stáhnout do Excelu</button></div>
-        <div id="dnaramekMereni"></div>
-        </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
-        <ul class="list" id="dnaramekPoplachy"></ul>
+        </div><div class="blok"><h3>Přiřazení náramku</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
+        <form class="kontakty" id="dnaramek">
+          <div class="kgrid"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label></div>
+          <div class="akce"><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekStav"></span></div>
+          <p class="small bad hide" id="dnaramekErr"></p>
+        </form>
       </div></section>
       <section class="dsec hide" data-sec="nastaveni">
         <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; ve sloupcích SMS komu a E-mail komu zatrhněte příjemce z Kontaktů (Komunikace) a telefony poskytovatele (⚙ Nastavení)</p>

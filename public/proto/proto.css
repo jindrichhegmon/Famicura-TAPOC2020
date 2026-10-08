@@ -124,7 +124,7 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .detail .dtabsSk .chovani .seg{border-style:dashed;border-color:#9fb0bf}
 .detail .dtabsSk .chovani .seg button{background:#f1f4f7;color:#3b4b5c}
 .detail .dtabsSk .chovani .seg button+button{border-left-style:dashed}
-.detail .dtabsSk .chovani .seg button[aria-pressed=true]{background:#3b4b5c;color:#fff}
+.detail .dtabsSk .chovani .seg button[aria-pressed=true]{background:#7d8b99;color:#fff}
 .detail .dtabs{margin:0}
 .detail .dtabs button{font-size:.9rem}
 .detail .dsec{animation:none}

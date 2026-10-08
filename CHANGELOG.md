@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.25 · 8. 10. 2026 · náramek: napřed výsledky, pak ovládání; šedá aktivní záložka nastavení
+
+- Záložka **Náramek**: pořadí bloků Stav náramku (ozvání, baterie, mapa, grafy)
+  → Měření zdraví → Poplachy z náramku → **Ovládání a nastavení náramku**
+  (Změřit zdraví, Zjistit polohu, Vypnout, automatické měření, čísla SOS)
+  → Přiřazení náramku (ID zařízení).
+- Aktivní záložka ve skupině Nastavení je šedá (ne tmavá).
+
 ## 3.24 · 8. 10. 2026 · záložky detailu ve dvou skupinách
 
 - Záložky detailu kamery jsou rozdělené: **Sledování – co se děje** (Monitoring,
