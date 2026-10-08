@@ -116,7 +116,16 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .queue .head{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .queue .esc{color:var(--bad);font-weight:700;font-size:.8rem}
 .detail .stage{margin-bottom:10px}
-.detail .dtabs{margin:4px 0 12px}
+.detail .dtabsSk{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 14px;align-items:flex-end}
+.detail .dtabsSk .skupina{display:flex;flex-direction:column;gap:4px;flex:1 1 240px;min-width:0}
+.detail .dtabsSk .skupina+.skupina{border-left:2px solid var(--line);padding-left:16px}
+.detail .dtabsSk .sklabel{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--muted);padding-left:4px}
+.detail .dtabsSk .zobrazeni .sklabel{color:var(--blue)}
+.detail .dtabsSk .chovani .seg{border-style:dashed;border-color:#9fb0bf}
+.detail .dtabsSk .chovani .seg button{background:#f1f4f7;color:#3b4b5c}
+.detail .dtabsSk .chovani .seg button+button{border-left-style:dashed}
+.detail .dtabsSk .chovani .seg button[aria-pressed=true]{background:#3b4b5c;color:#fff}
+.detail .dtabs{margin:0}
 .detail .dtabs button{font-size:.9rem}
 .detail .dsec{animation:none}
 /* detail: každé téma v ohraničeném bloku, tlačítka v jedné liště (.akce) */
@@ -468,6 +477,7 @@ html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
   .cols>div{display:contents}
   .cols .c,.cols .tiles,.cols .row{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
   .detail .dtabs button{flex:1;padding:8px 4px;font-size:.85rem}
+  .detail .dtabsSk{gap:10px}.detail .dtabsSk .skupina+.skupina{border-left:0;padding-left:0}
   .deskbar .right{flex-wrap:wrap}
   .deskbar .stats{width:100%;order:2}
   .cols .c:has(#queue){order:-1;margin-top:0}

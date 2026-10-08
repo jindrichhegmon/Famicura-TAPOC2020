@@ -5,6 +5,12 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.24 · 8. 10. 2026 · záložky detailu ve dvou skupinách
+
+- Záložky detailu kamery jsou rozdělené: **Sledování – co se děje** (Monitoring,
+  Náramek, modré) a **Nastavení – jak se má chovat** (Komunikace a kontakty,
+  Nastavení alertů; šedé s čárkovaným rámem). Oddělené mezerou a svislou linkou.
+
 ## 3.23 · 8. 10. 2026 · kontakty pod sebou, vypnutý náramek jasně vidět
 
 - **Kontakty** (Komunikace): každý člověk z rodiny, každý telefon

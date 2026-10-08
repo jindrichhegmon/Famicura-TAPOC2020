@@ -493,7 +493,10 @@ function renderDetail(rebuild = false) {
     detailUnreg?.(); 
     const kon = kontaktyPro(p);
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
-      <div class="seg dtabs" id="dtabs" role="tablist"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span></button><button type="button" data-t="komunikace" role="tab">💬 Komunikace</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení</button></div>
+      <div class="dtabsSk" id="dtabs" role="tablist">
+        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="seg dtabs"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span></button></div></div>
+        <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="seg dtabs"><button type="button" data-t="komunikace" role="tab">💬 Komunikace a kontakty</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení alertů</button></div></div>
+      </div>
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
