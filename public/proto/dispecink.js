@@ -846,16 +846,26 @@ function kresliMapu(el, lat, lon) {
 }
 
 const MERENI_NA_KEY = 'famicura.mereniNa';
+/** Jako slucMereni na serveru (src/log-udalosti.mjs): hodnoty jedné sady (do 2 minut, bez překryvu) v jednom řádku. */
+function slucMereni(radky, oknoMs = 120_000) {
+  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota']; const out = [];
+  for (const r of radky) {
+    const g = out[out.length - 1];
+    if (g && g.cas - r.cas <= oknoMs && r.cas <= g.cas && !POLE.some((k) => r[k] != null && g[k] != null)) { for (const k of POLE) if (r[k] != null) g[k] = r[k]; }
+    else out.push({ ...r });
+  }
+  return out;
+}
 /** Měření zdraví: načte ze serveru, když přibylo (čas posledního měření ve stavu se změnil) nebo ještě nebylo načteno; bez serveru vezme n.mereni ze stavu. */
 function nactiMereni(d, p, n) {
   const m = d.__mereni; if (!m) return;
   const cas = n?.zdravi?.cas || null;
   if (m.radky && m.cas === cas && m.kamera === p.id) return;
   m.kamera = p.id; m.cas = cas;
-  if (!sim.naServeru) { m.radky = Array.isArray(n?.mereni) ? n.mereni : []; m.strana = 0; kresliMereni(d); return; }
+  if (!sim.naServeru) { m.radky = slucMereni(Array.isArray(n?.mereni) ? n.mereni : []); m.strana = 0; kresliMereni(d); return; }
   if (m.nacitam) return; m.nacitam = true;
   apiJson(`/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}`).then((r) => { m.radky = r.mereni || []; if (m.strana * m.na >= m.radky.length) m.strana = 0; kresliMereni(d); })
-    .catch(() => { m.radky = Array.isArray(n?.mereni) ? n.mereni : []; kresliMereni(d); })
+    .catch(() => { m.radky = slucMereni(Array.isArray(n?.mereni) ? n.mereni : []); kresliMereni(d); })
     .finally(() => { m.nacitam = false; });
 }
 function kresliMereni(d) {

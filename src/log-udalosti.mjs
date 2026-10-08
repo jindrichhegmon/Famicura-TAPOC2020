@@ -59,6 +59,21 @@ export function logXlsx(radky, { poskytovatel = '', od = '', do: doDne = '', kam
   ]);
 }
 
+/** Hodnoty z jedné sady měření (tlak s tepem, kyslík, teplota přicházejí zvlášť během pár desítek sekund) do jednoho řádku:
+ *  řádky seřazené od nejnovějšího se slučují, když jsou do 2 minut od prvního ve skupině a žádná veličina se nepřekrývá. Čas = nejnovější. */
+export function slucMereni(radky, oknoMs = 120_000) {
+  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota'];
+  const out = [];
+  for (const r of radky) {
+    const g = out[out.length - 1];
+    if (g && g.cas - r.cas <= oknoMs && r.cas <= g.cas && !POLE.some((k) => r[k] != null && g[k] != null)) {
+      for (const k of POLE) if (r[k] != null) g[k] = r[k];
+      g.od = r.cas; g.pocet = (g.pocet || 1) + 1;
+    } else out.push({ ...r });
+  }
+  return out;
+}
+
 /** Sešit .xlsx s měřením zdraví z náramku: list Měření + list Info. */
 export function mereniXlsx(radky, { poskytovatel = '', kamera = '', naramek = '' } = {}) {
   const t = (v) => (v == null ? '' : v);

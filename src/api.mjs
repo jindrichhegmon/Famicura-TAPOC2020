@@ -59,7 +59,7 @@ import { createAsistent } from './asistent.mjs';
 import { createUpozorneni } from './upozorneni.mjs';
 import { createPdp } from './pdp.mjs';
 import { createNajemci } from './najemci.mjs';
-import { zacatekDne, konecDne, logXlsx, mereniXlsx } from './log-udalosti.mjs';
+import { zacatekDne, konecDne, logXlsx, mereniXlsx, slucMereni } from './log-udalosti.mjs';
 import { createDispecer } from './dispecer.mjs';
 import { normTenant } from './tabulky.mjs';
 import { createLimiter } from './limit.mjs';
@@ -434,7 +434,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!isDeviceId(kam) || !(await smiKameruId(kam))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         const st = await stavTenanta();
         const xl = url.searchParams.get('format') === 'xlsx';
-        const radky = await st.vypisMereni({ kameraId: kam, limit: xl ? 10000 : 2000 });
+        const radky = slucMereni(await st.vypisMereni({ kameraId: kam, limit: xl ? 10000 : 2000 }));   // jedna sada měření = jeden řádek
         if (xl) {
           const sv = (await st.stav()).state; const p = sv.patients.find((x) => x.id === kam);
           const kamNazev = p?.name || (await kamery()).find((c) => c.id === kam)?.name || kam;

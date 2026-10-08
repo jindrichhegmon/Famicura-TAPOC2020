@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.16 · 8. 10. 2026 · jedna sada měření v jednom řádku
+
+- **Hodnoty z jedné sady měření** (tlak s tepem, kyslík, teplota přicházejí
+  z náramku zvlášť během pár desítek sekund) jsou **v jednom řádku** tabulky
+  Měření zdraví i v Excelu (`slucMereni` v log-udalosti.mjs: řádky do 2 minut
+  od nejnovějšího ve skupině, bez překrývající se veličiny; čas = nejnovější).
+  Dvě měření téže veličiny zůstávají dva řádky. V databázi zůstává každé
+  hlášení zvlášť.
+
 ## 3.15 · 8. 10. 2026 · měření zdraví: jedno tlačítko, stránkování, Excel
 
 - **Změřit zdraví (tep, tlak, kyslík, teplotu)** je jedno tlačítko: server pošle

@@ -7,6 +7,7 @@ import { pripravit } from '../src/zaznamy.mjs';
 import { mockDbs } from './mock-db.mjs';
 import { createUzivatele } from '../src/uzivatele.mjs';
 import { createMockTabulky } from './mock-tabulky.mjs';
+import { slucMereni } from '../src/log-udalosti.mjs';
 import { createNajemci } from '../src/najemci.mjs';
 import { createNahravky } from '../src/nahravky.mjs';
 import { createUloziste } from '../src/uloziste.mjs';
@@ -917,7 +918,7 @@ test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený ná
 test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, export do Excelu, rodina 403, cizí kamera 404', async () => {
   const tabulky = createMockTabulky();
   for (const [i, r] of [[1, { Tep: 70, TlakS: 120, TlakD: 80 }], [2, { Spo2: 97 }], [3, { Teplota: '36.6' }]].entries()) {
-    await tabulky.vloz(T, 'A_KAM_Mereni', { Id: 'm' + i, KameraID: 'tapoc2020', NaramekId: '9705357211', Cas: 1_700_000_000_000 + r[0] * 60_000, ...r[1] });
+    await tabulky.vloz(T, 'A_KAM_Mereni', { Id: 'm' + i, KameraID: 'tapoc2020', NaramekId: '9705357211', Cas: 1_700_000_000_000 + r[0] * 300_000, ...r[1] });
   }
   await tabulky.vloz(T, 'A_KAM_Mereni', { Id: 'mx', KameraID: 'jina', NaramekId: '1', Cas: 1_700_000_000_000, Tep: 1 });
   const { h, uzivatele, vsichni } = handler({ tabulky });
@@ -931,4 +932,17 @@ test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, 
   const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000444', kamery: ['tapoc2020'] });
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
   assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: cookieRodina(T, rod.id).split(';')[0] }))).status, 403);
+});
+
+test('slucMereni: hodnoty jedné sady (do 2 minut, bez překryvu) v jednom řádku, další sada zvlášť', () => {
+  const t = 1_700_000_000_000;
+  const r = slucMereni([
+    { cas: t + 900_000 + 40_000, teplota: 36.6 }, { cas: t + 900_000 + 20_000, spo2: 96 }, { cas: t + 900_000, tep: 66, tlakS: 111, tlakD: 69 },   // druhá sada
+    { cas: t + 30_000, spo2: 95 }, { cas: t, tep: 65, tlakS: 108, tlakD: 67 },                                                                  // první sada
+  ]);
+  assert.equal(r.length, 2);
+  assert.deepEqual([r[0].tep, r[0].tlakS, r[0].tlakD, r[0].spo2, r[0].teplota, r[0].cas, r[0].od, r[0].pocet], [66, 111, 69, 96, 36.6, t + 940_000, t + 900_000, 3]);
+  assert.deepEqual([r[1].tep, r[1].tlakS, r[1].spo2, r[1].teplota ?? null], [65, 108, 95, null]);
+  // dvě měření tepu po 30 s = dvě sady (překryv), nic se neztratí
+  assert.equal(slucMereni([{ cas: t + 30_000, tep: 70 }, { cas: t, tep: 65 }]).length, 2);
 });
