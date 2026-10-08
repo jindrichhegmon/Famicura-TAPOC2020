@@ -98,7 +98,13 @@ const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: 
 if (pdp.nastaveno) najemci.start(2000);
 const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
 const ptz = createPtz({ kamery: nactiKamery });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik });
+// Náramky a přívěsky SOS (ReachFar V48 a další s protokolem hodinek) se připojují mobilními daty přímo sem: TCP port NARAMKY_PORT (výchozí 5093, 0 = vypnuto).
+const { createNaramky } = await import('./src/naramky.mjs');
+const NARAMKY_PORT = process.env.NARAMKY_PORT === undefined ? 5093 : Number(process.env.NARAMKY_PORT) || 0;
+const naramky = pdp.nastaveno && NARAMKY_PORT > 0 ? createNaramky({ najemci, kamery: kameryTenanty, port: NARAMKY_PORT }) : null;
+if (naramky) naramky.start().then((p) => console.log(`[famicura-tapo] náramky a přívěsky: poslouchám na TCP ${p}`)).catch((e) => console.error('[famicura-tapo] náramky:', e.message));
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { naramky?.stop().catch(() => {}); });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik, naramky });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

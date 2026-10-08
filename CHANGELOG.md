@@ -5,6 +5,25 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.9 · 8. 10. 2026 · náramky a přívěsky SOS přímo na server
+
+- **Nouzový přívěsek / hodinky (ReachFar RF‑V48, protokol hodinek jako
+  SeTracker) se připojují mobilními daty přímo na server** (`src/naramky.mjs`,
+  TCP `NARAMKY_PORT`, výchozí 5093, `vps-deploy.sh` otevře v ufw). Server
+  rozumí rámcům `[3G*ID*DÉLKA*OBSAH]` i s indexem, potvrzuje `LK`, `AL`
+  a `TKQ`, z `UD`/`AL` čte polohu, baterii a bity stavu (SOS, pád, slabá
+  baterie; sejmutí a opuštění oblasti jen do logu).
+- **Přiřazení ke kameře v dispečinku:** Komunikace → Náramek / přívěsek SOS
+  (akce `setNaramek`, sloupec `A_KAM_Kamera.Naramek` – JSON id, posledni,
+  baterie, poloha; server si ho přidá sám). SOS → `sos` (Nouzové tlačítko),
+  pád → `devfall`, slabá baterie → `battery`, vše jako skutečné události
+  kamery (fronta, SMS, e‑mail, nahrávka). SOS z náramku projde i u kamery
+  deaktivované rodinou. Opakovaný poplach do minuty se počítá jednou; neznámé
+  ID server jen potvrdí a jednou za hodinu zaloguje.
+- V Komunikaci je vidět poslední ozvání, baterie a odkaz na poslední polohu;
+  `/api/health` má `naramky` (port, spojení, přijato, poplachy).
+- Rodina náramek přiřadit nemůže (403), jen poskytovatel.
+
 ## Nasazení · 8. 10. 2026 · další kamera za stejnou bránou
 
 - **`./deploy/wireguard-vps.sh <IP> --misto N --dalsi`**: další kamera na

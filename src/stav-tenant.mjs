@@ -25,14 +25,14 @@ const MAPA = { 'cam-linecross': 'linecross', 'cam-intrusion': 'intrusion', 'cam-
 const UDALOSTI_MAX = 400, ZADOSTI_MAX = 100;
 const ZAKAZANE = new Set(['reset']);   // ostrá data tenanta nikdo nevynuluje z prohlížeče
 // akce, jejichž první argument je kamera: musí patřit tenantovi (jinak by šlo zapsat událost cizí kameře)
-const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace']);
+const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace', 'setNaramek']);
 const json = (v) => { if (v === null || v === undefined || v === '') return null; try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 const otisk = (o) => JSON.stringify(o);
 
 /* ---------- řádky ↔ objekty stavu ---------- */
 function radekKamery(p, s) {
   return { KameraID: p.id, Nazev: p.name, Misto: p.place || '', Poznamka: p.note || '', Souhlas: p.consent, Sledovani: p.watch, Kontakty: p.kontakty || null,
-    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null };
+    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null, Naramek: p.naramek || null };
 }
 function pacientZRadku(r, nazevPoskytovatele) {
   const consent = { den: 'skeleton', noc: 'skeleton', nouze: true, denOd: DEN_OD, nocOd: NOC_OD, ...(json(r.Souhlas) || {}) };
@@ -41,6 +41,7 @@ function pacientZRadku(r, nazevPoskytovatele) {
   const k = json(r.Kontakty); if (k) p.kontakty = k;
   const d = json(r.Docasne); if (d) p.docasne = d;
   const dz = json(r.Deaktivace); if (dz && dz.od) p.deaktivace = dz;
+  const nr = json(r.Naramek); if (nr && nr.id) p.naramek = nr;
   return p;
 }
 function radekUdalosti(e, notif) {
@@ -298,6 +299,19 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
             text: `Kameru se nepodařilo otočit ${on ? 'do stropu' : 'zpět'}: ${chyba || 'kamera neodpověděla'}. ${on ? 'Obraz, nahrávky a události jsou přesto vypnuté.' : 'Záběr doladíte šipkami.'}`.trim() });
           if (s.events.length > 400) s.events.length = 400;
         }
+        data.v++; await uloz();
+        return { v: data.v };
+      });
+    },
+    /** Ozvání náramku/přívěsku přiřazeného ke kameře (src/naramky.mjs): kdy naposledy, baterie %, poslední platná poloha. */
+    naramek({ kameraId, posledni, baterie = null, poloha = null }) {
+      return serializovane(async () => {
+        await nacti();
+        const p = data.state.patients.find((x) => x.id === kameraId); if (!p || !p.naramek?.id) return { v: data.v };
+        const n = { ...p.naramek, posledni: Number(posledni) || now() };
+        if (Number.isFinite(Number(baterie)) && baterie !== null) n.baterie = Number(baterie);
+        if (poloha && Number.isFinite(poloha.lat) && Number.isFinite(poloha.lon)) n.poloha = { lat: poloha.lat, lon: poloha.lon, cas: poloha.cas || now() };
+        p.naramek = n;
         data.v++; await uloz();
         return { v: data.v };
       });

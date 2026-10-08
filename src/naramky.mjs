@@ -1,0 +1,229 @@
+/**
+ * Náramky a přívěsky SOS (ReachFar RF-V48 a další zařízení s „protokolem hodinek“,
+ * stejným jako SeTracker): zařízení se připojí mobilními daty přímo na tento server
+ * (TCP, port NARAMKY_PORT, výchozí 5093) a posílá textové rámce
+ *
+ *   [3G*9705357211*0009*LK,50,100]          – ozvání (kroky, převrácení, baterie %)
+ *   [3G*9705357211*00B5*UD,081026,125959,A,50.0376,N,13.8711,E,0.0,0,250,8,80,95,0,0,00000000,…]
+ *   [3G*9705357211*00B5*AL,…stejná pole…]  – poplach (SOS, pád…) – stav v šestnáctkovém poli „status“
+ *   [3G*9705357211*0003*TKQ]                – dotaz na čas
+ *
+ * Tvar rámce: [VÝROBCE*ID*DÉLKA*OBSAH], novější firmware [VÝROBCE*ID*INDEX*DÉLKA*OBSAH];
+ * délka = 4 šestnáctkové číslice, počet bajtů obsahu. Server odpovídá na LK, AL a TKQ
+ * stejným rámcem bez dat ([3G*ID*0002*LK]); bez odpovědi zařízení poplach opakuje.
+ *
+ * Přívěsek se v dispečinku přiřadí ke kameře (Komunikace → Náramek / přívěsek, ID zařízení).
+ * SOS → událost „Nouzové tlačítko“, pád → „Pád hlášený náramkem“, slabá baterie → „Slabá
+ * baterie náramku“ u té kamery; dál jde vše jako u událostí kamery (fronta, SMS, e-mail,
+ * nahrávka kamery). Ozvání a baterie se zapisují ke kameře (naramek.posledni, baterie, poloha).
+ *
+ * Přijímá se jen od ID, které některý poskytovatel přiřadil; neznámé ID se jen zaloguje
+ * (jednou za hodinu), ať se dá přiřadit. Žádná data se neposílají zpět kromě potvrzení.
+ */
+import net from 'node:net';
+
+const MAX_RAMEC = 4096;          // delší obsah (obrázky, záznamy) nás nezajímá
+const MAX_BUFFER = 64 * 1024;    // ochrana proti zahlcení jedním spojením
+const DEDUP_MS = 60 * 1000;      // stejný poplach z téhož zařízení do minuty = opakování
+const OZVANI_MS = 5 * 60 * 1000; // ozvání bez změny baterie se zapisuje nejvýš po 5 minutách
+const CACHE_MS = 60 * 1000;      // přiřazení ID → kamera se hledá znovu po minutě
+
+/* ---------- rámce ---------- */
+
+/**
+ * Z bufferu vyřízne celé rámce. Vrací { ramce: [text bez hranatých závorek], zbytek: Buffer }.
+ * Smetí před „[“ zahodí; rámec s délkou nad MAX_RAMEC nebo bez „]“ na konci zahodí také.
+ */
+export function vyrizniRamce(buf) {
+  const ramce = [];
+  let i = 0;
+  for (;;) {
+    const zac = buf.indexOf(0x5b, i);   // [
+    if (zac < 0) return { ramce, zbytek: Buffer.alloc(0) };
+    // hlavička: VÝROBCE*ID*(INDEX*)?DÉLKA*  – délka je vždy 4 hex číslice
+    const hlav = hledejHlavicku(buf, zac);
+    if (hlav === null) return { ramce, zbytek: buf.subarray(zac) };   // ještě nedošla celá hlavička
+    if (hlav === false) { i = zac + 1; continue; }                      // není to rámec
+    const konec = hlav.obsahOd + hlav.delka;
+    if (hlav.delka > MAX_RAMEC) { i = zac + 1; continue; }
+    if (buf.length < konec + 1) return { ramce, zbytek: buf.subarray(zac) };
+    if (buf[konec] !== 0x5d) { i = zac + 1; continue; }                 // ]
+    ramce.push({ vyrobce: hlav.vyrobce, id: hlav.id, index: hlav.index, obsah: buf.subarray(hlav.obsahOd, konec).toString('latin1') });
+    i = konec + 1;
+    if (i >= buf.length) return { ramce, zbytek: Buffer.alloc(0) };
+  }
+}
+
+function hledejHlavicku(buf, zac) {
+  // nejvýš 2 + 1 + 20 + 1 + 4 + 1 + 4 + 1 bajtů
+  const kus = buf.subarray(zac + 1, Math.min(buf.length, zac + 48)).toString('latin1');
+  const m = /^([A-Za-z0-9]{2})\*([A-Za-z0-9]{1,20})\*(?:([0-9A-Fa-f]{4})\*)?([0-9A-Fa-f]{4})\*/.exec(kus);
+  if (!m) {
+    // neúplná hlavička (ještě dojde), nebo smetí
+    return /^[A-Za-z0-9*]*$/.test(kus) && kus.length < 40 && buf.length - zac < 48 ? null : false;
+  }
+  return { vyrobce: m[1], id: m[2], index: m[3] || null, delka: parseInt(m[4], 16), obsahOd: zac + 1 + m[0].length };
+}
+
+/** Odpověď zařízení ve stejném tvaru: [VÝROBCE*ID*(INDEX*)?DÉLKA*OBSAH]. */
+export function slozRamec({ vyrobce, id, index }, obsah) {
+  const delka = Buffer.byteLength(obsah, 'latin1').toString(16).toUpperCase().padStart(4, '0');
+  return `[${vyrobce}*${id}*${index ? index + '*' : ''}${delka}*${obsah}]`;
+}
+
+/* ---------- obsah rámce ---------- */
+
+/** Bity pole „status“ (šestnáctkově) – jako u hodinek SeTracker / Traccar watch. */
+const BIT = { bateriePod: [0, 17], oblastVen: [1, 18], oblastDovnitr: [2, 19], rychlost: [3], sejmuti: [4, 20], sos: [16], pad: [21] };
+const maBit = (status, bity) => bity.some((b) => (status / 2 ** b) % 2 >= 1);
+
+/**
+ * Rozebere obsah rámce → { typ, pole, poloha?, baterie?, status?, poplachy: [] }.
+ * Poloha jen u UD/UD2/AL s platným fixem (A); baterie z LK (3. pole) nebo z polohy (13. pole).
+ */
+export function rozeberObsah(obsah) {
+  const pole = obsah.split(',');
+  const typ = pole[0].trim().toUpperCase();
+  const out = { typ, pole: pole.slice(1), poloha: null, baterie: null, status: null, poplachy: [] };
+  if (typ === 'LK') {
+    const b = Number(pole[3]); if (Number.isFinite(b) && pole.length >= 4) out.baterie = b;
+    return out;
+  }
+  if (typ === 'UD' || typ === 'UD2' || typ === 'AL' || typ === 'WT' || typ === 'UD_LTE') {
+    // datum, čas, A/V, lat, N/S, lon, E/W, rychlost, kurz, výška, satelity, signál, baterie, kroky, převrácení, status
+    const [datum, cas, platne, lat, ns, lon, ew, rychlost, , , , , baterie, , , status] = pole.slice(1);
+    const la = Number(lat), lo = Number(lon);
+    if (platne === 'A' && Number.isFinite(la) && Number.isFinite(lo) && (la !== 0 || lo !== 0)) {
+      out.poloha = { lat: Math.abs(la) * (ns === 'S' ? -1 : 1), lon: Math.abs(lo) * (ew === 'W' ? -1 : 1), cas: casZ(datum, cas), rychlost: Number(rychlost) || 0 };
+    }
+    const b = Number(baterie); if (Number.isFinite(b) && baterie !== undefined && baterie !== '') out.baterie = b;
+    const st = parseInt(status, 16); out.status = Number.isFinite(st) ? st : null;
+    const s = out.status || 0;
+    if (maBit(s, BIT.pad)) out.poplachy.push('pad');
+    if (maBit(s, BIT.sos) || (typ === 'AL' && !out.poplachy.length && !maBit(s, BIT.bateriePod) && !maBit(s, BIT.sejmuti) && !maBit(s, BIT.oblastVen))) out.poplachy.push('sos');
+    if (maBit(s, BIT.bateriePod)) out.poplachy.push('baterie');
+    if (maBit(s, BIT.sejmuti)) out.poplachy.push('sejmuti');
+    if (maBit(s, BIT.oblastVen)) out.poplachy.push('oblastVen');
+  }
+  return out;
+}
+
+function casZ(datum, cas) {
+  // DDMMYY, HHMMSS v UTC
+  const m = /^(\d{2})(\d{2})(\d{2})$/.exec(datum || ''), t = /^(\d{2})(\d{2})(\d{2})$/.exec(cas || '');
+  if (!m || !t) return null;
+  const ms = Date.UTC(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(t[1]), Number(t[2]), Number(t[3]));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export const mapaOdkaz = (p) => p ? `https://maps.google.com/?q=${p.lat.toFixed(5)},${p.lon.toFixed(5)}` : '';
+
+/* ---------- server ---------- */
+
+/**
+ * createNaramky({ najemci, kamery, port, now, log })
+ *   najemci.pro(tenant) → stav tenanta (stav(), proved(), naramek())
+ *   kamery()            → kamery ze serveru (kvůli seznamu tenantů)
+ */
+export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', now = Date.now, log = console } = {}) {
+  const spojeni = new Set();
+  const cache = new Map();         // id přívěsku → { tenant, kameraId, do }
+  const nezname = new Map();       // id → kdy naposledy zalogováno
+  const posledniPoplach = new Map(); // id|druh → čas
+  const posledniOzvani = new Map();  // id → { cas, baterie }
+  let server = null;
+  const stat = { prijato: 0, poplachy: 0, nezname: 0, posledni: null };
+
+  async function tenanti() {
+    const vse = await kamery().catch(() => []);
+    return [...new Set(vse.map((k) => String(k.tenant || '').toUpperCase()).filter(Boolean))];
+  }
+
+  /** Ke kterému poskytovateli a kameře přívěsek patří (podle Naramek.id u kamery). */
+  async function najdi(id) {
+    const c = cache.get(id);
+    if (c && c.do > now()) return c.hit;
+    let hit = null;
+    for (const t of await tenanti()) {
+      try {
+        const s = await najemci.pro(t);
+        const st = await s.stav();
+        const p = st.state.patients.find((x) => x.naramek && String(x.naramek.id) === id);
+        if (p) { hit = { tenant: t, kameraId: p.id, stav: s }; break; }
+      } catch (e) { log.error('[naramky]', t, 'stav tenanta:', e.message); }
+    }
+    cache.set(id, { hit, do: now() + CACHE_MS });
+    return hit;
+  }
+
+  async function zpracuj(ramec, socket) {
+    stat.prijato++; stat.posledni = now();
+    const r = rozeberObsah(ramec.obsah);
+    // potvrzení: LK, AL, TKQ – jinak zařízení poplach opakuje a ozvání považuje za ztracené
+    if (r.typ === 'LK' || r.typ === 'AL' || r.typ === 'TKQ' || r.typ === 'TKQ2') {
+      try { socket.write(slozRamec(ramec, r.typ)); } catch { /* spojení už není */ }
+    }
+    const kam = await najdi(ramec.id);
+    if (!kam) {
+      stat.nezname++;
+      const kdy = nezname.get(ramec.id) || 0;
+      if (now() - kdy > 60 * 60 * 1000) { nezname.set(ramec.id, now()); log.log(`[naramky] neznámý přívěsek ${ramec.id} (${r.typ}) – přiřaďte ho v dispečinku u kamery (Komunikace → Náramek / přívěsek).`); }
+      return;
+    }
+    // ozvání a baterie ke kameře (nejvýš jednou za 5 minut, při změně baterie nebo poloze hned)
+    const oz = posledniOzvani.get(ramec.id);
+    const zmena = !oz || now() - oz.cas > OZVANI_MS || (r.baterie !== null && r.baterie !== oz.baterie) || !!r.poloha;
+    if (zmena) {
+      posledniOzvani.set(ramec.id, { cas: now(), baterie: r.baterie ?? oz?.baterie ?? null });
+      await kam.stav.naramek({ kameraId: kam.kameraId, posledni: now(), baterie: r.baterie, poloha: r.poloha }).catch((e) => log.error('[naramky] zápis ozvání:', e.message));
+    }
+    for (const druh of r.poplachy) {
+      const kind = { sos: 'sos', pad: 'devfall', baterie: 'battery' }[druh];
+      if (!kind) continue;   // sejmutí a oblast jen do logu
+      const klic = ramec.id + '|' + kind;
+      if (now() - (posledniPoplach.get(klic) || 0) < DEDUP_MS) continue;
+      posledniPoplach.set(klic, now());
+      stat.poplachy++;
+      const text = { sos: 'Přívěsek: stisknuto nouzové tlačítko', devfall: 'Přívěsek hlásí pád', battery: 'Přívěsek hlásí slabou baterii' }[kind]
+        + (r.baterie !== null ? ` (baterie ${r.baterie} %)` : '') + (r.poloha ? ` · poloha ${mapaOdkaz(r.poloha)}` : '') + '.';
+      try {
+        await kam.stav.proved('emit', [kam.kameraId, kind, { real: true, naramek: true, text }]);
+        log.log(`[naramky] ${ramec.id} → ${kam.tenant} ${kam.kameraId}: ${kind}`);
+      } catch (e) { log.error('[naramky] událost se nezapsala:', e.message); }
+    }
+    if (r.poplachy.includes('sejmuti') || r.poplachy.includes('oblastVen')) log.log(`[naramky] ${ramec.id}: ${r.poplachy.filter((x) => x === 'sejmuti' || x === 'oblastVen').join(', ')} (jen log)`);
+  }
+
+  function obsluz(socket) {
+    spojeni.add(socket);
+    let buf = Buffer.alloc(0);
+    let fronta = Promise.resolve();
+    socket.setTimeout(10 * 60 * 1000, () => socket.destroy());
+    socket.on('data', (chunk) => {
+      buf = buf.length ? Buffer.concat([buf, chunk]) : chunk;
+      if (buf.length > MAX_BUFFER) { socket.destroy(); return; }
+      const { ramce, zbytek } = vyrizniRamce(buf);
+      buf = Buffer.from(zbytek);
+      for (const r of ramce) fronta = fronta.then(() => zpracuj(r, socket)).catch((e) => log.error('[naramky]', e.message));
+    });
+    socket.on('error', () => {});
+    socket.on('close', () => spojeni.delete(socket));
+  }
+
+  return {
+    get port() { return server ? server.address().port : port; },
+    stav() { return { port: server ? server.address().port : null, spojeni: spojeni.size, ...stat }; },
+    zapomen() { cache.clear(); },
+    start() {
+      return new Promise((resolve, reject) => {
+        server = net.createServer(obsluz);
+        server.once('error', reject);
+        server.listen(port, host, () => { server.off('error', reject); resolve(server.address().port); });
+      });
+    },
+    stop() {
+      for (const s of spojeni) s.destroy();
+      return new Promise((resolve) => { if (!server) return resolve(); server.close(() => resolve()); server = null; });
+    },
+  };
+}

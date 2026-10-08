@@ -110,7 +110,7 @@ function verejnaAdresa(req) {
 }
 
 export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null,
-                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null }) {
+                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
   pdp = pdp || createPdp();
@@ -143,7 +143,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     const m = req.method.toUpperCase();
 
     try {
-      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), zasobnik: zasobnik ? zasobnik.stav() : null, uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false } });
+      if (m === 'GET' && (path === '/api/health' || path === '/api/clb-health')) return json({ ...health(), tenanti: najemci.nastaveno, dispecer: dispecer.nastaveno, nahravky: !!(nahravky && nahravky.nastaveno), zasobnik: zasobnik ? zasobnik.stav() : null, uloziste: nahravky ? nahravky.uloziste : { server: false, disk: false }, naramky: naramky ? naramky.stav() : null });
 
       // Tenant pro přihlašovací stránku: jen název, aby uživatel viděl, že je u správného poskytovatele.
       if (m === 'GET' && path === '/api/tenant') {
@@ -380,6 +380,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (m === 'POST' && path === '/api/proto/akce') {
         const telo_ = await telo(req); const akce = telo_.akce; let args = telo_.args;
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
+        // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
+        if (akce === 'setNaramek' && rodina) return jenPoskytovatel();
         // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
         if (akce === 'deaktivace') {
           if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);

@@ -228,7 +228,8 @@ const akce = {
     const k = KINDS[kind]; if (!k) throw chyba('Neznámý druh události.');
     if (!extra || typeof extra !== 'object') extra = {};
     const p = najdi(s, patientId);
-    if (p?.deaktivace) {
+    // Náramek/přívěsek SOS není kamera: jeho poplach projde i u kamery deaktivované rodinou (nahrávka se přesto nepořídí).
+    if (p?.deaktivace && !bool(extra.naramek)) {
       // kamera deaktivovaná rodinou: nic se nezapisuje ani nehlásí (jen stav nedostupnosti se eviduje)
       if (kind === 'offline') p.offline = true;
       if (kind === 'online') p.offline = false;
@@ -318,6 +319,19 @@ const akce = {
     s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink', text: popis ? `Kontakty pro upozornění: ${popis}` : 'Kontakty pro upozornění smazány.', note: '' });
     if (s.events.length > 400) s.events.length = 400;
     return { vysledek: nove };
+  },
+  /** Náramek / přívěsek SOS ke kameře: ID zařízení (jak ho hlásí v protokolu hodinek), prázdné = odebrat. Ozvání a baterii doplňuje server. */
+  setNaramek(s, now, patientId, id, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    const nove = str(id, 40, 'id').trim();
+    if (nove && !/^[A-Za-z0-9]{5,20}$/.test(nove)) throw chyba('ID náramku je 5 až 20 písmen a číslic (ID zařízení z aplikace náramku).');
+    const stare = p.naramek?.id || '';
+    if (nove === stare) return { zmena: false, vysledek: p.naramek || null };
+    if (nove) p.naramek = { id: nove }; else delete p.naramek;
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink',
+      text: nove ? `Náramek / přívěsek ${nove} přiřazen ke kameře${stare ? ` (místo ${stare})` : ''}: SOS, pád a slabá baterie půjdou do fronty této kamery.` : `Náramek / přívěsek ${stare} odebrán.`, note: '' });
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: p.naramek || null };
   },
   setConsent(s, now, patientId, consent) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };

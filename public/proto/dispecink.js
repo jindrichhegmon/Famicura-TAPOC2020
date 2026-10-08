@@ -519,6 +519,12 @@ function renderDetail(rebuild = false) {
           <div class="akce"><button class="sm" type="submit">Uložit kontakty</button><span class="small muted" id="dkontaktyStav"></span></div>
           <p class="small bad hide" id="dkontaktyErr"></p>
         </form>
+        </div><div class="blok"><h3>Náramek / přívěsek SOS</h3><p class="small muted">– ID zařízení z aplikace náramku (např. ReachFar V48: O zařízení → ID zařízení); SOS, pád a slabá baterie pak jdou do fronty této kamery</p>
+        <form class="kontakty" id="dnaramek">
+          <div class="kgrid"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label></div>
+          <div class="akce"><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekStav"></span></div>
+          <p class="small bad hide" id="dnaramekErr"></p>
+        </form>
         </div><div class="blok"><h3>Poznámky dispečinku</h3><p class="small muted">– přehled všech poznámek k této kameře, nejnovější nahoře; novou přidáte v Monitoringu</p>
         <div class="notes"><ul id="dnotes"></ul></div>
       </div></section>
@@ -572,6 +578,18 @@ function renderDetail(rebuild = false) {
         if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo (zkontrolujte číslo a adresu).'; err.classList.remove('hide'); return; }
         toast(sms.length || mail.length ? 'Kontakty uloženy. V Nastavení zatrhněte, na které události mají jít.' : 'Kontakty smazány.');
         naplnWatch();
+      } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
+    };
+    const nf = d.querySelector('#dnaramek');
+    nf.onsubmit = async (e) => {
+      e.preventDefault();
+      const err = nf.querySelector('#dnaramekErr'); err.classList.add('hide');
+      const id = nf.querySelector('#dnaramekId').value.trim();
+      if (id && !/^[A-Za-z0-9]{5,20}$/.test(id)) { err.textContent = 'ID zařízení je 5 až 20 písmen a číslic.'; err.classList.remove('hide'); return; }
+      try {
+        const r = await sim.setNaramek(p.id, id, ME());
+        if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo.'; err.classList.remove('hide'); return; }
+        toast(id ? `Náramek ${id} přiřazen. Až se ozve, uvidíte tu čas ozvání a baterii.` : 'Náramek odebrán.');
       } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
     };
     const ovl = d.querySelector('#ovl'); ovl.onclick = () => { ulozOverlay(!overlay); kresliOvl(d); };
@@ -640,6 +658,14 @@ function renderDetail(rebuild = false) {
   nactiNahravky(p.id);
   d.querySelector('#dnoteKdo').textContent = `zapíše se jako ${ME()}, ${new Date().toLocaleDateString('cs-CZ')}`;
   d.querySelector('#dkontaktyStav').textContent = describeKontakty(p) ? `Uloženo: ${describeKontakty(p)}` : 'Zatím žádné kontakty; bez nich SMS ani e-mail neodcházejí.';
+  {
+    const n = p.naramek;
+    const el = d.querySelector('#dnaramekStav');
+    if (!n?.id) el.textContent = 'Zatím žádný náramek.';
+    else if (!n.posledni) el.textContent = `Náramek ${n.id} přiřazen, zatím se neozval (zařízení musí mít nastavenou adresu serveru, viz nápověda).`;
+    else el.innerHTML = `Naposledy se ozval ${esc(ago(n.posledni))}${Number.isFinite(n.baterie) ? `, baterie ${n.baterie} %` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha</a>` : ''}`;
+    if (n?.id && !d.querySelector('#dnaramek').contains(document.activeElement)) d.querySelector('#dnaramekId').value = n.id;
+  }
   if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();
   d.querySelector('#dtrvala').textContent = p.note || 'zatím žádná (tlačítko Upravit)';
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');

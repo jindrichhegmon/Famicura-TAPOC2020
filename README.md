@@ -74,6 +74,33 @@ hodnoty, ne označení zprávy. Jedna detekce je jedna událost, ať přišla v
 jedné nebo ve sto zprávách; stejná detekce do 5 s po sobě se nepočítá
 dvakrát.
 
+### Náramky a přívěsky SOS (od 3.9)
+
+Nouzový přívěsek nebo hodinky s „protokolem hodinek“ (ReachFar RF‑V48 a
+příbuzné modely, stejný protokol používá SeTracker) se připojují mobilními
+daty **přímo na tento server**: TCP port `NARAMKY_PORT` (výchozí 5093,
+`vps-deploy.sh` ho otevře v ufw). Server umí rámce `[3G*ID*DÉLKA*OBSAH]`:
+`LK` (ozvání, baterie), `UD`/`UD2` (poloha), `AL` (poplach – SOS, pád, slabá
+baterie podle bitů pole status), `TKQ`; `LK`, `AL` a `TKQ` potvrzuje, jinak
+zařízení poplach opakuje.
+
+Přívěsek se přiřadí ke kameře v dispečinku: detail kamery → Komunikace →
+**Náramek / přívěsek SOS** → ID zařízení (v aplikaci náramku: O zařízení → ID
+zařízení). Od té chvíle: SOS → událost **Nouzové tlačítko**, pád → **Pád
+hlášený náramkem**, slabá baterie → **Slabá baterie náramku** u té kamery,
+dál jako u událostí kamery (fronta, SMS, e‑mail, nahrávka kamery se zatrženým
+Nahrávat). SOS projde i u kamery deaktivované rodinou. V Komunikaci je vidět,
+kdy se přívěsek naposledy ozval, baterie a odkaz na poslední polohu. Stejný
+poplach z téhož zařízení do minuty se počítá jednou. Neznámé ID server jen
+potvrdí a zapíše do logu (`[naramky] neznámý přívěsek …`), nic nezakládá.
+
+Přívěsek se na server nasměruje SMS příkazem z mobilu (přívěsek SMS přijímá,
+i když z SIM bez SMS neodpovídá): `pw,123456,ip,95.216.201.2,5093#`
+(ReachFar; u jiných modelů `ip,95.216.201.2,5093#`). Tím přestane posílat
+data na server výrobce (aplikace AnyTracking zařízení neuvidí); původní
+adresu serveru si předem zjistěte u prodejce, kdyby bylo potřeba se vrátit.
+Stav příjmu je v `/api/health` (`naramky`: port, spojení, přijato, poplachy).
+
 ### Odkud nahrávka bere obraz
 
 Když je obraz zobrazený tak, jak je (bez rozostření, černého pozadí a
@@ -550,7 +577,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 3.8) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.9) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

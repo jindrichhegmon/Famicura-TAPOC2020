@@ -134,6 +134,7 @@ export const sim = {
   closeAll(patientId, by, result) { return run('closeAll', [patientId, by, result]); },
   setWatch(patientId, kind, patch) { return run('setWatch', [patientId, kind, patch]); },
   setKontakty(patientId, kontakty, by) { return run('setKontakty', [patientId, kontakty, by]); },
+  setNaramek(patientId, id, by) { return run('setNaramek', [patientId, id, by]); },
   setConsent(patientId, consent) { return run('setConsent', [patientId, consent]); },
   requestFull(patientId, from, reason) { return run('requestFull', [patientId, from, reason]); },
   answerRequest(reqId, answer, minutes = 15) { return run('answerRequest', [reqId, answer, minutes]); },

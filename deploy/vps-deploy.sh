@@ -10,6 +10,7 @@ KEY="${KEY:-$HOME/.ssh/id_ed25519_jhnapps}"
 DIR=/opt/famicura-tapo
 PORT="${PORT:-3112}"
 WEBRTC_PORT=8555
+NARAMKY_PORT="${NARAMKY_PORT:-5093}"   # náramky a přívěsky SOS (protokol hodinek), TCP
 VEREJNA="${VEREJNA:-https://famicuratapo.95-216-201-2.sslip.io}"
 SSH="ssh -i $KEY -o BatchMode=yes"
 
@@ -50,7 +51,8 @@ fi"
 # Port pro obraz: TCP i UDP. Jen když na VPS běží ufw; firewall v Hetzner
 # Cloud konzoli (pokud ho používáte) je potřeba otevřít ručně.
 $SSH "$VPS" "if command -v ufw >/dev/null && ufw status | grep -q 'Status: active'; then
-  ufw allow $WEBRTC_PORT/tcp >/dev/null && ufw allow $WEBRTC_PORT/udp >/dev/null && echo 'ufw: port $WEBRTC_PORT otevřen.'; fi"
+  ufw allow $WEBRTC_PORT/tcp >/dev/null && ufw allow $WEBRTC_PORT/udp >/dev/null && echo 'ufw: port $WEBRTC_PORT otevřen.'
+  ufw allow $NARAMKY_PORT/tcp >/dev/null && echo 'ufw: port $NARAMKY_PORT (náramky a přívěsky SOS) otevřen.'; fi"
 
 # .env ze šablony, pokud ještě není; go2rtc.yaml vždy znovu z cameras.json.
 $SSH "$VPS" "chown -R jhnapps:jhnapps $DIR && su - jhnapps -c 'cd $DIR &&
