@@ -733,6 +733,20 @@ přímo kameru. Nastavení ve webovém rozhraní Manga, bez skriptů na zaříze
    „2 received“ a „succeeded“; „Destination Port Unreachable“ nebo
    „Connection refused“ od 10.77.0.2 znamená, že chybí krok 5).
 
+**Kroky 4 a 5 z Terminálu místo webu Manga:** `deploy/wireguard/mango-ssh.sh`
+nahraje `.conf` do Manga přes SSH a nastaví tunel i firewall najednou (Mac na
+Wi-Fi Manga, zeptá se na heslo správce Manga):
+
+```
+./deploy/wireguard/mango-ssh.sh famicura-mango-misto-3.conf 192.168.11.50 192.168.11.1
+```
+
+(soubor .conf, IP kamery, IP Manga). Nepoužívá klienta VPN z webu GL.iNet, ale
+obyčejné rozhraní OpenWrt `wgfam` s vlastní zónou firewallu, takže Proxy Mode
+ani „Allow Remote Access LAN“ nejsou potřeba; klient VPN ve webu Manga musí být
+odpojený. Na konci vypíše `wg show wgfam` (má mít „latest handshake“) a ping na
+10.77.0.1. Soukromý klíč jde jen tunelem SSH, soubory `.conf` pak smažte.
+
 Tunel SSH z Windows (2b) ani WireGuard na Windows pak nejsou potřeba; VPS
 přepne `vps-kamera.sh` automaticky podle `/etc/wireguard/famicura-rezim`
 (po kroku 3 je `linux`).

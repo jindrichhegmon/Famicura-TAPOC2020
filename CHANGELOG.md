@@ -7,6 +7,10 @@ dispečinku. Postup nové verze je v README, část „Verze“.
 
 ## 3.33 · 9. 10. 2026 · grafy náramku: posledních 10 měření
 
+- **Mango přes SSH**: `deploy/wireguard/mango-ssh.sh <famicura-mango*.conf>
+  <IP kamery> [IP Manga]` nastaví v Mangu tunel WireGuard k VPS (rozhraní
+  OpenWrt `wgfam`) a firewall ke kameře bez webu GL.iNet; README 2c.
+
 - **Grafy tepu, tlaku, kyslíku a teploty** (dispečink i aplikace na telefonu)
   ukazují posledních 10 měření rovnoměrně vedle sebe, pod každým bodem čas
   (a datum, když měření nejsou z jednoho dne); v titulku počet a období.
