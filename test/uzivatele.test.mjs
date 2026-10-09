@@ -18,7 +18,7 @@ test('pozvánka → aktivace → přihlášení; nová pozvánka staré heslo zr
   assert.equal(uzivatel.telefon, '777123456');
   assert.ok(token.length >= 20);
   assert.equal(await vsichni.prihlas('777123456', 'cokoli-heslo'), null, 'před aktivací se nepřihlásí');
-  assert.deepEqual(await vsichni.pozvanka(token), { platna: true, jmeno: 'Petr Novák', tenant: T });
+  assert.deepEqual(await vsichni.pozvanka(token), { platna: true, jmeno: 'Petr Novák', tenant: T, role: 'rodina' });
   assert.deepEqual(await vsichni.pozvanka('jiny'), { platna: false });
   await assert.rejects(vsichni.aktivuj(token, 'kratke'), /aspoň 8/);
   await assert.rejects(vsichni.aktivuj('jiny-token', 'Famicura2026'), /neplatí/);
@@ -117,4 +117,35 @@ test('druhá kamera téhož člověka: podle telefonu se účtu kamera přidá, 
   assert.equal(o1.smazan, false); assert.deepEqual(o1.uzivatel.kamery, ['famicura001']);
   const o2 = await u.odeberKameru(uzivatel.id, 'famicura001');
   assert.equal(o2.smazan, true); assert.equal(await u.podleTelefonu('777123456'), null, 'bez poslední kamery účet zmizí');
+});
+
+test('mobilní dispečer: role dispecer bez kamer, pozvánka s jasným textem, deaktivace účtu rodiny i dispečera', async () => {
+  let t = 1_700_000_000_000;
+  const vsichni = createUzivatele(createMockTabulky(), { now: () => t }); const u = vsichni.pro(T);
+  const d = await u.vytvor({ jmeno: 'Jana Dispečerka', telefon: '777 000 111', role: 'dispecer' });
+  assert.equal(d.uzivatel.role, 'dispecer'); assert.deepEqual(d.uzivatel.kamery, []); assert.equal(d.uzivatel.deaktivovan, null);
+  const d2 = await u.vytvor({ jmeno: 'Druhý', telefon: '777 000 222', role: 'dispecer', kamery: ['k1'] });
+  assert.deepEqual(d2.uzivatel.kamery, [], 'dispečer kamery nemá, seznam se ignoruje'); assert.equal((await u.seznam()).filter((x) => x.role === 'dispecer').length, 2, 'tenant může mít víc dispečerů');
+  await assert.rejects(u.vytvor({ jmeno: 'X', telefon: '777000333', role: 'neco' }), /Typ účtu/);
+  await assert.rejects(u.vytvor({ jmeno: 'X', telefon: '777000333', role: 'rodina' }), /aspoň jednu kameru/);
+  const r = await u.vytvor({ jmeno: 'Petr', telefon: '777000444', kamery: ['k1'] });
+  assert.equal(r.uzivatel.role, 'rodina', 'výchozí role je rodina');
+  assert.deepEqual(await vsichni.pozvanka(d.token), { platna: true, jmeno: 'Jana Dispečerka', tenant: T, role: 'dispecer' });
+  const text = textPozvanky({ jmeno: 'Jana Dispečerka', odkaz: 'https://x/r/abc', role: 'dispecer', poskytovatel: 'FamiCura s.r.o.' });
+  assert.match(text, /pristup DISPECERA k dohledu \(FamiCura s.r.o.\): https:\/\/x\/r\/abc/); assert.match(text, /vsechny kamery poskytovatele, nic v nich nenastavujete/); assert.ok(!/[^\x00-\x7f]/.test(text), 'bez diakritiky');
+  await vsichni.aktivuj(d.token, 'DispecerHeslo1');
+  assert.equal((await vsichni.prihlas('777000111', 'DispecerHeslo1')).role, 'dispecer');
+  // deaktivace: heslo zůstává, ale přihlášení vrátí účet s deaktivovan (API ho odmítne), pozvánka neplatí, aktivace odkazem také ne
+  const dd = await u.deaktivuj(d.uzivatel.id, true); assert.ok(dd.deaktivovan);
+  assert.ok((await vsichni.prihlas('777000111', 'DispecerHeslo1')).deaktivovan);
+  await u.deaktivuj(r.uzivatel.id, true);
+  assert.deepEqual(await vsichni.pozvanka(r.token), { platna: false }, 'deaktivovaný účet: pozvánka neplatí');
+  await assert.rejects(vsichni.aktivuj(r.token, 'RodinaHeslo1'), /deaktivovaný/);
+  await u.deaktivuj(r.uzivatel.id, false);
+  assert.equal((await vsichni.pozvanka(r.token)).platna, true, 'po aktivaci pozvánka zase platí');
+  assert.equal((await u.deaktivuj(d.uzivatel.id, false)).deaktivovan, null);
+  await assert.rejects(u.deaktivuj('neni', true), /neexistuje/);
+  // odebrání dispečera u kamery = smazání účtu (kamery nemá)
+  assert.deepEqual(await u.odeberKameru(d.uzivatel.id, 'k1'), { smazan: true, uzivatel: null });
+  assert.equal(await u.podleId(d.uzivatel.id), null);
 });

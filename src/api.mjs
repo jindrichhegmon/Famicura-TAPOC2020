@@ -37,7 +37,8 @@
  *
  * Rodina (aplikace rodiny, src/uzivatele.mjs, tabulka tenanta):
  *   GET    /api/rodina/uzivatele                 seznam (poskytovatel)
- *   POST   /api/rodina/uzivatele                 { jmeno, telefon, kamery, poslatSms } → pozvánka (poskytovatel);
+ *   POST   /api/rodina/uzivatele                 { jmeno, telefon, kamery, poslatSms, role } → pozvánka (poskytovatel); role 'dispecer' = mobilní dispečer (všechny kamery tenanta, nic nenastavuje)
+ *   POST   /api/rodina/uzivatele/:id/deaktivace  { on } deaktivace / aktivace účtu rodiny nebo dispečera (poskytovatel)
  *                                                telefon, který už účet má → kamery se k němu přidají ({ pridano: true }, bez nové pozvánky)
  *   POST   /api/rodina/uzivatele/:id/pozvanka    { poslatSms } nová pozvánka = nové heslo (poskytovatel)
  *   DELETE /api/rodina/uzivatele/:id[?kamera=ID]  (poskytovatel); s ?kamera= jen odebere tu kameru, účet smaže až bez poslední
@@ -218,6 +219,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const u = await uzivatele.prihlas(telefon, heslo);
         if (!u) { limiter.chyba(ip); return json({ ok: false, error: 'Telefon nebo heslo nesedí.' }, 401); }
         limiter.uspech(ip);
+        if (u.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 403);
         return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.tenant, u.id) });
       }
       if (m === 'POST' && path === '/api/rodina/odhlaseni') return json({ ok: true }, 200, { 'Set-Cookie': odhlaseni() });
@@ -234,12 +236,16 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // A family login outlives the account: a deleted user is logged out at once.
       const rodina = ja.role === 'rodina' ? await uzivatele.pro(tenant).podleId(ja.id) : null;
       if (ja.role === 'rodina' && !rodina) return json({ ok: false, error: 'Účet už neexistuje. Požádejte poskytovatele o novou pozvánku.' }, 401, { 'Set-Cookie': odhlaseni() });
-      // Kamera je vidět: rodině jen její, dispečinku a správci s tenantem jen kamery tenanta, správci bez tenanta všechny.
+      if (rodina?.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 401, { 'Set-Cookie': odhlaseni() });
+      // Mobilní dispečer: účet rodiny s rolí dispecer – vidí všechny kamery tenanta, ale nic nenastavuje (jen sleduje).
+      const mobilniDispecer = !!rodina && rodina.role === 'dispecer';
+      const jenSleduje = () => json({ ok: false, error: 'Dispečer v mobilní aplikaci jen sleduje, nic nenastavuje.' }, 403);
+      // Kamera je vidět: rodině jen její, mobilnímu dispečerovi, dispečinku a správci s tenantem jen kamery tenanta, správci bez tenanta všechny.
       const smiKameru = (c) => {
         const id = typeof c === 'string' ? c : c.id;
         // rodina: jen své kamery, a jen dokud kamera patří tomuto poskytovateli (kamera přiřazená jinému poskytovateli zmizí i rodině,
         // jinak by aplikace rodiny počítala s kamerou, kterou stav poskytovatele nezná, a zamrzla by)
-        if (rodina) return rodina.kamery.includes(id) && (typeof c === 'string' || !tenant || normTenant(c.tenant) === tenant);
+        if (rodina && !mobilniDispecer) return rodina.kamery.includes(id) && (typeof c === 'string' || !tenant || normTenant(c.tenant) === tenant);
         if (!tenant) return true;
         return (typeof c === 'string' ? '' : normTenant(c.tenant)) === tenant;
       };
@@ -256,8 +262,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const t = tenant ? await najemci.tenant(tenant).catch(() => ({ id: tenant, nazev: '' })) : null;
         const moje = vse.filter(smiKameru);
         // rodina má v účtu jen kameru, která už tomuto poskytovateli nepatří: stránka to řekne místo prázdné obrazovky
-        const zprava = rodina && !moje.length && rodina.kamery.length ? 'Kamera, ke které máte přístup, už u tohoto poskytovatele není (byla přiřazena jinému poskytovateli). Přístup u nového poskytovatele vám zřídí jeho dispečink.' : '';
-        return json({ ok: true, role: ja.role, tenant: t ? { id: t.id, nazev: t.nazev } : null, jmeno: rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce',
+        const zprava = mobilniDispecer && !moje.length ? 'Poskytovatel zatím nemá žádnou kameru.' : rodina && !moje.length && rodina.kamery.length ? 'Kamera, ke které máte přístup, už u tohoto poskytovatele není (byla přiřazena jinému poskytovateli). Přístup u nového poskytovatele vám zřídí jeho dispečink.' : '';
+        return json({ ok: true, role: ja.role, ucet: rodina ? rodina.role : null, tenant: t ? { id: t.id, nazev: t.nazev } : null, jmeno: rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce',
           telefon: rodina ? formatTelefon(rodina.telefon) : null, kamery: moje.map(({ id, name, events }) => ({ id, name, events })), zprava });
       }
       if (m === 'POST' && path === '/api/rodina/heslo') {
@@ -270,10 +276,12 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // ---------- správa uživatelů rodiny: jen poskytovatel ----------
       const pozvanka = async (vysledek, poslatSms) => {
         const odkaz = `${verejnaAdresa(req)}/r/${vysledek.token}`;   // server.mjs: → /proto/rodina.html?pozvanka=
-        const text = textPozvanky({ jmeno: vysledek.uzivatel.jmeno, odkaz });
+        const dispecerUcet = vysledek.uzivatel.role === 'dispecer';
+        const posk = dispecerUcet ? await najemci.tenant(tenant).then((t) => t?.nazev || '').catch(() => '') : '';
+        const text = textPozvanky({ jmeno: vysledek.uzivatel.jmeno, odkaz, role: vysledek.uzivatel.role, poskytovatel: posk });
         let smsStav = { odeslano: false, error: null };
         if (poslatSms) {
-          const r = await sms.posli({ telefon: vysledek.uzivatel.telefon, text, typ: 'FAMICURA_POZVANKA', poznamka: 'Pozvánka do aplikace rodiny Famicura.' });
+          const r = await sms.posli({ telefon: vysledek.uzivatel.telefon, text, typ: 'FAMICURA_POZVANKA', poznamka: dispecerUcet ? 'Pozvánka dispečera do mobilní aplikace Famicura.' : 'Pozvánka do aplikace rodiny Famicura.' });
           smsStav = { odeslano: r.ok, error: r.ok ? null : r.error };
         }
         return json({ ok: true, uzivatel: vysledek.uzivatel, odkaz, text, sms: smsStav, smsNastaveno: sms.nastaveno });
@@ -282,23 +290,26 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (rodina) return jenPoskytovatel();
         if (m === 'GET') return json({ ok: true, uzivatele: await uz().seznam(), smsNastaveno: sms.nastaveno });
         if (m !== 'POST') return json({ ok: false, error: 'GET nebo POST' }, 405);
-        const { jmeno, telefon, kamery: k, poslatSms } = await telo(req);
+        const { jmeno, telefon, kamery: k, poslatSms, role } = await telo(req);
+        if (role !== undefined && !['rodina', 'dispecer'].includes(role)) return json({ ok: false, error: 'Typ účtu: rodina, nebo dispecer.' }, 400);
         if (k && Array.isArray(k) && !k.every((id) => isDeviceId(id))) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
         // jen kamery tenanta: účet rodiny u cizí kamery by jí otevřel cizí obraz
         const moje = (await kamery()).filter(smiKameru).map((c) => c.id);
         if (Array.isArray(k) && k.some((id) => !moje.includes(id))) return json({ ok: false, error: 'Kamera nepatří tomuto poskytovateli.' }, 403);
-        // stejný člověk u další kamery: telefon už účet má → kamery se k němu přidají, heslo i pozvánka zůstávají
+        // stejný člověk u další kamery: telefon už účet má → kamery se k němu přidají, heslo i pozvánka zůstávají (dispečer kamery nemá, u něj se nic nepřidává)
         const stavajici = await uz().podleTelefonu(telefon);
+        if (stavajici && (stavajici.role === 'dispecer' || role === 'dispecer')) return json({ ok: false, error: `Telefon už má účet (${stavajici.jmeno}, ${stavajici.role === 'dispecer' ? 'dispečer' : 'rodina'}). Jeden telefon = jeden účet; odeberte ho a založte znovu.` }, 409);
         if (stavajici && Array.isArray(k) && k.length) {
           let u = stavajici; for (const id of k) u = await uz().pridejKameru(stavajici.id, id);
           return json({ ok: true, pridano: true, uzivatel: u, smsNastaveno: sms.nastaveno });
         }
-        return pozvanka(await uz().vytvor({ jmeno, telefon, kamery: k }), !!poslatSms);
+        return pozvanka(await uz().vytvor({ jmeno, telefon, kamery: k, role: role || 'rodina' }), !!poslatSms);
       }
-      const mu = path.match(/^\/api\/rodina\/uzivatele\/([a-z0-9]{1,40})(\/pozvanka)?$/);
+      const mu = path.match(/^\/api\/rodina\/uzivatele\/([a-z0-9]{1,40})(\/pozvanka|\/deaktivace)?$/);
       if (mu) {
         if (rodina) return jenPoskytovatel();
-        if (mu[2] && m === 'POST') { const { poslatSms } = await telo(req).catch(() => ({})); return pozvanka(await uz().novaPozvanka(mu[1]), !!poslatSms); }
+        if (mu[2] === '/deaktivace' && m === 'POST') { const { on } = await telo(req).catch(() => ({})); return json({ ok: true, uzivatel: await uz().deaktivuj(mu[1], on === true || on === 'true' || on === 1) }); }
+        if (mu[2] === '/pozvanka' && m === 'POST') { const { poslatSms } = await telo(req).catch(() => ({})); return pozvanka(await uz().novaPozvanka(mu[1]), !!poslatSms); }
         if (!mu[2] && m === 'DELETE') {
           const kam = url.searchParams.get('kamera') || '';
           if (kam) { if (!isDeviceId(kam)) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400); const r = await uz().odeberKameru(mu[1], kam); return json({ ok: true, smazan: r.smazan, uzivatel: r.uzivatel }); }
@@ -382,6 +393,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
         // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
         if ((akce === 'setNaramek' || akce === 'setNaramekAuto' || akce === 'setNaramekSos') && rodina) return jenPoskytovatel();
+        // Mobilní dispečer jen sleduje: ze stavu smí jen zapsat, že se dívá (setWatching).
+        if (mobilniDispecer && akce !== 'setWatching') return jenSleduje();
         // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
         if (akce === 'deaktivace') {
           if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);
@@ -548,7 +561,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const mOdemkni = path.match(/^\/api\/nahravky\/([A-Za-z0-9_-]{4,40})\/odemknout$/);
         if (m === 'POST' && mOdemkni) {
           if (!nahravky) return nejsou();
-          if (!rodina) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci.' }, 403);
+          if (!rodina || mobilniDispecer) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci.' }, 403);
           const n = await nahravky.podleId(tenant, mOdemkni[1]);
           if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
           if (!n.zamek) return json({ ok: true, nahravka: n, zmena: false });

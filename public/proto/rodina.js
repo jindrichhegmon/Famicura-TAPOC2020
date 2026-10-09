@@ -79,7 +79,16 @@ function boot(ja) {
   const posk = ja.tenant ? (ja.tenant.nazev || ja.tenant.id) : '';
   for (const k of ja.kamery || []) sim.ensurePatient({ id: k.id, name: k.name });
   FAMILY = (ja.kamery || []).map((k) => k.id);
-  if (ja.role === 'rodina') {
+  // mobilní dispečer: účet rodiny s rolí dispecer – všechny kamery poskytovatele, jen sledování (server odmítne každé nastavení), jasné označení
+  const dispecerMobil = ja.role === 'rodina' && ja.ucet === 'dispecer';
+  document.body.classList.toggle('dispecer', dispecerMobil);
+  $('dispecerPruh').classList.toggle('hide', !dispecerMobil);
+  $('schemaCard').classList.toggle('hide', !dispecerMobil);
+  if (dispecerMobil) {
+    $('whoami').textContent = `${ja.jmeno} · DISPEČER${posk ? ' · ' + posk : ''}`;
+    $('ucetInfo').textContent = `Přihlášen(a) jako DISPEČER ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. Vidíte všechny kamery poskytovatele. Souhlas s obrazem, klid a deaktivaci kamery nastavuje rodina, hlídání dispečink na počítači – tady se nic nemění. ${ja.kamery.length ? '' : (ja.zprava || '')}`;
+    kresliSchemata();
+  } else if (ja.role === 'rodina') {
     $('whoami').textContent = `${ja.jmeno} · rodina${posk ? ' · ' + posk : ''}`;
     $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. ${ja.kamery.length ? '' : (ja.zprava || 'Poskytovatel vám zatím nepřiřadil kameru.')}`;
   } else {
@@ -152,6 +161,33 @@ $('pwForm').onsubmit = async (e) => {
   if (token) showErr('gLoginInfo', 'Tenhle odkaz už byl použitý, heslo máte nastavené. Přihlaste se telefonem a heslem. Když heslo nevíte, požádejte poskytovatele o novou pozvánku.');
   showGate('login');
 })();
+
+/* ---------- barevné schéma (jen mobilní dispečer; stejná schémata jako dispečink, html[data-schema] v proto.css) ---------- */
+const SCHEMA_KEY = 'famicura.rodina.schema';
+const SCHEMATA = [
+  { id: '', nazev: 'Tmavě modrá (výchozí)', s1: '#0d4a75', s2: '#1b6bb8' },
+  { id: 'modra', nazev: 'Modrá', s1: '#1f6fc2', s2: '#3a8ee0' },
+  { id: 'tyrkys', nazev: 'Tyrkysová', s1: '#0f8a8a', s2: '#2bb3b1' },
+  { id: 'zelena', nazev: 'Zelená', s1: '#2e8b57', s2: '#4caf7a' },
+  { id: 'fialova', nazev: 'Fialová', s1: '#5b4bd6', s2: '#8a7cf0' },
+  { id: 'oranzova', nazev: 'Oranžová', s1: '#c9661a', s2: '#e8873b' },
+  { id: 'grafit', nazev: 'Grafitová', s1: '#3a4451', s2: '#5c6b7a' },
+];
+function schemaAktualni() { try { return localStorage.getItem(SCHEMA_KEY) || ''; } catch { return ''; } }
+function nastavSchema(id) {
+  if (!SCHEMATA.some((x) => x.id === id)) id = '';
+  if (id) document.documentElement.dataset.schema = id; else delete document.documentElement.dataset.schema;
+  try { if (id) localStorage.setItem(SCHEMA_KEY, id); else localStorage.removeItem(SCHEMA_KEY); } catch { /* bez paměti prohlížeče */ }
+  const sch = SCHEMATA.find((x) => x.id === id); document.querySelector('meta[name=theme-color]')?.setAttribute('content', sch ? sch.s1 : '#0d4a75');
+  kresliSchemata();
+}
+function kresliSchemata() {
+  const box = $('schemata'); if (!box) return;
+  const akt = schemaAktualni();
+  box.innerHTML = SCHEMATA.map((x) => `<button type="button" data-s="${x.id}" aria-pressed="${x.id === akt}" title="${esc(x.nazev)}"><i style="--s1:${x.s1};--s2:${x.s2}"></i>${esc(x.nazev)}</button>`).join('');
+  box.querySelectorAll('button').forEach((b) => { b.onclick = () => nastavSchema(b.dataset.s); });
+}
+if (schemaAktualni()) document.documentElement.dataset.schema = schemaAktualni();
 
 /* ---------- aplikace na ploše telefonu ---------- */
 // Servisní skript nic nekešuje (obraz i události jsou živé); je tu kvůli
@@ -257,7 +293,7 @@ let deaktZobrazeno = null;
 function kresliDeaktivaci(p) {
   const card = $('deaktCard'); if (!card) return;
   const ja = JA;
-  const smi = !sim.naServeru || ja.role === 'rodina';
+  const smi = !sim.naServeru || (ja.role === 'rodina' && ja.ucet !== 'dispecer');   // mobilní dispečer kameru (de)aktivovat nesmí
   const d = p.deaktivace;
   if (d && deaktZobrazeno !== true) { deaktZobrazeno = true; src?.odpoj?.('kamera je deaktivovaná'); }
   if (!d && deaktZobrazeno === true) { deaktZobrazeno = false; if (src) src.connect(); else startSource(patientId); }
@@ -308,6 +344,7 @@ function ton() {
 }
 function renderZadost() {
   const el = $('zadost');
+  if (JA.ucet === 'dispecer') { el.classList.add('hide'); return; }   // žádost o plný obraz vyřizuje rodina, ne mobilní dispečer
   const r = sim.state.requests.find((x) => x.patientId === patientId && !zadostZavrene.has(x.id) && (x.state === 'čeká' || (x.state === 'vypršelo' && zadostZobrazena === x.id)));
   if (!r) { el.classList.add('hide'); zadostZobrazena = null; return; }
   const ceka = r.state === 'čeká';

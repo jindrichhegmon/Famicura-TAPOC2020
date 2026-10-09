@@ -1092,14 +1092,16 @@ async function renderUzivatele(p) {
       : `<p class="small bad">${esc(e.message)}</p>`;
     return;
   }
-  const users = data.uzivatele.filter((u) => u.kamery.includes(p.id));
+  // u každé kamery: rodina s touhle kamerou + všichni mobilní dispečeři poskytovatele (vidí všechny kamery)
+  const users = data.uzivatele.filter((u) => u.role === 'dispecer' || u.kamery.includes(p.id));
   rodinaUzivatele.set(p.id, users);
   const inv = posledniPozvanka;
-  box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"><span class="grow"><strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}${u.kamery.length > 1 ? ` <span class="small muted">· také ${esc(u.kamery.filter((k) => k !== p.id).map((k) => sim.patient(k)?.name || k).join(', '))}</span>` : ''}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
-      <button class="sm sec" data-a="pozvanka">Nová pozvánka (nové heslo)</button><button class="sm bad" data-a="smaz">Odebrat</button>
+  box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"${u.deaktivovan ? ' class="deakt"' : ''}><span class="grow">${u.role === 'dispecer' ? '<span class="badge crit">DISPEČER</span> ' : ''}<strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}${u.deaktivovan ? ' <span class="badge tech">deaktivován</span>' : ''}${u.role === 'dispecer' ? ' <span class="small muted">· všechny kamery poskytovatele, jen sleduje</span>' : ''}${u.role !== 'dispecer' && u.kamery.length > 1 ? ` <span class="small muted">· také ${esc(u.kamery.filter((k) => k !== p.id).map((k) => sim.patient(k)?.name || k).join(', '))}</span>` : ''}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
+      <button class="sm sec" data-a="pozvanka">Nová pozvánka (nové heslo)</button><button class="sm sec" data-a="deakt">${u.deaktivovan ? 'Aktivovat' : 'Deaktivovat'}</button><button class="sm bad" data-a="smaz">Odebrat</button>
       ${inv && inv.uzivatelId === u.id ? `<div class="inv"><strong>${inv.sms?.odeslano ? 'SMS odeslána.' : inv.sms?.error ? `SMS neodešla: ${esc(inv.sms.error)}` : 'Pozvánka připravena.'}</strong> Odkaz platí 7 dní, je na jedno použití:<br><code>${esc(inv.odkaz)}</code>
         <div class="row"><button class="sm" data-a="copy">Kopírovat odkaz</button><a class="sm btnlike" href="${smsLink(u.telefon, inv.text)}">Poslat SMS z tohoto telefonu</a></div></div>` : ''}</li>`).join('') || '<li class="small muted">Zatím nikdo. Založte první účet níže; rodina dostane pozvánku SMS.</li>'}</ul>
     <form class="userform" id="uform">
+      <label>Typ účtu<select id="uTyp"><option value="rodina">Rodina – jen tato kamera</option><option value="dispecer">Dispečer – všechny kamery, jen sleduje</option></select></label>
       <label>Jméno<input type="text" id="uJmeno" maxlength="60" required placeholder="Petr Novák"></label>
       <label>Telefon<input type="tel" id="uTel" required placeholder="777 123 456"></label>
       <label class="small"><input type="checkbox" id="uSms" ${data.smsNastaveno ? 'checked' : 'disabled'}> poslat SMS ze serveru${data.smsNastaveno ? '' : ' (není nastaveno; pošlete ji z telefonu)'}</label>
@@ -1110,8 +1112,12 @@ async function renderUzivatele(p) {
     e.preventDefault();
     const err = box.querySelector('#uErr'); err.classList.add('hide');
     try {
-      const r = await post('/api/rodina/uzivatele', { jmeno: box.querySelector('#uJmeno').value, telefon: box.querySelector('#uTel').value, kamery: [p.id], poslatSms: box.querySelector('#uSms').checked });
-      if (r.pridano) {
+      const typ = box.querySelector('#uTyp').value;
+      const r = await post('/api/rodina/uzivatele', { jmeno: box.querySelector('#uJmeno').value, telefon: box.querySelector('#uTel').value, kamery: typ === 'dispecer' ? [] : [p.id], role: typ, poslatSms: box.querySelector('#uSms').checked });
+      if (typ === 'dispecer' && !r.pridano) {
+        posledniPozvanka = { uzivatelId: r.uzivatel.id, odkaz: r.odkaz, text: r.text, sms: r.sms };
+        toast(r.sms.odeslano ? `Pozvánka dispečera odeslána SMS na ${r.uzivatel.telefon}. Uvidí všechny kamery poskytovatele.` : 'Účet dispečera založen, pozvánka je připravená. Uvidí všechny kamery poskytovatele.');
+      } else if (r.pridano) {
         // telefon už účet má: kamera se k němu přidala, rodina ji uvidí pod stejným heslem (v aplikaci přibude přepínač kamer)
         posledniPozvanka = null;
         toast(r.uzivatel.aktivni ? `Telefon už má účet (${r.uzivatel.jmeno}): kamera mu byla přidána, přihlásí se stejným heslem a kameru si vybere v aplikaci.` : `Telefon už má účet (${r.uzivatel.jmeno}), kamera mu byla přidána. Účet ještě není aktivovaný – pošlete mu novou pozvánku.`);
@@ -1130,6 +1136,11 @@ async function renderUzivatele(p) {
         if (b.textContent !== 'Opravdu odebrat?') { b.textContent = 'Opravdu odebrat?'; return; }
         const r = await apiJson(`/api/rodina/uzivatele/${id}?kamera=${encodeURIComponent(p.id)}`, { method: 'DELETE' }); posledniPozvanka = null;
         toast(r.smazan ? 'Účet odebrán.' : `Kamera odebrána z účtu; ${r.uzivatel.jmeno} má dál své ostatní kamery.`);
+      }
+      if (b.dataset.a === 'deakt') {
+        const u = (rodinaUzivatele.get(p.id) || []).find((x) => x.id === id);
+        const r = await post(`/api/rodina/uzivatele/${id}/deaktivace`, { on: !u?.deaktivovan });
+        toast(r.uzivatel.deaktivovan ? `Účet ${r.uzivatel.jmeno} deaktivován: nepřihlásí se a přihlášený je odhlášen. Aktivovat ho jde kdykoli.` : `Účet ${r.uzivatel.jmeno} je zase aktivní.`);
       }
       if (b.dataset.a === 'pozvanka') {
         const r = await post(`/api/rodina/uzivatele/${id}/pozvanka`, { poslatSms: data.smsNastaveno });

@@ -59,6 +59,8 @@
     </div>
     <select id="patient" class="pill hide" aria-label="Pacient"></select>
   </header>
+  <!-- mobilní dispečer: jasně označená aplikace, jen sledování -->
+  <div class="dispecerPruh hide" id="dispecerPruh">👁 APLIKACE DISPEČERA · jen sledování všech kamer poskytovatele. Nastavení kamer dělá rodina a dispečink na počítači, tady se nic nemění.</div>
   <!-- výběr kamery: samostatné dlaždice hned pod hlavičkou (jen když má rodina víc kamer) -->
   <div class="kamvyber hide" id="kamVyber" role="tablist" aria-label="Kamery"></div>
 
@@ -179,6 +181,12 @@
     <div class="cardhead"><span class="ic">⚙️</span><h2>Co poskytovatel hlídá</h2></div>
     <p class="hint">Nastavuje dispečink poskytovatele; rodina nic nenastavuje. Symboly: 🎞 událost se nahrává (15 s, plus 5 s před ní), 📱 jde SMS a ✉ e-mail na kontakty, které poskytovatel zadal.</p>
     <p class="now" id="watchInfo"></p>
+  </section>
+
+  <section class="card hide" id="schemaCard">
+    <div class="cardhead"><span class="ic">🎨</span><h2>Barevné schéma</h2></div>
+    <p class="hint">Jediné nastavení dispečera v mobilní aplikaci. Platí jen v tomhle telefonu.</p>
+    <div class="schemata" id="schemata"></div>
   </section>
 
   <section class="card" id="ucet">

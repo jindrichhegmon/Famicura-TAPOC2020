@@ -342,7 +342,7 @@ body.withAuth .apphead,body.withAuth .deskbar{top:var(--auth-h,56px)}
 .users .inv .row{margin-top:6px;flex-wrap:wrap}
 .userform{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:8px}
 .userform label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)}
-.userform input[type=text],.userform input[type=tel]{min-height:36px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:.9rem}
+.userform input[type=text],.userform input[type=tel],.userform select{min-height:36px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:.9rem;background:#fff}.users li.deakt strong{color:var(--muted);text-decoration:line-through}
 .app.pending .phone,.app.pending .bottomnav{visibility:hidden}
 .gateinfo{background:#e7f1fb;color:var(--navy);border-radius:10px;padding:8px 10px;font-size:.9rem;margin:0;line-height:1.35}
 .gatecard .btn.wide,#ucet .btn{flex:0 0 auto;height:auto;min-height:48px;font-size:1.05rem;margin-top:4px;padding:12px 16px}
@@ -448,6 +448,11 @@ body.pending .desk,body.pending #critBanner{visibility:hidden}
 /* ---------- Dispečink: světlejší modrá než aplikace rodiny (od 3.3) ---------- */
 :root{--hdr1:#1f6fc2;--hdr2:#3a8ee0}
 /* Barevná schémata dispečinku (⚙ Nastavení → Zobrazení; jen tento prohlížeč, html[data-schema]) */
+html[data-schema=modra]{--hdr1:#1f6fc2;--hdr2:#3a8ee0;--blue:#106fd5;--navy:#1a5fa3}
+html[data-schema] .apphead{background:linear-gradient(135deg,var(--hdr1),var(--hdr2))}
+.dispecerPruh{margin:10px 0 0;padding:8px 12px;border-radius:12px;background:#fff3e0;border:2px solid #e8873b;color:#7a3d00;font-weight:700;font-size:.85rem;line-height:1.35}
+body.dispecer #soukromi,body.dispecer #klid,body.dispecer #testBtn{display:none!important}
+body.dispecer .apphead{border-bottom:4px solid #e8873b}
 html[data-schema=tyrkys]{--hdr1:#0f8a8a;--hdr2:#2bb3b1;--blue:#0e8f8f;--navy:#0b5e5e}
 html[data-schema=zelena]{--hdr1:#2e8b57;--hdr2:#4caf7a;--blue:#2a8c4a;--navy:#1d5c33}
 html[data-schema=fialova]{--hdr1:#5b4bd6;--hdr2:#8a7cf0;--blue:#5b4bd6;--navy:#3d3290}

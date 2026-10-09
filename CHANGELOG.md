@@ -5,6 +5,32 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.26 · 9. 10. 2026 · mobilní dispečer (účet rodiny s rolí dispečer), deaktivace účtů
+
+- **Mobilní dispečer**: v detailu kamery → Uživatelé rodiny má formulář **Typ
+  účtu** (Rodina – jen tato kamera / Dispečer – všechny kamery, jen sleduje).
+  Dispečer je účet v `A_KAM_UzivatelRodiny` s `Role = 'dispecer'` (bez
+  seznamu kamer), přihlašuje se stejně jako rodina (telefon + heslo, cookie
+  `r:`), vidí všechny kamery tenanta (`smiKameru`) a **nic nenastavuje**:
+  server odmítne každou akci stavu kromě `setWatching` (403 „jen sleduje“),
+  odemknutí nahrávky i deaktivaci kamery. `GET /api/rodina/ja` vrací `ucet:
+  'rodina' | 'dispecer'`.
+- Aplikace rodiny pro dispečera: oranžový pruh **APLIKACE DISPEČERA**, hlavička
+  „jméno · DISPEČER · poskytovatel“, karty Přístup poskytovatele a Klid jsou
+  schované, deaktivace kamery bez tlačítka, žádost o plný obraz se nezobrazuje;
+  jediné nastavení je karta **Barevné schéma** (jen v tom telefonu,
+  `html[data-schema]`).
+- Pozvánka SMS dispečera říká „pristup DISPECERA k dohledu (poskytovatel)“ a že
+  uvidí všechny kamery a nic nenastavuje (`textPozvanky({ role, poskytovatel })`).
+- Dispečer se ukazuje u všech kamer tenanta s odznakem DISPEČER; tenant jich
+  může mít víc; Odebrat ho smaže celého (`odeberKameru` u dispečera).
+- **Deaktivace účtu** (rodina i dispečer): `POST /api/rodina/uzivatele/:id/deaktivace
+  { on }`, sloupec `Deaktivovan`; deaktivovaný se nepřihlásí (403), přihlášený je
+  odhlášen (401), pozvánka a aktivace odkazem neplatí; tlačítka Deaktivovat /
+  Aktivovat v seznamu.
+- Testy: `test/uzivatele.test.mjs` (role, pozvánka, deaktivace), `test/api.test.mjs`
+  (dispečer vidí všechny kamery tenanta, akce 403, deaktivace odhlásí).
+
 ## 3.25 · 8. 10. 2026 · náramek: napřed výsledky, pak ovládání; šedá aktivní záložka nastavení
 
 - Záložka **Náramek**: pořadí bloků Stav náramku (ozvání, baterie, mapa, grafy)

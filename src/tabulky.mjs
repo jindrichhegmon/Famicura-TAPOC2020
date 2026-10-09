@@ -67,7 +67,7 @@ export const SCHEMA = {
   A_KAM_UzivatelRodiny: {
     klic: ['Id'],
     sloupce: { Id: ['c', 16], Jmeno: ['s', 60], Telefon: ['c', 9], HesloHash: ['s', 200], Kamery: ['s', 0], PozvankaHash: ['s', 100], PozvankaDo: ['i'],
-      Vytvoren: ['i'], PosledniPrihlaseni: ['i'] },
+      Vytvoren: ['i'], PosledniPrihlaseni: ['i'], Role: ['s', 12], Deaktivovan: ['i'] },   // Role: rodina (výchozí) | dispecer (mobilní dispečer: všechny kamery tenanta, nic nenastavuje); Deaktivovan: kdy (ms), NULL = aktivní
     indexy: [['Telefon'], ['PozvankaHash']],
   },
 };

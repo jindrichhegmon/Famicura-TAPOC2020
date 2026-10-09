@@ -4,6 +4,12 @@
  * přihlašuje se telefonem a heslem. Stejný princip jako aplikace pacienta
  * Péče doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz.
  *
+ * Role účtu: 'rodina' (své kamery, nastavuje souhlas, klid, deaktivaci) nebo
+ * 'dispecer' – mobilní dispečer: stejná aplikace na telefonu, vidí všechny kamery
+ * tenanta, nic nenastavuje (jen barevné schéma), ukazuje se u všech kamer.
+ * Tenant jich může mít víc. Oba druhy jde deaktivovat (Deaktivovan = kdy):
+ * deaktivovaný se nepřihlásí, přihlášený je odhlášen, pozvánka mu neplatí.
+ *
  * Uloženo v PeceDomaPlus, tabulka A_KAM_UzivatelRodiny tenanta (src/tabulky.mjs).
  * Heslo jen jako scrypt hash, pozvánka jen jako SHA-256 jejího tokenu: kdo
  * tabulku přečte, nepřihlásí se. Odkaz z SMS a přihlášení telefonem tenanta
@@ -14,6 +20,7 @@ import { isDeviceId } from './plan-pravidla.mjs';
 
 export const POZVANKA_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const HESLO_MIN = 8;
+export const ROLE_UCTU = ['rodina', 'dispecer'];
 const TAB = 'A_KAM_UzivatelRodiny';
 
 /** „+420 777 123 456“, „00420777123456“, „777123456“ → „777123456“; jinak null. */
@@ -58,7 +65,8 @@ const iso = (ms) => (ms ? new Date(Number(ms)).toISOString() : null);
 
 /** Co o uživateli smí vidět dispečink i on sám (bez hashů). */
 function verejne(r) {
-  return { id: r.Id, jmeno: r.Jmeno, telefon: r.Telefon, kamery: kameryZ(r.Kamery), aktivni: !!r.HesloHash,
+  return { id: r.Id, jmeno: r.Jmeno, telefon: r.Telefon, kamery: kameryZ(r.Kamery), aktivni: !!r.HesloHash, role: r.Role === 'dispecer' ? 'dispecer' : 'rodina',
+    deaktivovan: r.Deaktivovan ? iso(r.Deaktivovan) : null,
     pozvankaPlatiDo: r.PozvankaHash ? r.PozvankaDo : null, vytvoren: iso(r.Vytvoren), posledniPrihlaseni: iso(r.PosledniPrihlaseni), tenant: r.IDTENANT || undefined };
 }
 
@@ -77,18 +85,19 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
         const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
         return r ? verejne(r) : null;
       },
-      /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). */
-      async vytvor({ jmeno, telefon, kamery }) {
+      /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). role 'dispecer' = mobilní dispečer: bez seznamu kamer (vidí všechny tenanta). */
+      async vytvor({ jmeno, telefon, kamery, role = 'rodina' }) {
         const j = String(jmeno ?? '').trim();
         if (!j || j.length > 60 || /[\r\n]/.test(j)) throw chyba('Jméno: 1 až 60 znaků.');
+        if (!ROLE_UCTU.includes(role)) throw chyba('Typ účtu: rodina, nebo dispecer.');
         const tel = normalizeTelefon(telefon);
         if (!tel) throw chyba('Telefon musí být české mobilní číslo, např. 777 123 456.');
-        const k = Array.isArray(kamery) ? kamery.map(String) : [];
-        if (!k.length || k.length > 10 || !k.every(isDeviceId)) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
+        const k = role === 'dispecer' ? [] : Array.isArray(kamery) ? kamery.map(String) : [];
+        if (role === 'rodina' && (!k.length || k.length > 10 || !k.every(isDeviceId))) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
         if ((await tabulky.vyber(t, TAB, { kde: { Telefon: tel }, limit: 1 })).length) throw chyba('Uživatel s tímhle telefonem už existuje.', 409);
         const id = nahoda(8).toString('hex');
         const p = pozvankaPro();
-        const r = { Id: id, Jmeno: j, Telefon: tel, HesloHash: null, Kamery: [...new Set(k)], PozvankaHash: p.PozvankaHash, PozvankaDo: p.PozvankaDo, Vytvoren: now(), PosledniPrihlaseni: null };
+        const r = { Id: id, Jmeno: j, Telefon: tel, HesloHash: null, Kamery: [...new Set(k)], PozvankaHash: p.PozvankaHash, PozvankaDo: p.PozvankaDo, Vytvoren: now(), PosledniPrihlaseni: null, Role: role, Deaktivovan: null };
         await tabulky.vloz(t, TAB, r);
         return { uzivatel: verejne({ ...r, Kamery: JSON.stringify(r.Kamery) }), token: p.token };
       },
@@ -111,6 +120,14 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
       async smaz(id) {
         if (!(await tabulky.smaz(t, TAB, { Id: String(id) }))) throw chyba('Uživatel neexistuje.', 404);
       },
+      /** Deaktivace (on = true) / aktivace účtu: heslo i kamery zůstávají, jen se nepřihlásí (a přihlášený je odhlášen). */
+      async deaktivuj(id, on) {
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        if (!r) throw chyba('Uživatel neexistuje.', 404);
+        const Deaktivovan = on ? now() : null;
+        await tabulky.uprav(t, TAB, { Id: r.Id }, { Deaktivovan });
+        return verejne({ ...r, Deaktivovan });
+      },
       /** Účet podle telefonu (stejný člověk u další kamery), nebo null. */
       async podleTelefonu(telefon) {
         const tel = normalizeTelefon(telefon); if (!tel) return null;
@@ -127,10 +144,11 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
         await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k });
         return verejne({ ...r, Kamery: JSON.stringify(k) });
       },
-      /** Odebere účtu jednu kameru; když to byla poslední, účet smaže. → { smazan, uzivatel } */
+      /** Odebere účtu jednu kameru; když to byla poslední, účet smaže. Dispečer kamery nemá – odebrání ho smaže. → { smazan, uzivatel } */
       async odeberKameru(id, kameraId) {
         const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
         if (!r) throw chyba('Uživatel neexistuje.', 404);
+        if (r.Role === 'dispecer') { await tabulky.smaz(t, TAB, { Id: r.Id }); return { smazan: true, uzivatel: null }; }
         const k = kameryZ(r.Kamery).filter((x) => x !== String(kameraId));
         if (!k.length) { await tabulky.smaz(t, TAB, { Id: r.Id }); return { smazan: true, uzivatel: null }; }
         await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k });
@@ -145,7 +163,7 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
     async pozvanka(token) {
       if (typeof token !== 'string' || !token) return { platna: false };
       const r = await podleTokenu(token);
-      return r && r.PozvankaDo >= now() ? { platna: true, jmeno: r.Jmeno, tenant: r.IDTENANT } : { platna: false };
+      return r && r.PozvankaDo >= now() && !r.Deaktivovan ? { platna: true, jmeno: r.Jmeno, tenant: r.IDTENANT, role: r.Role === 'dispecer' ? 'dispecer' : 'rodina' } : { platna: false };
     },
     /** Odkaz z SMS: token → nastavení hesla. Vrací uživatele (s tenantem) k přihlášení. */
     async aktivuj(token, heslo) {
@@ -153,11 +171,12 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
       if (chybaHesla) throw chyba(chybaHesla);
       const r = await podleTokenu(token);
       if (!r || r.PozvankaDo < now()) throw chyba('Odkaz z pozvánky neplatí. Požádejte poskytovatele o novou pozvánku.', 410);
+      if (r.Deaktivovan) throw chyba('Účet je deaktivovaný. Obraťte se na poskytovatele.', 403);
       const zmeny = { HesloHash: hashHesla(heslo), PozvankaHash: null, PozvankaDo: null, PosledniPrihlaseni: now() };
       await tabulky.uprav(r.IDTENANT, TAB, { Id: r.Id }, zmeny);
       return verejne({ ...r, ...zmeny });
     },
-    /** Telefon + heslo → uživatel (s tenantem), nebo null (stejná odpověď pro neznámý telefon i špatné heslo). */
+    /** Telefon + heslo → uživatel (s tenantem), nebo null (stejná odpověď pro neznámý telefon i špatné heslo). Deaktivovaný se vrátí s deaktivovan – přihlášení ho odmítne srozumitelně. */
     async prihlas(telefon, heslo) {
       const tel = normalizeTelefon(telefon);
       const kandidati = tel ? await tabulky.vyber('*', TAB, { kde: { Telefon: tel } }) : [];
@@ -177,7 +196,14 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
  * telefonát. Použitý odkaz vede na přihlášení, takže ho rodina může
  * klepnout i podruhé.
  */
-export function textPozvanky({ jmeno, odkaz }) {
+export function textPozvanky({ jmeno, odkaz, role = 'rodina', poskytovatel = '' }) {
+  const bez = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (role === 'dispecer') {
+    return `Famicura: ${bez(jmeno)}, pristup DISPECERA k dohledu${poskytovatel ? ' (' + bez(poskytovatel).slice(0, 40) + ')' : ''}: ${odkaz} `
+      + 'Otevrete odkaz a zvolte si heslo. Jako dispecer uvidite vsechny kamery poskytovatele, nic v nich nenastavujete. '
+      + 'Dejte si aplikaci na plochu: iPhone Safari Sdilet > Pridat na plochu, Android Chrome menu > Pridat na plochu. '
+      + 'Priste se jen prihlasite telefonem a heslem.';
+  }
   return `Famicura: ${jmeno}, pristup k dohledu: ${odkaz} `
     + 'Otevrete odkaz a zvolte si heslo. '
     + 'Dejte si ji na plochu: iPhone Safari Sdilet > Pridat na plochu, Android Chrome menu > Pridat na plochu. '

@@ -526,7 +526,13 @@ Aplikace rodiny je jen pro přihlášené. Princip je z aplikace pacienta Péče
 doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
 
 1. **Poskytovatel založí účet** v dispečinku (detail skutečné kamery →
-   Uživatelé rodiny): jméno a telefon. Server připraví pozvánku: krátký odkaz
+   Uživatelé rodiny): typ účtu (Rodina – jen tato kamera / **Dispečer** –
+   mobilní dispečer: vidí všechny kamery tenanta, nic nenastavuje, jen
+   barevné schéma; `Role` v tabulce, `ucet` v `/api/rodina/ja`, server mu
+   akce stavu kromě `setWatching` odmítá), jméno a telefon. Účet rodiny i
+   dispečera jde deaktivovat (`POST /api/rodina/uzivatele/:id/deaktivace`,
+   sloupec `Deaktivovan`: nepřihlásí se, přihlášený je odhlášen). Server
+   připraví pozvánku: krátký odkaz
    `/r/<token>` (server ho přesměruje na `/proto/rodina.html?pozvanka=…`),
    platný 7 dní a na jedno použití. SMS je bez diakritiky a vejde se do
    dvou dílů; radí i, jak si aplikaci dát na plochu. Použitý odkaz vede
