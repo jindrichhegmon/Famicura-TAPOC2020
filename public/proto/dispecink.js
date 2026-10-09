@@ -1101,7 +1101,7 @@ async function renderUzivatele(p) {
       ${inv && inv.uzivatelId === u.id ? `<div class="inv"><strong>${inv.sms?.odeslano ? 'SMS odeslána.' : inv.sms?.error ? `SMS neodešla: ${esc(inv.sms.error)}` : 'Pozvánka připravena.'}</strong> Odkaz platí 7 dní, je na jedno použití:<br><code>${esc(inv.odkaz)}</code>
         <div class="row"><button class="sm" data-a="copy">Kopírovat odkaz</button><a class="sm btnlike" href="${smsLink(u.telefon, inv.text)}">Poslat SMS z tohoto telefonu</a></div></div>` : ''}</li>`).join('') || '<li class="small muted">Zatím nikdo. Založte první účet níže; rodina dostane pozvánku SMS.</li>'}</ul>
     <form class="userform" id="uform">
-      <label>Typ účtu<select id="uTyp"><option value="rodina">Rodina – jen tato kamera</option><option value="dispecer">Dispečer – všechny kamery, jen sleduje</option></select></label>
+      <label>Typ účtu<select id="uTyp"><option value="rodina">Rodina – jen tato kamera</option><option value="dispecer">Dispečer – všechny kamery, jen sleduje</option><option value="obe">Rodina i dispečer – tady rodina, jinde jen sleduje</option></select></label>
       <label>Jméno<input type="text" id="uJmeno" maxlength="60" required placeholder="Petr Novák"></label>
       <label>Telefon<input type="tel" id="uTel" required placeholder="777 123 456"></label>
       <label class="small"><input type="checkbox" id="uSms" ${data.smsNastaveno ? 'checked' : 'disabled'}> poslat SMS ze serveru${data.smsNastaveno ? '' : ' (není nastaveno; pošlete ji z telefonu)'}</label>
@@ -1112,13 +1112,15 @@ async function renderUzivatele(p) {
     e.preventDefault();
     const err = box.querySelector('#uErr'); err.classList.add('hide');
     try {
-      const typ = box.querySelector('#uTyp').value;
+      const volba = box.querySelector('#uTyp').value;
+      const typ = volba === 'rodina' ? 'rodina' : 'dispecer';   // „obě“ = dispečer, který má tuhle kameru jako rodina
       // bezpečnostní dotaz: pozvánka dispečera otevírá všechny kamery poskytovatele
-      if (typ === 'dispecer' && !confirm(`Opravdu poslat pozvánku DISPEČERA pro ${box.querySelector('#uJmeno').value.trim() || 'tento telefon'} (${box.querySelector('#uTel').value.trim()})?\n\nDispečer uvidí obraz ze VŠECH kamer poskytovatele. Pokud má být jen rodina u této kamery, zvolte Typ účtu „Rodina“.`)) return;
-      const r = await post('/api/rodina/uzivatele', { jmeno: box.querySelector('#uJmeno').value, telefon: box.querySelector('#uTel').value, kamery: typ === 'dispecer' ? [] : [p.id], role: typ, poslatSms: box.querySelector('#uSms').checked });
+      if (typ === 'dispecer' && !confirm(`Opravdu poslat pozvánku DISPEČERA pro ${box.querySelector('#uJmeno').value.trim() || 'tento telefon'} (${box.querySelector('#uTel').value.trim()})?\n\nDispečer uvidí obraz ze VŠECH kamer poskytovatele${volba === 'obe' ? ' a u této kamery bude zároveň rodina' : ''}. Pokud má být jen rodina u této kamery, zvolte Typ účtu „Rodina“.`)) return;
+      const r = await post('/api/rodina/uzivatele', { jmeno: box.querySelector('#uJmeno').value, telefon: box.querySelector('#uTel').value, kamery: volba === 'dispecer' ? [] : [p.id], role: typ, poslatSms: box.querySelector('#uSms').checked });
       if (typ === 'dispecer' && !r.pridano) {
         posledniPozvanka = { uzivatelId: r.uzivatel.id, odkaz: r.odkaz, text: r.text, sms: r.sms };
-        toast(r.povysen ? `${r.uzivatel.jmeno} má teď i roli dispečera (své kamery mu zůstávají jako rodině); ${r.sms.odeslano ? 'pozvánka odeslána SMS, staré heslo přestalo platit' : 'pozvánka je připravená, staré heslo přestalo platit'}.` : r.sms.odeslano ? `Pozvánka dispečera odeslána SMS na ${r.uzivatel.telefon}. Uvidí všechny kamery poskytovatele.` : 'Účet dispečera založen, pozvánka je připravená. Uvidí všechny kamery poskytovatele.');
+        const obe = volba === 'obe' ? ' a u této kamery je zároveň rodina' : '';
+        toast(r.povysen ? `${r.uzivatel.jmeno} má teď i roli dispečera (své kamery mu zůstávají jako rodině); ${r.sms.odeslano ? 'pozvánka odeslána SMS, staré heslo přestalo platit' : 'pozvánka je připravená, staré heslo přestalo platit'}.` : r.sms.odeslano ? `Pozvánka dispečera odeslána SMS na ${r.uzivatel.telefon}. Uvidí všechny kamery poskytovatele${obe}.` : `Účet dispečera založen, pozvánka je připravená. Uvidí všechny kamery poskytovatele${obe}.`);
       } else if (r.pridano) {
         // telefon už účet má: kamera se k němu přidala, rodina ji uvidí pod stejným heslem (v aplikaci přibude přepínač kamer)
         posledniPozvanka = null;

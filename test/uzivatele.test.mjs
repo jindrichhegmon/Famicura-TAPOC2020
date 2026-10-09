@@ -125,7 +125,7 @@ test('mobilní dispečer: role dispecer bez kamer, pozvánka s jasným textem, d
   const d = await u.vytvor({ jmeno: 'Jana Dispečerka', telefon: '777 000 111', role: 'dispecer' });
   assert.equal(d.uzivatel.role, 'dispecer'); assert.deepEqual(d.uzivatel.kamery, []); assert.equal(d.uzivatel.deaktivovan, null);
   const d2 = await u.vytvor({ jmeno: 'Druhý', telefon: '777 000 222', role: 'dispecer', kamery: ['k1'] });
-  assert.deepEqual(d2.uzivatel.kamery, [], 'dispečer kamery nemá, seznam se ignoruje'); assert.equal((await u.seznam()).filter((x) => x.role === 'dispecer').length, 2, 'tenant může mít víc dispečerů');
+  assert.deepEqual(d2.uzivatel.kamery, ['k1'], 'dispečer s kamerou = u ní zároveň rodina'); assert.equal((await u.seznam()).filter((x) => x.role === 'dispecer').length, 2, 'tenant může mít víc dispečerů');
   await assert.rejects(u.vytvor({ jmeno: 'X', telefon: '777000333', role: 'neco' }), /Typ účtu/);
   await assert.rejects(u.vytvor({ jmeno: 'X', telefon: '777000333', role: 'rodina' }), /aspoň jednu kameru/);
   const r = await u.vytvor({ jmeno: 'Petr', telefon: '777000444', kamery: ['k1'] });

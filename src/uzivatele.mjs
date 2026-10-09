@@ -88,15 +88,16 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
         const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
         return r ? verejne(r) : null;
       },
-      /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). role 'dispecer' = mobilní dispečer: bez seznamu kamer (vidí všechny tenanta). */
+      /** Nový uživatel + token pozvánky (ten se nikam neukládá, jde jen do odkazu). role 'dispecer' = mobilní dispečer: vidí všechny kamery tenanta; kamery v seznamu jsou ty, kde je zároveň rodina (může být prázdný). */
       async vytvor({ jmeno, telefon, kamery, role = 'rodina' }) {
         const j = String(jmeno ?? '').trim();
         if (!j || j.length > 60 || /[\r\n]/.test(j)) throw chyba('Jméno: 1 až 60 znaků.');
         if (!ROLE_UCTU.includes(role)) throw chyba('Typ účtu: rodina, nebo dispecer.');
         const tel = normalizeTelefon(telefon);
         if (!tel) throw chyba('Telefon musí být české mobilní číslo, např. 777 123 456.');
-        const k = role === 'dispecer' ? [] : Array.isArray(kamery) ? kamery.map(String) : [];
-        if (role === 'rodina' && (!k.length || k.length > 10 || !k.every(isDeviceId))) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
+        const k = Array.isArray(kamery) ? kamery.map(String) : [];
+        if (role === 'rodina' && !k.length) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
+        if (k.length > 10 || !k.every(isDeviceId)) throw chyba('Vyberte aspoň jednu kameru (nejvýš 10).');
         if ((await tabulky.vyber(t, TAB, { kde: { Telefon: tel }, limit: 1 })).length) throw chyba('Uživatel s tímhle telefonem už existuje.', 409);
         const id = nahoda(8).toString('hex');
         const p = pozvankaPro();

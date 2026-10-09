@@ -517,6 +517,11 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   assert.equal(b.ok, true); assert.equal(b.uzivatel.role, 'dispecer'); assert.deepEqual(b.uzivatel.kamery, []);
   assert.match(b.text, /pristup DISPECERA k dohledu \(FamiCura s.r.o.\)/, 'SMS říká, že je to dispečer a jmenuje poskytovatele');
   assert.equal((await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Jana', telefon: '777000111', kamery: [], role: 'dispecer' } }))).status, 409, 'druhý účet dispečera na stejný telefon ne');
+  // „Rodina i dispečer“ rovnou při založení: dispečer s kamerou
+  const ob = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Oba', telefon: '777000333', kamery: ['druha'], role: 'dispecer' } }))).json();
+  assert.equal(ob.uzivatel.role, 'dispecer'); assert.deepEqual(ob.uzivatel.kamery, ['druha']);
+  const ob2 = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Oba', telefon: '777000333', kamery: ['tapoc2020'], role: 'dispecer' } }))).json();
+  assert.equal(ob2.pridano, true); assert.deepEqual(ob2.uzivatel.kamery, ['druha', 'tapoc2020'], 'dispečerovi se přidá další kamera jako rodině i volbou obě');
   const seznam = await (await h(req('GET', '/api/rodina/uzivatele', { cookies: cookie() }))).json();
   assert.equal(seznam.uzivatele[0].role, 'dispecer');
   const token = b.odkaz.split('/r/')[1];

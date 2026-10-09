@@ -301,8 +301,10 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         // pozvánka dispečera na existující účet → účet dostane roli dispečera (své kamery mu zůstávají jako rodině) a novou pozvánku (nové heslo)
         const stavajici = await uz().podleTelefonu(telefon);
         if (stavajici && role === 'dispecer') {
-          if (stavajici.role === 'dispecer') return json({ ok: false, error: `Telefon už má účet dispečera (${stavajici.jmeno}). Novou pozvánku pošlete tlačítkem u jeho účtu.` }, 409);
+          if (stavajici.role === 'dispecer' && !(Array.isArray(k) && k.some((id) => !stavajici.kamery.includes(id)))) return json({ ok: false, error: `Telefon už má účet dispečera (${stavajici.jmeno}). Novou pozvánku pošlete tlačítkem u jeho účtu.` }, 409);
+          if (stavajici.role === 'dispecer') { let u = stavajici; for (const id of k) u = await uz().pridejKameru(stavajici.id, id); return json({ ok: true, pridano: true, uzivatel: u, smsNastaveno: sms.nastaveno }); }
           await uz().nastavRoli(stavajici.id, 'dispecer');
+          if (Array.isArray(k)) for (const id of k) await uz().pridejKameru(stavajici.id, id);
           return pozvanka(await uz().novaPozvanka(stavajici.id), !!poslatSms, { povysen: true });
         }
         if (stavajici && Array.isArray(k) && k.length) {
