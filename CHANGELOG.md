@@ -10,6 +10,8 @@ dispečinku. Postup nové verze je v README, část „Verze“.
 - **Mango přes SSH**: `deploy/wireguard/mango-ssh.sh <famicura-mango*.conf>
   <IP kamery> [IP Manga]` nastaví v Mangu tunel WireGuard k VPS (rozhraní
   OpenWrt `wgfam`) a firewall ke kameře bez webu GL.iNet; README 2c.
+  Nastaví i pevný kanál Wi-Fi 6 / 20 MHz (kanál Auto = 12 nebo 13, který kamery
+  Tapo neumí; proto se kamera k novému Mangu nepřipojila).
 
 - **Grafy tepu, tlaku, kyslíku a teploty** (dispečink i aplikace na telefonu)
   ukazují posledních 10 měření rovnoměrně vedle sebe, pod každým bodem čas

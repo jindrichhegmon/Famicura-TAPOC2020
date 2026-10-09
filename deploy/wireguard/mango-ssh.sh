@@ -2,8 +2,11 @@
 # Brána GL.iNet Mango přes SSH místo jeho webu: z famicura-mango*.conf (od
 # ./deploy/wireguard-vps.sh) nastaví v Mangu tunel WireGuard k VPS a firewall,
 # který z tunelu pustí jen kameru. Spouštět z Macu připojeného na Wi-Fi Manga:
-#   ./deploy/wireguard/mango-ssh.sh famicura-mango-misto-3.conf 192.168.11.50 192.168.11.1
-#   (soubor .conf, IP kamery v síti Manga, IP Manga – výchozí 192.168.8.1)
+#   ./deploy/wireguard/mango-ssh.sh famicura-mango-misto-3.conf 192.168.11.50 192.168.11.1 [6]
+#   (soubor .conf, IP kamery v síti Manga, IP Manga – výchozí 192.168.8.1, kanál Wi-Fi – výchozí 6)
+# Nastaví i pevný kanál Wi-Fi 2,4 GHz (výchozí 6, šířka 20 MHz): s kanálem „Auto“ si
+# Mango v Evropě vybere i 12 nebo 13, které kamery Tapo neumí, a kamera se nepřipojí
+# (telefon a Mac ano). Kanál 0 = nechat Auto.
 # Zeptá se na heslo správce Manga (to z jeho webu). Soukromý klíč jde jen
 # tunelem SSH do Manga, nikde se nevypisuje; po úspěchu soubory .conf smažte.
 #
@@ -12,10 +15,11 @@
 # „Allow Remote Access LAN“ a přežije i reset klienta VPN ve webu. Spuštěno
 # znovu vše přepíše (nový klíč po dalším wireguard-vps.sh, jiná IP kamery).
 set -euo pipefail
-CONF="${1:-}"; KAMERA="${2:-}"; MANGO="${3:-192.168.8.1}"
+CONF="${1:-}"; KAMERA="${2:-}"; MANGO="${3:-192.168.8.1}"; KANAL="${4:-6}"
 [ -n "$CONF" ] && [ -f "$CONF" ] || { echo "Použití: $0 <famicura-mango*.conf> <IP kamery v síti Manga> [IP Manga, výchozí 192.168.8.1]"; exit 1; }
 [[ "$KAMERA" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "Druhý parametr je IP kamery v síti Manga (např. 192.168.11.50)."; exit 1; }
 [[ "$MANGO" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "Třetí parametr je IP Manga (např. 192.168.11.1)."; exit 1; }
+[[ "$KANAL" =~ ^[0-9]{1,2}$ ]] && [ "$KANAL" -le 11 ] || { echo "Čtvrtý parametr je kanál Wi-Fi 1–11 (0 = Auto), výchozí 6."; exit 1; }
 
 hodnota() { grep -i "^[[:space:]]*$1[[:space:]]*=" "$CONF" | head -1 | sed 's/^[^=]*=[[:space:]]*//' | tr -d '\r[:space:]'; }
 PRIV=$(hodnota PrivateKey); ADDR=$(hodnota Address); PUB=$(hodnota PublicKey)
@@ -26,7 +30,7 @@ EP_HOST="${EP%:*}"; EP_PORT="${EP##*:}"
 KEEP="${KEEP:-25}"
 ALLOWED_SEZNAM=$(echo "$ALLOWED" | tr ',' ' ')
 
-echo "Mango $MANGO: tunel WireGuard k $EP (adresa $ADDR), z tunelu ke kameře $KAMERA. Heslo správce Manga:"
+echo "Mango $MANGO: tunel WireGuard k $EP (adresa $ADDR), z tunelu ke kameře $KAMERA, Wi-Fi kanál ${KANAL/#0/Auto}. Heslo správce Manga:"
 # Celé nastavení běží v Mangu z jednoho skriptu na vstupu ssh; heslo se ptá z terminálu, ne ze vstupu.
 ssh -o StrictHostKeyChecking=accept-new "root@$MANGO" 'sh -s' <<REMOTE
 set -e
@@ -67,10 +71,20 @@ echo "--- stav tunelu v Mangu (wg show wgfam):"
 wg show wgfam 2>/dev/null || { echo "rozhraní wgfam nenaběhlo"; ifstatus wgfam 2>/dev/null | head -20; exit 3; }
 echo "--- ping na VPS tunelem (10.77.0.1):"
 ping -c 2 -W 3 10.77.0.1 2>&1 | tail -2
+# Wi-Fi: pevný kanál pro kamery (až nakonec a na pozadí – restart Wi-Fi odpojí Mac, kdyby byl na Wi-Fi Manga)
+if [ "$KANAL" != 0 ]; then
+  zmena=0
+  for r in \$(uci show wireless | grep -oE '^wireless\.[^.=]+=wifi-device' | cut -d. -f2 | cut -d= -f1); do
+    [ "\$(uci -q get wireless.\$r.channel)" = "$KANAL" ] && [ "\$(uci -q get wireless.\$r.htmode)" = "HT20" ] && continue
+    uci set wireless.\$r.channel='$KANAL'; uci set wireless.\$r.htmode='HT20'; zmena=1
+  done
+  if [ "\$zmena" = 1 ]; then uci commit wireless; echo "--- Wi-Fi Manga: kanál $KANAL, 20 MHz – restartuje se za 3 s, Mac na Wi-Fi Manga se připojí znovu sám"; (sleep 3; wifi) >/dev/null 2>&1 & else echo "--- Wi-Fi Manga: kanál $KANAL, 20 MHz už nastaven"; fi
+fi
 REMOTE
 cat <<TEXT
 
 Hotovo. Když je výše „latest handshake“ a ping „2 packets received“, tunel stojí.
+Kameru Tapo připojte na Wi-Fi Manga až teď (po restartu Wi-Fi na kanál ${KANAL/#0/Auto}): telefon na Wi-Fi Manga, kamera resetovaná, v aplikaci Tapo zvolit síť Manga.
 Dál (Mac zpět na internet):
   ./deploy/vps-kamera.sh          (místo podle tunelu, IP kamery $KAMERA)
   rm $CONF ${CONF/mango/wg}       (soubory mají soukromý klíč)

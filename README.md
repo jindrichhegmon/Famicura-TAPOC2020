@@ -744,7 +744,10 @@ Wi-Fi Manga, zeptá se na heslo správce Manga):
 (soubor .conf, IP kamery, IP Manga). Nepoužívá klienta VPN z webu GL.iNet, ale
 obyčejné rozhraní OpenWrt `wgfam` s vlastní zónou firewallu, takže Proxy Mode
 ani „Allow Remote Access LAN“ nejsou potřeba; klient VPN ve webu Manga musí být
-odpojený. Na konci vypíše `wg show wgfam` (má mít „latest handshake“) a ping na
+odpojený. Nastaví i **pevný kanál Wi-Fi 6 (20 MHz)**, čtvrtý parametr ho mění
+(0 = Auto): s kanálem Auto si Mango vybere i 12 nebo 13, které kamery Tapo
+neumí – kamera se pak k Mangu nepřipojí, i když telefon ano (stalo se u
+třetího místa). Na konci vypíše `wg show wgfam` (má mít „latest handshake“) a ping na
 10.77.0.1. Soukromý klíč jde jen tunelem SSH, soubory `.conf` pak smažte.
 
 Tunel SSH z Windows (2b) ani WireGuard na Windows pak nejsou potřeba; VPS
