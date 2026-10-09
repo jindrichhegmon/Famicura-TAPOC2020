@@ -12,12 +12,13 @@ import { createTapo, TapoError } from './tapo.mjs';
 
 export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = console, pametMs = 10 * 60 * 1000 } = {}) {
   const klienti = new Map();   // kameraId → { klient, ucet }
+  const odmitnute = new Map(); // kameraId → Set účtů, které kamera po přihlášení odmítla (-40211: bez práv) – zkouší se další
   const pamet = new Map();     // kameraId → { podporuje, zapnuto, chyba, cas, model }
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
 
   const ucty = (kam) => {
-    const u = [];
-    if (kam.user && kam.pass) u.push({ ucet: 'kamera', user: kam.user, pass: kam.pass });
+    const u = []; const o = odmitnute.get(kam.id) || new Set();
+    if (kam.user && kam.pass && !o.has('kamera')) u.push({ ucet: 'kamera', user: kam.user, pass: kam.pass });
     if (kam.tapoPass) u.push({ ucet: 'tapo', user: kam.tapoUser || 'admin', pass: kam.tapoPass });
     return u;
   };
@@ -29,7 +30,7 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
     const drzeny = klienti.get(kameraId);
     if (drzeny) return drzeny;
     const moznosti = ucty(kam);
-    if (!moznosti.length) throw chyba('Kamera nemá uložený účet.', 503);
+    if (!moznosti.length) throw chyba(kam.tapoPass ? 'Kamera odmítla účet kamery i účet TP-Link.' : `účet kamery na tohle rozhraní nestačí – uložte heslo účtu TP-Link: ./deploy/vps-kamera.sh svetlo ${kameraId}`, 503);
     let posledni = null;
     for (const m of moznosti) {
       const k = tapo({ host: kam.ip, user: m.user, pass: m.pass, log });
@@ -49,11 +50,12 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
      * Stav světla: { podporuje, zapnuto, chyba, model, ucet }. Kamera bez světla → podporuje false (na pametMs se nezkouší znovu).
      * Chyba spojení / přihlášení → podporuje null a text chyby (zkusí se příště znovu).
      */
-    async stav(kameraId, { znovu = false } = {}) {
+    async stav(kameraId, { znovu = false, pokus = 0 } = {}) {
       const z = pamet.get(kameraId);
       if (!znovu && z && z.podporuje === false && now() - z.cas < pametMs) return z;
+      let ucet = null;
       try {
-        const { klient: k, ucet } = await klient(kameraId);
+        const k = (({ klient: kl, ucet: u }) => { ucet = u; return kl; })(await klient(kameraId));
         let model = z?.model || null;
         if (!model) { try { const i = await k.info(); model = i?.device_model || null; } catch { /* model je jen informace */ } }
         const s = await k.svetloStav();
@@ -61,6 +63,8 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
       } catch (e) {
         if (e instanceof TapoError && e.nepodporuje) return zapamatuj(kameraId, { podporuje: false, zapnuto: null, chyba: null });
         klienti.delete(kameraId);
+        // přihlášení prošlo, ale kamera účet na funkce nepustila (-40211): zapamatovat a zkusit další účet (TP-Link)
+        if (e instanceof TapoError && e.auth && ucet && pokus < 2) { const o = odmitnute.get(kameraId) || new Set(); o.add(ucet); odmitnute.set(kameraId, o); return this.stav(kameraId, { znovu, pokus: pokus + 1 }); }
         if (log?.error) log.error('[svetlo]', kameraId, 'stav:', e.message);
         return zapamatuj(kameraId, { podporuje: null, zapnuto: null, chyba: e.message });
       }
@@ -84,6 +88,6 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
     },
     /** Co si server o světlech pamatuje (Diagnostika): kameraId → { podporuje, zapnuto, chyba, cas, model }. */
     pamet() { return Object.fromEntries(pamet); },
-    zapomen(kameraId) { klienti.delete(kameraId); pamet.delete(kameraId); },
+    zapomen(kameraId) { klienti.delete(kameraId); pamet.delete(kameraId); odmitnute.delete(kameraId); },
   };
 }

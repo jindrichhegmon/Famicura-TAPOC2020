@@ -9,13 +9,14 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:
 const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex').toUpperCase();
 const md5 = (s) => createHash('md5').update(s, 'utf8').digest('hex').toUpperCase();
 
-export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, model = 'C560WS', user = 'admin', hashMetoda = 'sha256', blokovatPo = 3 } = {}) {
+export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, model = 'C560WS', user = 'admin', hashMetoda = 'sha256', blokovatPo = 3, bezPrav = false } = {}) {
   const H = hashMetoda === 'md5' ? md5(password) : sha(password);
   const st = { zapnuto: false, intenzita: 3, stok: null, seq: 0, nonce: '', cnonce: '', lsk: null, ivb: null, spatne: 0, volani: [], prihlaseni: 0, neplatnyStok: 0 };
   const odp = (status, j) => ({ status, text: async () => JSON.stringify(j) });
 
   const funkce = (method, params) => {
     st.volani.push({ method, params });
+    if (bezPrav) return { error_code: -40211 };   // účet se přihlásí, ale na funkce nemá práva (účet kamery u C220)
     if (method === 'getDeviceInfo') return { device_info: { basic_info: { device_model: model, device_alias: 'Kamera test', sw_version: '1.3.9' } } };
     if (!svetlo && /Whitelamp/.test(method)) return { error_code: -40210 };
     if (method === 'getWhitelampConfig') return { image: { switch: { force_wtl_state: st.zapnuto ? 'on' : 'off', wtl_intensity_level: String(st.intenzita), wtl_force_time: '300' } } };

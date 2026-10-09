@@ -75,6 +75,18 @@ test('světlo: stav a přepnutí přes účet kamery; kamera bez světla se zapa
   assert.equal(Object.keys(sv.pamet()).length, 2);
 });
 
+test('světlo: účet kamery se přihlásí, ale kamera vrací -40211 (bez práv) → server sám přejde na účet TP-Link', async () => {
+  const kamUcet = fakeTapo({ password: 'ucet-kamery', user: 'Kamera', bezPrav: true });
+  const cloud = fakeTapo({ password: 'cloud-heslo' });
+  const kamery = async () => [{ id: 'k1', ip: '10.0.0.1', user: 'Kamera', pass: 'ucet-kamery', tapoPass: 'cloud-heslo' }, { id: 'k2', ip: '10.0.0.2', user: 'Kamera', pass: 'ucet-kamery' }];
+  const tapo = ({ host, user, pass }) => createTapo({ host, user, pass, fetchImpl: user === 'admin' ? cloud.fetchImpl : kamUcet.fetchImpl });
+  const sv = createSvetlo({ kamery, tapo, log: { error() {} } });
+  const s = await sv.stav('k1');
+  assert.equal(s.podporuje, true); assert.equal(s.ucet, 'tapo');
+  const s2 = await sv.stav('k2');
+  assert.equal(s2.podporuje, null); assert.match(s2.chyba, /TP-Link/);
+});
+
 test('světlo: účet kamery nestačí → účet TP-Link (tapoPass); bez něj srozumitelná rada', async () => {
   const kam = fakeTapo({ password: 'cloud-heslo' });
   const kamery = async () => [{ id: 'k1', ip: '10.0.0.1', user: 'Kamera', pass: 'jine', tapoPass: 'cloud-heslo' }, { id: 'k2', ip: '10.0.0.1', user: 'Kamera', pass: 'jine' }];

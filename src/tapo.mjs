@@ -36,6 +36,7 @@ export const KODY = {
   '-40404': 'kamera dočasně blokuje přihlášení (příliš mnoho pokusů)',
   '-40411': 'nesprávné jméno nebo heslo',
   '-40413': 'kamera chce zabezpečené přihlášení',
+  '-40211': 'účet nemá na tohle rozhraní práva (kamera chce účet TP-Link)',
   '-40210': 'kamera tuhle funkci nemá',
   '-40209': 'kamera tuhle funkci nemá',
   '-64303': 'kamera tuhle funkci nemá',
@@ -157,7 +158,7 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
     const o = await raw({ method: 'multipleRequest', params: { requests: [{ method, params }] } });
     const r = o?.result?.responses?.[0];
     if (!r) throw new TapoError('kamera neodpověděla na ' + method, {});
-    if (r.error_code && r.error_code !== 0) throw new TapoError(popisKodu(r.error_code), { code: r.error_code, nepodporuje: NEPODPORUJE.has(r.error_code) });
+    if (r.error_code && r.error_code !== 0) throw new TapoError(popisKodu(r.error_code), { code: r.error_code, nepodporuje: NEPODPORUJE.has(r.error_code), auth: r.error_code === -40211 || r.error_code === -40401 });
     return r.result ?? {};
   }
 
