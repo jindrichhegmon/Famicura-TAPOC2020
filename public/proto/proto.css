@@ -391,6 +391,7 @@ body.withAuth .cm.ovl{padding-top:calc(var(--auth-h,56px) + 16px)}
 .cm .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 18px}
 .cm .tabs button{padding:10px 13px;font-weight:550;color:var(--ink3);border:0;border-bottom:2px solid transparent;background:none;border-radius:0;white-space:nowrap;font-size:13.5px;min-height:0}
 .cm .tabs button[aria-pressed=true]{color:var(--brand-dark);border-bottom-color:var(--brand);font-weight:650}
+.cm .tabs .naptisk{margin-left:auto;align-self:center;font-size:13px;font-weight:600;color:var(--brand-dark);text-decoration:none;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .cm .sec{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:6px 0 2px}
 .cm .f2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 .cm .f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px}

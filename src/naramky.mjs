@@ -12,7 +12,7 @@
  * délka = 4 šestnáctkové číslice, počet bajtů obsahu. Server odpovídá na LK, AL a TKQ
  * stejným rámcem bez dat ([3G*ID*0002*LK]); bez odpovědi zařízení poplach opakuje.
  *
- * Přívěsek se v dispečinku přiřadí ke kameře (Komunikace → Náramek / přívěsek, ID zařízení).
+ * Přívěsek se v dispečinku přiřadí ke kameře (záložka Náramek → Přiřazení náramku, ID zařízení).
  * SOS → událost „Nouzové tlačítko“, pád → „Pád hlášený náramkem“, slabá baterie → „Slabá
  * baterie náramku“ u té kamery; dál jde vše jako u událostí kamery (fronta, SMS, e-mail,
  * nahrávka kamery). Ozvání a baterie se zapisují ke kameře (naramek.posledni, baterie, poloha).
@@ -210,7 +210,7 @@ export function createNaramky({ najemci, kamery, port = 5093, host = '0.0.0.0', 
     if (!kam) {
       stat.nezname++;
       const kdy = nezname.get(ramec.id) || 0;
-      if (now() - kdy > 60 * 60 * 1000) { nezname.set(ramec.id, now()); log.log(`[naramky] neznámý přívěsek ${ramec.id} (${r.typ}) – přiřaďte ho v dispečinku u kamery (Komunikace → Náramek / přívěsek).`); }
+      if (now() - kdy > 60 * 60 * 1000) { nezname.set(ramec.id, now()); log.log(`[naramky] neznámý přívěsek ${ramec.id} (${r.typ}) – přiřaďte ho v dispečinku u kamery (záložka Náramek → Přiřazení náramku).`); }
       return;
     }
     let sv = null, pac = null;

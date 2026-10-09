@@ -5,6 +5,24 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.30 · 9. 10. 2026 · nápověda zkontrolovaná a k tisku do PDF
+
+- **Tisk / PDF**: v Nápovědě dispečinku je vpravo na liště Témata / Asistent
+  odkaz „🖨 Tisk / PDF“ → nová stránka `/proto/napoveda-tisk.html` se všemi
+  tématy, obsahem, obrázky, verzí a datem; tlačítko otevře dialog tisku
+  (Uložit jako PDF). Téma „Co je nové“ jde na konec na vlastní stránku.
+- **Nápověda uvedená do souladu s 3.29**: záložky ve dvou skupinách (Monitoring,
+  Náramek / Komunikace a kontakty, Nastavení alertů), sloupce SMS komu a
+  E-mail komu, telefony poskytovatele v Kontaktech (ne v ⚙), přiřazení náramku
+  dole v záložce, čísla SOS z dispečinku, Odebrat u dispečera, lišta s
+  tlačítkem Hlavní aplikace a diagnostika; nové téma „Nápověda k vytištění“.
+- **Asistent**: nové ukázkové otázky (mobilní dispečer, čísla SOS, komu jde
+  SMS a e-mail), klíčová slova pro náramek (i „náramku“), mobilního dispečera
+  a tisk; uvítání jmenuje všechna témata.
+- Nové snímky obrazovek v nápovědě: detail se záložkami, Uživatelé rodiny
+  s typem účtu, Kontakty se třemi oddíly, Nastavení alertů s příjemci,
+  ⚙ Nastavení bez telefonů.
+
 ## 3.29 · 9. 10. 2026 · typ účtu „Rodina i dispečer“
 
 - Formulář Uživatelé rodiny má třetí volbu **Rodina i dispečer – tady rodina,

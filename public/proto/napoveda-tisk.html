@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Famicura Kamera – nápověda dispečinku (tisk)</title>
+<script src="/verze.js"></script>
+<style>
+  :root{--ink:#17212b;--muted:#5a6b7d;--blue:#106fd5;--line:#dde4ea}
+  html{color-scheme:light}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#f5f7f9;line-height:1.5}
+  .lista{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .lista .grow{flex:1;color:var(--muted);font-size:.9rem}
+  button{font:inherit;font-weight:700;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
+  button.sec{background:#e6ecf2;color:var(--ink)}
+  main{max-width:860px;margin:0 auto;padding:24px;background:#fff}
+  h1{font-size:1.9rem;margin:0 0 4px}
+  .pod{color:var(--muted);margin:0 0 18px}
+  nav ol{columns:2;column-gap:32px;padding-left:22px;margin:0 0 24px;font-size:.95rem}
+  nav li{break-inside:avoid;margin:2px 0}
+  nav a{color:var(--blue);text-decoration:none}
+  section{border-top:1px solid var(--line);padding:18px 0 8px;break-inside:avoid-page}
+  section h2{font-size:1.25rem;margin:0 0 8px;color:#0d4a75}
+  section p{margin:0 0 10px;font-size:.98rem}
+  figure{margin:10px 0 14px}
+  figure img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;display:block}
+  figcaption{font-size:.82rem;color:var(--muted);margin-top:4px}
+  footer{color:var(--muted);font-size:.82rem;padding:16px 0 32px;border-top:1px solid var(--line)}
+  @media print{
+    body{background:#fff}
+    .lista{display:none}
+    main{max-width:none;padding:0}
+    section{page-break-inside:avoid}
+    section#t-novinky{page-break-before:always}
+    figure img{max-height:11cm;width:auto;max-width:100%}
+    a{color:inherit;text-decoration:none}
+    @page{margin:16mm 14mm}
+  }
+</style>
+</head>
+<body>
+<div class="lista">
+  <span class="grow">Tisk nebo uložení do PDF: klepněte na tlačítko a v dialogu tisku zvolte tiskárnu, nebo „Uložit jako PDF“ (Mac: vlevo dole PDF → Uložit jako PDF).</span>
+  <button type="button" id="tisk">🖨 Vytisknout / uložit jako PDF</button>
+  <button type="button" class="sec" id="zavrit">Zavřít</button>
+</div>
+<main>
+  <h1>Famicura Kamera – nápověda dispečinku</h1>
+  <p class="pod" id="pod">Verze aplikace <span id="verze"></span> · vytištěno <span id="datum"></span> · témata nápovědy a obrázky obrazovek stejně jako v Nápovědě dispečinku.</p>
+  <nav><ol id="obsah"></ol></nav>
+  <div id="temata"></div>
+  <footer>Famicura Kamera · dispečink poskytovatele, aplikace rodiny a mobilní dispečer · stejná nápověda je v dispečinku pod tlačítkem ? Nápověda, kde na otázky odpovídá i asistent.</footer>
+</main>
+<script type="module">
+  import { TEMATA } from '/proto/napoveda.js';
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  document.getElementById('verze').textContent = window.FAMICURA_VERZE || '';
+  document.getElementById('datum').textContent = new Date().toLocaleDateString('cs-CZ');
+  // obsah + témata; „Co je nové“ je dlouhé, jde až na konec a na novou stránku
+  const poradi = [...TEMATA.filter((t) => t.id !== 'novinky'), ...TEMATA.filter((t) => t.id === 'novinky')];
+  document.getElementById('obsah').innerHTML = poradi.map((t) => `<li><a href="#t-${esc(t.id)}">${esc(t.nazev)}</a></li>`).join('');
+  // Co je nové: každá verze na vlastní řádek, ať se to dá číst
+  const text = (t) => t.id === 'novinky' ? t.text.split(/(?= Verze \d)/).map((v) => `<p>${esc(v.trim())}</p>`).join('') : `<p>${esc(t.text)}</p>`;
+  document.getElementById('temata').innerHTML = poradi.map((t) => `<section id="t-${esc(t.id)}"><h2>${esc(t.nazev)}</h2>${text(t)}${(t.obrazky || []).map((o) => `<figure><img src="${esc(o.src)}" alt="${esc(o.popis)}" loading="eager" onerror="this.parentElement.remove()"><figcaption>${esc(o.popis)}</figcaption></figure>`).join('')}</section>`).join('');
+  document.getElementById('tisk').onclick = () => window.print();
+  document.getElementById('zavrit').onclick = () => { if (history.length > 1) history.back(); else window.close(); };
+  if (new URLSearchParams(location.search).get('tisk') === '1') setTimeout(() => window.print(), 800);
+</script>
+</body>
+</html>

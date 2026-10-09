@@ -224,7 +224,7 @@ import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
   const log = $('chatLog');
   const zprava = (text, kdo, tema) => { const d = document.createElement('div'); d.className = 'msg ' + kdo; d.innerHTML = (tema ? `<span class="tema">${esc(tema)}</span>` : '') + esc(text); log.append(d); log.scrollTop = log.scrollHeight; return d; };
   zprava('Dobrý den, jsem asistent dispečinku. Zeptejte se, nebo klepněte na jednu z otázek níže.', 'bot');
-  const PRIKLADY = ['Jak požádat rodinu o plný obraz?', 'Kdy můžu použít nouzový přístup?', 'Jak založit účet rodině?', 'Proč nevidím obraz z kamery?', 'Co dělá tlačítko Převzít?'];
+  const PRIKLADY = ['Jak požádat rodinu o plný obraz?', 'Kdy můžu použít nouzový přístup?', 'Jak založit účet rodině?', 'Jak založit mobilního dispečera?', 'Jak nastavit čísla SOS náramku?', 'Komu jde SMS a e-mail při události?', 'Proč nevidím obraz z kamery?', 'Co dělá tlačítko Převzít?'];
   $('chatOtazky').innerHTML = PRIKLADY.map((q) => `<button type="button">${esc(q)}</button>`).join('');
   $('chatOtazky').querySelectorAll('button').forEach((b) => { b.onclick = () => { $('chatIn').value = b.textContent; $('chatForm').requestSubmit(); }; });
   let aiNaServeru = null;   // null = ještě nevíme, false = neodpovídá AI, true = odpovídá AI přes webhook
