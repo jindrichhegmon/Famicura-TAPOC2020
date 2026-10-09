@@ -24,7 +24,7 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:
 import https from 'node:https';
 
 export class TapoError extends Error {
-  constructor(message, { code = null, status = 0, auth = false, nepodporuje = false } = {}) { super(message); this.code = code; this.status = status; this.auth = auth; this.nepodporuje = nepodporuje; }
+  constructor(message, { code = null, status = 0, auth = false, nepodporuje = false, secLeft = 0 } = {}) { super(message); this.code = code; this.status = status; this.auth = auth; this.nepodporuje = nepodporuje; this.secLeft = secLeft; }
 }
 
 const sha256hex = (s) => createHash('sha256').update(s, 'utf8').digest('hex').toUpperCase();
@@ -92,17 +92,22 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
   const zjistiZabezpeceni = async () => {
     if (secure !== null) return secure;
     const { status, j } = await post('/', { method: 'login', params: { encrypt_type: '3', username: user } });
-    const et = j?.result?.data?.encrypt_type;
+    const d = data(j);
+    if (d?.sec_left || d?.code === -40404) { if (log?.log) log.log('[tapo]', host, user, 'úvodní dotaz: kamera blokuje přihlášení', tvar(j)); throw chybaPrihlaseni(j, 'úvodní dotaz'); }
+    const et = d?.encrypt_type;
     const ma3 = Array.isArray(et) ? et.map(String).includes('3') : et != null && String(et).includes('3');
     secure = j?.error_code === -40413 || ma3;
     if (log?.log) log.log('[tapo]', host, user, 'úvodní dotaz: HTTP', status, secure ? 'zabezpečené přihlášení' : 'starší přihlášení', tvar(j));
     return secure;
   };
 
+  // Kamera vrací podrobnosti buď v result.data, nebo rovnou v data (C560WS: {"data":{"code":-40404,"sec_left":1120},"error_code":-40401}).
+  const data = (j) => j?.result?.data ?? j?.data ?? null;
   const chybaPrihlaseni = (j, krok) => {
-    const code = j?.result?.data?.code ?? j?.error_code ?? null;
-    const sec = j?.result?.data?.sec_left;
-    if (sec) return new TapoError(`kamera dočasně blokuje přihlášení, zkuste za ${sec} s`, { code, auth: true });
+    const d = data(j);
+    const code = d?.code ?? j?.error_code ?? null;
+    const sec = Number(d?.sec_left) || 0;
+    if (sec || code === -40404) return new TapoError(`kamera dočasně blokuje přihlášení (po špatných pokusech), zkuste za ${sec || 600} s`, { code: -40404, auth: true, secLeft: sec || 600 });
     const text = code === -40401 ? `kamera odmítla přihlášení (${krok}, kód -40401)` : popisKodu(code);
     return new TapoError(text, { code, auth: code === -40411 || code === -40401 || code === -40404 || code === 401 });
   };

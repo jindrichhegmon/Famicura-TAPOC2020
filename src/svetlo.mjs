@@ -10,7 +10,7 @@
  */
 import { createTapo, TapoError } from './tapo.mjs';
 
-export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = console, pametMs = 10 * 60 * 1000 } = {}) {
+export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = console, pametMs = 10 * 60 * 1000, klidMs = 10 * 60 * 1000, klidSitMs = 60 * 1000 } = {}) {
   const klienti = new Map();   // kameraId → { klient, ucet }
   const odmitnute = new Map(); // kameraId → Set účtů, které kamera po přihlášení odmítla (-40211: bez práv) – zkouší se další
   const pamet = new Map();     // kameraId → { podporuje, zapnuto, chyba, cas, model }
@@ -35,15 +35,25 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
     for (const m of moznosti) {
       const k = tapo({ host: kam.ip, user: m.user, pass: m.pass, log });
       try { await k.login(); klienti.set(kameraId, { klient: k, ucet: m.ucet }); return klienti.get(kameraId); }
-      catch (e) { posledni = e; if (!(e instanceof TapoError) || !e.auth) break; }
+      catch (e) {
+        posledni = e;
+        if (!(e instanceof TapoError) || !e.auth) break;
+        if (e.secLeft) break;   // blokace: nezkoušet další účet, každý pokus ji prodlužuje
+        // špatné heslo tohoto účtu: příště ho přeskočit (nový pokus až po zapomen() – nové zavedení kamery / heslo TP-Link)
+        const o = odmitnute.get(kameraId) || new Set(); o.add(m.ucet); odmitnute.set(kameraId, o);
+      }
     }
     const e = posledni || new Error('přihlášení se nepodařilo');
-    throw chyba(e instanceof TapoError && e.auth && moznosti.length === 1 && !kam.tapoPass
+    const out = chyba(''); out.puvod = e;   // původní TapoError (blokace, auth) pro výpočet klidu
+    throw Object.assign(out, { message: (e instanceof TapoError && e.auth && moznosti.length === 1 && !kam.tapoPass
       ? `${e.message}; účet kamery na tohle rozhraní nestačí – uložte heslo účtu TP-Link: ./deploy/vps-kamera.sh svetlo ${kameraId}`
-      : e.message, e instanceof TapoError && e.status === 0 ? 502 : 502);
+      : e.message), status: 502 });
   }
 
   const zapamatuj = (kameraId, v) => { const z = { ...(pamet.get(kameraId) || {}), ...v, cas: now() }; pamet.set(kameraId, z); return z; };
+  // Po neúspěchu se kamery na čas nedotýkat: blokace podle sec_left kamery, špatné heslo klidMs, výpadek sítě klidSitMs.
+  const klid = (kameraId, e, v) => zapamatuj(kameraId, { ...v, klidDo: now() + (e instanceof TapoError && e.secLeft ? (e.secLeft + 30) * 1000 : e instanceof TapoError && e.auth ? klidMs : klidSitMs) });
+  const vKlidu = (z) => z && z.klidDo && z.klidDo > now();
 
   return {
     /**
@@ -53,6 +63,7 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
     async stav(kameraId, { znovu = false, pokus = 0 } = {}) {
       const z = pamet.get(kameraId);
       if (!znovu && z && z.podporuje === false && now() - z.cas < pametMs) return z;
+      if (!znovu && vKlidu(z)) return z;
       let ucet = null;
       try {
         const k = (({ klient: kl, ucet: u }) => { ucet = u; return kl; })(await klient(kameraId));
@@ -66,15 +77,16 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
         // přihlášení prošlo, ale kamera účet na funkce nepustila (-40211): zapamatovat a zkusit další účet (TP-Link)
         if (e instanceof TapoError && e.auth && ucet && pokus < 2) { const o = odmitnute.get(kameraId) || new Set(); o.add(ucet); odmitnute.set(kameraId, o); return this.stav(kameraId, { znovu, pokus: pokus + 1 }); }
         if (log?.error) log.error('[svetlo]', kameraId, 'stav:', e.message);
-        return zapamatuj(kameraId, { podporuje: null, zapnuto: null, chyba: e.message });
+        return klid(kameraId, e.puvod || e, { podporuje: null, zapnuto: null, chyba: e.message });
       }
     },
     /** Rozsvítí (true) nebo zhasne (false); vrací { zapnuto }. 404 neznámá kamera, 502 kamera neodpovídá / odmítá, 501 světlo nemá. */
     async nastav(kameraId, zapnout) {
       const z = pamet.get(kameraId);
       if (z && z.podporuje === false && now() - z.cas < pametMs) throw chyba('Tahle kamera světlo nemá.', 501);
+      if (vKlidu(z)) throw chyba(`Světlo teď nejde: ${z.chyba || 'kamera odmítla přihlášení'} (zkusí se znovu ${new Date(z.klidDo).toLocaleTimeString('cs-CZ', { timeZone: 'Europe/Prague', hour: '2-digit', minute: '2-digit' })})`, 423);
       let k;
-      try { ({ klient: k } = await klient(kameraId)); } catch (e) { if (e.status === 404 || e.status === 503) throw e; zapamatuj(kameraId, { podporuje: null, chyba: e.message }); throw chyba(`Světlo se nepodařilo přepnout: ${e.message}`, 502); }
+      try { ({ klient: k } = await klient(kameraId)); } catch (e) { if (e.status === 404 || e.status === 503) throw e; klid(kameraId, e.puvod || e, { podporuje: null, chyba: e.message }); throw chyba(`Světlo se nepodařilo přepnout: ${e.message}`, 502); }
       try {
         const s = await k.svetlo(!!zapnout);
         zapamatuj(kameraId, { podporuje: true, zapnuto: !!s.zapnuto, intenzita: s.intenzita, chyba: null });

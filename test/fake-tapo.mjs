@@ -35,8 +35,8 @@ export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, mod
     if (u.pathname === '/') {
       if (j.method !== 'login') return odp(200, { error_code: -40100 });
       const p = j.params || {};
-      if (p.username !== user) return odp(401, { error_code: -40401, result: { data: { code: -40411 } } });
-      if (st.spatne >= blokovatPo) return odp(401, { error_code: -40404, result: { data: { code: -40404, sec_left: 600 } } });
+      if (st.spatne >= blokovatPo) return odp(200, { data: { code: -40404, sec_left: 600 }, error_code: -40401 });   // tvar jako skutečná C560WS; blokace platí pro každé jméno
+      if (p.username !== user) { st.spatne++; return odp(401, { error_code: -40401, result: { data: { code: -40411 } } }); }
       if (secure) {
         if (p.encrypt_type !== '3') return odp(200, { error_code: -40413, result: { data: { encrypt_type: ['3'] } } });
         if (!p.cnonce) return odp(200, { error_code: -40413, result: { data: { encrypt_type: ['3'] } } });

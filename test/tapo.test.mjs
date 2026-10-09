@@ -86,6 +86,29 @@ test('světlo: stav a přepnutí přes účet kamery; kamera bez světla se zapa
   assert.equal(Object.keys(sv.pamet()).length, 2);
 });
 
+test('světlo: po blokaci kamery se jí server nedotýká do sec_left + 30 s; po špatném hesle 10 min; účet se špatným heslem se už nezkouší', async () => {
+  let t = 1_000_000; const now = () => t;
+  const kam = fakeTapo({ password: 'cloud', blokovatPo: 3 });
+  kam.st.spatne = 3;   // kamera už blokuje
+  const kamery = async () => [{ id: 'k', ip: '10.0.0.1', user: 'Kamera', pass: 'x', tapoPass: 'cloud' }];
+  const pokusy = [];
+  const tapo = ({ host, user, pass }) => { pokusy.push(user); return createTapo({ host, user, pass, fetchImpl: kam.fetchImpl, log: { log() {} } }); };
+  const sv = createSvetlo({ kamery, tapo, now, log: { error() {} } });
+  let s = await sv.stav('k');
+  assert.match(s.chyba, /blokuje přihlášení/); assert.match(s.chyba, /600 s/);
+  assert.deepEqual(pokusy, ['Kamera'], 'při blokaci se další účet nezkouší');
+  await sv.stav('k'); await sv.stav('k');
+  assert.equal(pokusy.length, 1, 'v klidu se kamera nekontaktuje');
+  await assert.rejects(sv.nastav('k', true), (e) => e.status === 423 && /Světlo teď nejde/.test(e.message));
+  t += 631 * 1000; kam.st.spatne = 0;
+  s = await sv.stav('k');
+  assert.equal(s.podporuje, true, 'po uplynutí blokace to jde');
+  // špatné heslo účtu kamery: zapamatovat a příště rovnou účet TP-Link
+  assert.deepEqual(pokusy.slice(1), ['Kamera', 'admin']);
+  sv.zapomen('k'); t += 1000;
+  await sv.stav('k'); assert.deepEqual(pokusy.slice(3), ['Kamera', 'admin'], 'po zapomen() znovu od účtu kamery');
+});
+
 test('světlo: účet kamery se přihlásí, ale kamera vrací -40211 (bez práv) → server sám přejde na účet TP-Link', async () => {
   const kamUcet = fakeTapo({ password: 'ucet-kamery', user: 'Kamera', bezPrav: true });
   const cloud = fakeTapo({ password: 'cloud-heslo' });
@@ -109,5 +132,5 @@ test('světlo: účet kamery nestačí → účet TP-Link (tapoPass); bez něj s
   assert.deepEqual(ucty, ['Kamera:jine', 'admin:cloud-heslo'], 'nejdřív účet kamery, pak TP-Link');
   const s2 = await sv.stav('k2');
   assert.equal(s2.podporuje, null); assert.match(s2.chyba, /vps-kamera\.sh svetlo k2/);
-  await assert.rejects(sv.nastav('k2', true), (e) => e.status === 502 && /TP-Link/.test(e.message));
+  await assert.rejects(sv.nastav('k2', true), (e) => e.status === 423 && /TP-Link/.test(e.message), 'v klidu po špatném hesle: 423 s radou');
 });
