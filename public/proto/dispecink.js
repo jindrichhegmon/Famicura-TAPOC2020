@@ -516,7 +516,7 @@ function renderDetail(rebuild = false) {
           <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
         </div><div class="blok"><h3>Uživatelé rodiny</h3><p class="small muted">– kdo smí otevřít aplikaci rodiny k téhle kameře</p>
         <div id="dusers"></div>
-        </div><div class="blok"><h3>Kontakty pro upozornění</h3><p class="small muted">– Rodina: až pět lidí (jméno a mobil na SMS). Poskytovatel: telefon dispečinku, služby a administrace (společné pro všechny kamery) – vlastní číslo, nebo z Péče doma / Péče doma plus. E-maily: dvě sady oddělené čárkou. Kdo dostane kterou událost, se vybírá v Nastavení kamery; čísla SOS náramku se vybírají z těchto kontaktů.</p>
+        </div><div class="blok"><h3>Kontakty pro upozornění</h3><p class="small muted">– Rodina: až pět lidí (jméno a mobil na SMS). Poskytovatel: telefon dispečinku, služby a administrace (společné pro všechny kamery) – vlastní číslo, nebo z Péče doma / Péče doma plus. E-maily: dvě sady oddělené čárkou. Kdo dostane kterou událost, se vybírá v Nastavení alertů; Telefonní čísla náramku (SOS) se vybírají z těchto kontaktů v oddílu níže.</p>
         <form class="kontakty" id="dkontakty">
           <fieldset class="ksekce"><legend>Rodina</legend>
           <div class="kgrid krodina">${Array.from({ length: KONTAKTY_RODINA_MAX }, (_, i) => `<label>Rodina ${i + 1} – jméno<input type="text" class="kjmeno" data-i="${i}" maxlength="40" placeholder="dcera Eva" value="${esc(kon.rodina[i]?.jmeno || '')}"></label><label>telefon<input type="tel" class="ksms" data-i="${i}" maxlength="20" placeholder="777 123 456" value="${esc(kon.rodina[i]?.telefon ? formatTelefon(kon.rodina[i].telefon) : '')}"></label>`).join('')}</div>
@@ -524,6 +524,14 @@ function renderDetail(rebuild = false) {
           <fieldset class="ksekce"><legend>Poskytovatel <span class="muted">(společné pro všechny kamery)</span></legend>
           <div class="kgrid kposk">${ROLE_POSKYTOVATELE.map((r) => { const tp = telefonyPoskytovatele(sim.state)[r]; return `<label>Telefon – ${esc(POPIS_ROLE[r])}<select class="kpzdroj" data-r="${r}">${ZDROJE_TELEFONU.map((z) => `<option value="${z}"${tp.zdroj === z ? ' selected' : ''}>${esc(POPIS_ZDROJE_TELEFONU[z])}</option>`).join('')}</select></label><label class="kptelL${tp.zdroj === 'pecedoma' ? ' kneviditelne' : ''}" data-r="${r}">${tp.zdroj === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'}<input type="tel" class="kptel" data-r="${r}" maxlength="20" placeholder="777 123 456" value="${esc(tp.telefon ? formatTelefon(tp.telefon) : '')}"></label><span class="small kpnahled" data-r="${r}"></span>`; }).join('')}</div>
           <p class="small muted" id="dkontaktyPosk">– Péče doma = kontaktní telefon poskytovatele v databázi Péče doma (bez tenanta, jedno číslo pro všechny tři); Péče doma plus = telefon v nastavení tohoto tenanta, zadáte ho tady a uloží se do Péče doma plus. Číslo z Péče doma (plus) dosadí server při každé události i do náramku a při změně ho pošle znovu.</p>
+          </fieldset>
+          <fieldset class="ksekce" id="dksos"><legend>Telefonní čísla náramku <span class="muted">(SOS: volá 1 → 2 → 3)</span></legend>
+          <p class="small muted hide" id="dksosBez">– náramek není přiřazen; přiřaďte ho v záložce ⌚ Náramek (Přiřazení náramku), pak tu vyberete, koho volá.</p>
+          <div class="kgrid ksos">${[0, 1, 2].map((i) => `<label>SOS ${i + 1}. číslo<select class="nsos" data-i="${i}"${p.naramek?.id ? '' : ' disabled'}>${volbySos(p, p.naramek?.sos?.[i] || '')}</select></label>`).join('')}</div>
+          <p class="small" id="dnaramekVola"></p>
+          <p class="small muted" id="dnaramekSosStav"></p>
+          <div class="small muted" id="dnaramekSluzba"></div>
+          <p class="small muted">– čísla, která náramek po stisku SOS postupně volá (a posílá jim SMS); vybírají se z Rodiny a Poskytovatele výše, prázdná volba číslo v náramku smaže. Ukládají se tlačítkem Uložit kontakty; server je pošle do náramku hned (když je připojený), jinak při jeho příštím ozvání, a při změně kontaktu nebo čísla v Péče doma (plus) je pošle znovu (do 10 minut).</p>
           </fieldset>
           <fieldset class="ksekce"><legend>E-maily</legend>
           <div class="kgrid kmaily"><label>Sada 1 (adresy oddělené čárkou)<input type="text" class="kmaily" data-s="1" maxlength="600" placeholder="dcera@example.cz, syn@example.cz" value="${esc(kon.maily1.join(', '))}"></label><label>Sada 2 (adresy oddělené čárkou)<input type="text" class="kmaily" data-s="2" maxlength="600" placeholder="lekar@example.cz" value="${esc(kon.maily2.join(', '))}"></label></div>
@@ -544,14 +552,10 @@ function renderDetail(rebuild = false) {
         <div id="dnaramekMereni"></div>
         </div><div class="blok"><h3>Poplachy z náramku</h3><p class="small muted">– nouzové tlačítko, pád a slabá baterie; vyřizují se ve frontě alertů jako ostatní události</p>
         <ul class="list" id="dnaramekPoplachy"></ul>
-        </div><div class="blok"><h3>Ovládání a nastavení náramku</h3><p class="small muted">– příkazy do náramku, automatické měření a čísla, která náramek po stisku SOS volá</p>
+        </div><div class="blok"><h3>Ovládání a nastavení náramku</h3><p class="small muted">– příkazy do náramku a automatické měření; telefonní čísla náramku (SOS) se nastavují v Komunikaci a kontaktech</p>
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
-        <form class="kontakty" id="dnaramekSos"><div class="kgrid">${[0, 1, 2].map((i) => `<label>SOS ${i + 1}. číslo<select class="nsos" data-i="${i}">${volbySos(p, p.naramek?.sos?.[i] || '')}</select></label>`).join('')}</div>
-          <div class="akce"><button class="sm" type="submit">Uložit čísla SOS a poslat do náramku</button><span class="small muted" id="dnaramekSosStav"></span></div>
-          <p class="small" id="dnaramekVola"></p>
-          <div class="small muted" id="dnaramekSluzba"></div>
-          <p class="small muted">– čísla, která náramek po stisku SOS postupně volá (a posílá jim SMS); pořadí 1 → 2 → 3, prázdná volba číslo smaže. Vybírá se z Kontaktů kamery (Komunikace): lidé z rodiny s mobilem a telefony poskytovatele (dispečink, služba, administrace); číslo z Péče doma (plus) dosadí server sám a při změně kontaktu nebo čísla je do náramku pošle znovu (do 10 minut)</p></form>
+        <p class="small" id="dnaramekVolaUlozene"></p>
         </div><div class="blok"><h3>Přiřazení náramku</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
         <form class="kontakty" id="dnaramek">
           <div class="kgrid"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label></div>
@@ -631,6 +635,20 @@ function renderDetail(rebuild = false) {
         const rp = await sim.setPoskytovatel(posk);
         if (rp === undefined && sim.naServeru) { err.textContent = 'Telefony poskytovatele se nepodařilo uložit.'; err.classList.remove('hide'); return; }
         for (const [role, t] of doPlus) { try { d.__sluzba = await post('/api/naramek/sluzba-telefon', { telefon: t, role }); } catch (ex) { err.textContent = `Telefon (${POPIS_ROLE[role]}) do Péče doma plus: ${ex.message}`; err.classList.remove('hide'); } }
+        // telefonní čísla náramku: uloží se ke kameře a server je pošle do náramku (hned, nebo při jeho příštím ozvání); chyba odeslání uložení kontaktů nezruší
+        const sosSekce = d.querySelector('#dksos');
+        if (sosSekce && (sim.patient(p.id) || p).naramek?.id) {   // náramek mohl být přiřazen až po otevření detailu
+          const cisla = [0, 1, 2].map((i) => kf.querySelector(`.nsos[data-i="${i}"]`).value);
+          const ulozena = sim.patient(p.id)?.naramek?.sos || ['', '', ''];
+          if (sosSekce.dataset.zmena || JSON.stringify(cisla) !== JSON.stringify(ulozena)) {
+            try {
+              const rs = await post('/api/naramek/sos', { kamera: p.id, cisla });
+              delete sosSekce.dataset.zmena;
+              d.querySelector('#dnaramekSosStav').textContent = rs.odeslano ? `odesláno do náramku ${fmtDT(Date.now())}` : rs.chyba ? `uloženo; do náramku se zatím neposlalo: ${rs.chyba}` : 'uloženo; do náramku se pošle, až se ozve';
+              if (rs.chyba) toast(`Telefonní čísla náramku uložena, do náramku zatím nešla: ${rs.chyba}`, 'warn');
+            } catch (ex) { err.textContent = `Telefonní čísla náramku: ${ex.message}`; err.classList.remove('hide'); }
+          }
+        }
         const neco = rodina.some((x) => x.telefon) || rozdelMaily(maily1).length || rozdelMaily(maily2).length;
         toast(neco ? 'Kontakty uloženy. V Nastavení zatrhněte u událostí, kdo je dostane.' : 'Kontakty uloženy.');
         naplnWatch(); kresliPosk(d); kresliSluzbu(d, p); naplnSos(d, p, true);
@@ -639,6 +657,8 @@ function renderDetail(rebuild = false) {
     // změna zdroje telefonu poskytovatele: pole pro číslo jen u vlastního čísla a Péče doma plus (tam se ukládá do Plus), náhled hned
     kf.querySelectorAll('.kpzdroj').forEach((sel) => { sel.onchange = () => { const r = sel.dataset.r; const inp = kf.querySelector(`.kptel[data-r="${r}"]`); const z = sel.value; const lab = kf.querySelector(`.kptelL[data-r="${r}"]`); lab.firstChild.textContent = z === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'; lab.classList.toggle('kneviditelne', z === 'pecedoma'); inp.value = z === 'pecedomaplus' ? (d.__sluzba?.pecedomaplus?.[r]?.telefon || '') : z === 'vlastni' ? (sim.poskytovatel[POLE_ROLE[r].telefon] || '') : ''; kresliPosk(d); }; });
     kf.querySelectorAll('.kptel').forEach((i) => { i.oninput = () => kresliPosk(d); });
+    // rozepsaná rodina (jméno, telefon) se hned nabízí v Telefonních číslech náramku a v náhledu „Náramek bude volat“
+    kf.querySelectorAll('.kjmeno, .ksms').forEach((i) => { i.addEventListener('input', () => naplnSos(d, p, true)); });
     const nf = d.querySelector('#dnaramek');
     nf.onsubmit = async (e) => {
       e.preventDefault();
@@ -683,21 +703,10 @@ function renderDetail(rebuild = false) {
       toast('Stahuji sešit Excelu s měřením…');
     };
     // rozpracovaná volba SOS se při obnově detailu (každé 2 s) nepřepisuje uloženými čísly, dokud se neuloží
-    d.querySelectorAll('.nsos').forEach((sel) => { sel.onchange = () => { d.querySelector('#dnaramekSos').dataset.zmena = '1'; kresliVola(d, p); }; });
+    d.querySelectorAll('.nsos').forEach((sel) => { sel.onchange = () => { d.querySelector('#dksos').dataset.zmena = '1'; kresliVola(d, p); }; });
     // telefony poskytovatele z Péče doma / Péče doma plus (jednou za otevření detailu; po uložení v Kontaktech se obnoví)
     const nactiSluzbu = () => apiJson('/api/naramek/sluzba-telefon').then((r) => { d.__sluzba = r; kresliSluzbu(d, p); kresliPosk(d); }).catch(() => {});
     if (!d.__sluzbaDotaz && sim.naServeru) { d.__sluzbaDotaz = true; nactiSluzbu(); } else { kresliSluzbu(d, p); kresliPosk(d); }
-    d.querySelector('#dnaramekSos').onsubmit = async (e) => {
-      e.preventDefault();
-      const cisla = [0, 1, 2].map((i) => d.querySelector(`.nsos[data-i="${i}"]`).value);
-      const st = d.querySelector('#dnaramekSosStav'); st.textContent = 'ukládám…';
-      try {
-        const r = await post('/api/naramek/sos', { kamera: p.id, cisla });
-        delete d.querySelector('#dnaramekSos').dataset.zmena;
-        st.textContent = r.odeslano ? `odesláno do náramku ${fmtDT(Date.now())}${Array.isArray(r.skutecna) ? ': ' + r.skutecna.map((c) => c || '–').join(', ') : ''}` : 'uloženo; do náramku se pošle, až se ozve';
-        toast(r.odeslano ? 'Čísla SOS odeslána do náramku.' : 'Čísla SOS uložena, pošlou se při příštím ozvání náramku.');
-      } catch (ex) { st.textContent = ''; toast(`Čísla SOS: ${ex.message}`, 'crit'); }
-    };
     d.querySelector('#dnaramekAuto').onsubmit = async (e) => {
       e.preventDefault();
       const auto = { min: Number(d.querySelector('#dnaramekAutoMin').value) || 0 };
@@ -786,12 +795,17 @@ function renderDetail(rebuild = false) {
     if (n?.vypnuto) setHtml(vyp, popisVypnuti(n));
     const mapa = d.querySelector('#dnaramekMapa');
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
-    const sf = d.querySelector('#dnaramekSos');
-    if (sf && !sf.contains(document.activeElement) && !sf.dataset.zmena) {
-      naplnSos(d, p);
-      d.querySelector('#dnaramekSosStav').textContent = !n?.sos ? '' : n.sosOdeslano ? `odesláno do náramku ${fmtDT(n.sosOdeslano)}` : 'uloženo; do náramku se pošle, až se ozve';
+    const sf = d.querySelector('#dksos');   // Telefonní čísla náramku v Kontaktech (Komunikace)
+    if (sf) {
+      sf.querySelectorAll('.nsos').forEach((sel) => { sel.disabled = !n?.id; });
+      sf.querySelector('#dksosBez').classList.toggle('hide', !!n?.id);
+      if (!d.querySelector('#dkontakty').contains(document.activeElement) && !sf.dataset.zmena) {   // při psaní kamkoli do Kontaktů se volby nepřepisují
+        naplnSos(d, p);
+        d.querySelector('#dnaramekSosStav').textContent = !n?.sos ? '' : n.sosOdeslano ? `odesláno do náramku ${fmtDT(n.sosOdeslano)}` : 'uloženo; do náramku se pošle, až se ozve';
+      }
+      kresliVola(d, p);   // náhled čte aktuální volby ve formuláři, může se obnovit i při psaní
     }
-    if (sf) kresliVola(d, p);   // náhled čte aktuální volby ve formuláři, může se obnovit i při psaní
+    kresliVolaUlozene(d, p);
     const as = d.querySelector('#dnaramekAutoStav');
     if (as && !d.querySelector('#dnaramekAuto').contains(document.activeElement)) as.textContent = n?.auto?.min > 0 ? `uloženo: každých ${n.auto.min} min` : 'vypnuto';
     nactiMereni(d, p, n);
@@ -932,9 +946,17 @@ function volbySos(p, vybrane) {
   if (vybrane && !volby.some(([v]) => v === vybrane)) volby.push([vybrane, `dřívější: ${cisloSosPro(sim.state, p, vybrane).popis}`]);
   return volby.map(([v, t]) => `<option value="${esc(v)}"${v === vybrane ? ' selected' : ''}>${esc(t)}</option>`).join('');
 }
+/** Kamera s kontakty tak, jak jsou právě rozepsané ve formuláři Kontakty (rodina z polí, ještě neuložená): nabídka a náhled čísel SOS
+ *  tak sledují, co dispečer píše, ne jen uložený stav. Bez formuláře uložený stav. */
+function pacientZFormulare(d, p) {
+  const pp = sim.patient(p.id) || p;
+  const kf = d.querySelector('#dkontakty'); if (!kf) return pp;
+  const rodina = Array.from({ length: KONTAKTY_RODINA_MAX }, (_, i) => { const tel = kf.querySelector(`.ksms[data-i="${i}"]`)?.value.trim() || ''; return { jmeno: kf.querySelector(`.kjmeno[data-i="${i}"]`)?.value.trim() || '', telefon: normalizeTelefonCz(tel) || tel }; });
+  return { ...pp, kontakty: { ...kontaktyPro(pp), rodina } };
+}
 /** Naplní tři výběry SOS podle uložených čísel (nebo po změně Kontaktů s novou nabídkou, zachová volbu). */
 function naplnSos(d, p, novaNabidka = false) {
-  const pp = sim.patient(p.id) || p;
+  const pp = pacientZFormulare(d, p);
   d.querySelectorAll('.nsos').forEach((sel) => { const i = Number(sel.dataset.i); const v = novaNabidka ? sel.value : (pp.naramek?.sos?.[i] || ''); setHtml(sel, volbySos(pp, v)); sel.value = v; });
   kresliVola(d, pp);
 }
@@ -947,24 +969,41 @@ function kresliSluzbu(d, p) {
   if (!r.nastaveno) { el.textContent = `– čísla z Péče doma (plus): ${r.chyba || 'nejsou nastavená'}`; kresliVola(d, p); return; }
   const pd = r.pecedoma || {}, pp = r.pecedomaplus || {};
   setHtml(el, `– <b>Péče doma</b> (kontaktní telefon poskytovatele${pd.poskytovatel ? ' ' + esc(pd.poskytovatel) : ''}): ${pd.telefon ? `<b>${esc(pd.telefon)}</b>` : `<span class="bad">není vyplněný</span>${pd.duvod ? ' – ' + esc(pd.duvod) : ''}`}
-    · <b>Péče doma plus</b> (tento tenant${r.poskytovatel ? ' ' + esc(r.poskytovatel) : ''}): ${ROLE_POSKYTOVATELE.map((role) => `${POPIS_ROLE[role]} ${pp[role]?.telefon ? `<b>${esc(pp[role].telefon)}</b>` : '<span class="muted">–</span>'}`).join(', ')}${r.zastarale ? ' <span class="muted">(poslední známé, jhn-apps neodpovídá)</span>' : ''}${r.chyba ? ` <span class="bad">${esc(r.chyba)}</span>` : ''}; mění se v Komunikaci → Kontakty → Poskytovatel`);
+    · <b>Péče doma plus</b> (tento tenant${r.poskytovatel ? ' ' + esc(r.poskytovatel) : ''}): ${ROLE_POSKYTOVATELE.map((role) => `${POPIS_ROLE[role]} ${pp[role]?.telefon ? `<b>${esc(pp[role].telefon)}</b>` : '<span class="muted">–</span>'}`).join(', ')}${r.zastarale ? ' <span class="muted">(poslední známé, jhn-apps neodpovídá)</span>' : ''}${r.chyba ? ` <span class="bad">${esc(r.chyba)}</span>` : ''}; mění se výše v oddílu Poskytovatel`);
   kresliVola(d, p);
 }
-/** „Kam bude náramek volat“: skutečná čísla podle volby ve formuláři (Kontakty + čísla z Péče doma); k tomu naposledy poslaná do náramku. */
-function kresliVola(d, p) {
-  const el = d.querySelector('#dnaramekVola'); if (!el) return;
-  const n = p.naramek;
-  const radky = [0, 1, 2].map((i) => {
-    const v = d.querySelector(`.nsos[data-i="${i}"]`)?.value || '';
+/** Řádky „1. číslo (odkud)“ pro tři sloty SOS podle hodnot (ID z Kontaktů); čísla z Péče doma (plus) podle odpovědi serveru. */
+function radkySos(d, p, hodnoty) {
+  const pp = pacientZFormulare(d, p);
+  return [0, 1, 2].map((i) => {
+    const v = String(hodnoty[i] || '');
     if (!v) return `${i + 1}. <span class="muted">–</span>`;
-    const c = cisloSosPro(sim.state, p, v);
+    const c = cisloSosPro(sim.state, pp, v);
     if (c.telefon) return `${i + 1}. <b>${esc(c.telefon)}</b> <span class="muted">(${esc(c.popis)})</span>`;
     if (!c.zdroj) return `${i + 1}. <span class="bad">${esc(c.popis)}: bez telefonu</span>`;
     const tel = cisloZeZdroje(d, c.zdroj, c.role);
     return tel ? `${i + 1}. <b>${esc(tel)}</b> <span class="muted">(${esc(c.popis)})</span>` : d.__sluzba || !sim.naServeru ? `${i + 1}. <span class="bad">${esc(c.popis)}: číslo není nastavené</span>` : `${i + 1}. <span class="muted">${esc(c.popis)}: zjišťuji…</span>`;
   });
-  const posl = Array.isArray(n?.sosOdeslaneCisla) ? ` · v náramku naposledy nastaveno ${n.sosOdeslano ? esc(fmtDT(n.sosOdeslano)) : ''}: ${n.sosOdeslaneCisla.map((c) => esc(c || '–')).join(', ')}` : n?.sos && !n.sosOdeslano ? ' · do náramku zatím neposláno' : '';
-  setHtml(el, `Náramek bude volat: ${radky.join(' · ')}${posl}`);
+}
+/** Co je v náramku naposledy nastavené (skutečně poslaná čísla), nebo že se zatím neposlalo. */
+function popisPoslanych(n) {
+  return Array.isArray(n?.sosOdeslaneCisla) ? ` · v náramku naposledy nastaveno ${n.sosOdeslano ? esc(fmtDT(n.sosOdeslano)) : ''}: ${n.sosOdeslaneCisla.map((c) => esc(c || '–')).join(', ')}` : n?.sos && !n.sosOdeslano ? ' · do náramku zatím neposláno' : '';
+}
+/** „Kam bude náramek volat“ v Kontaktech: skutečná čísla podle volby ve formuláři (Kontakty + čísla z Péče doma); k tomu naposledy poslaná do náramku. */
+function kresliVola(d, p) {
+  const el = d.querySelector('#dnaramekVola'); if (!el) return;
+  const n = (sim.patient(p.id) || p).naramek;   // náramek mohl být přiřazen až po otevření detailu
+  if (!n?.id) { setHtml(el, ''); return; }
+  const radky = radkySos(d, p, [0, 1, 2].map((i) => d.querySelector(`.nsos[data-i="${i}"]`)?.value || ''));
+  setHtml(el, `Náramek bude volat: ${radky.join(' · ')}${popisPoslanych(n)}`);
+}
+/** Přehled uložených čísel v záložce Náramek (jen ke čtení; nastavují se v Komunikaci a kontaktech). */
+function kresliVolaUlozene(d, p) {
+  const el = d.querySelector('#dnaramekVolaUlozene'); if (!el) return;
+  const n = (sim.patient(p.id) || p).naramek;
+  if (!n?.id) { setHtml(el, ''); return; }
+  const ulozena = n.sos || ['', '', ''];
+  setHtml(el, `Náramek volá: ${ulozena.some(Boolean) ? radkySos(d, p, ulozena).join(' · ') : '<span class="muted">žádná čísla</span>'}${popisPoslanych(n)} · <span class="muted">čísla nastavíte v Komunikaci a kontaktech → Telefonní čísla náramku</span>`);
 }
 const MERENI_NA_KEY = 'famicura.mereniNa';
 /** Měření zdraví: načte ze serveru, když přibylo (naramek-ui.nactiMereni), a překreslí tabulku, grafy a mapu. */

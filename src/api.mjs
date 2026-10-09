@@ -457,12 +457,13 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const kdo = ja.jmeno || (ja.role === 'dispecer' ? 'Dispečer' : 'Správce');
         const v = await st.proved('setNaramekSos', [kamera, Array.isArray(cisla) ? cisla : [], kdo]);
         const sv = (await st.stav()).state; const p = sv.patients.find((x) => x.id === kamera);
-        let odeslano = false, obsah = '', skutecna = null;
+        let odeslano = false, obsah = '', skutecna = null, chybaOdeslani = '';
         if (naramky && p?.naramek?.id && naramky.pripojen?.(p.naramek.id)) {
           try { const r = await naramky.prikaz(p.naramek.id, 'sos', { cislaSos: p.naramek.sos || [], tenant, state: sv, patient: p }); obsah = r.obsah; skutecna = r.cisla || null; await st.naramek({ kameraId: kamera, sosOdeslano: Date.now(), sosOdeslaneCisla: skutecna }); odeslano = true; }
-          catch (e) { if (e.status !== 409) throw e; }
+          // čísla jsou uložená i když se teď do náramku neposlala (není připojený = 409, číslo z Péče doma chybí, jhn-apps neodpovídá…): server je pošle znovu sám (tik, příští ozvání); chyba jde do odpovědi, ne jako neúspěch uložení
+          catch (e) { if (e.status !== 409) { chybaOdeslani = e.message; console.error(`[naramky] ${p.naramek.id}: čísla SOS uložena, do náramku se teď neposlala: ${e.message}`); } }
         }
-        return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah, skutecna });
+        return json({ ok: true, cisla: v?.vysledek ?? p?.naramek?.sos ?? [], odeslano, obsah, skutecna, ...(chybaOdeslani ? { chyba: chybaOdeslani } : {}) });
       }
       // Telefony poskytovatele z Péče doma (contact_phone poskytovatele, bez tenanta) a Péče doma plus (SLUZBA_TELEFON / DISPECINK_TELEFON / ADMINISTRACE_TELEFON tenanta);
       // POST { telefon, role } zapíše telefon role v Plus (role sluzba = výchozí).

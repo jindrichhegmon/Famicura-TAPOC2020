@@ -1067,4 +1067,16 @@ test('telefony poskytovatele z jhn-apps: GET /api/naramek/sluzba-telefon (Péče
   const { h: h2 } = handler({ naramky });
   j = await (await h2(req('GET', '/api/naramek/sluzba-telefon', { cookies: cookie() }))).json();
   assert.equal(j.nastaveno, false); assert.match(j.chyba, /JHN_APPS_TOKEN/);
+  // odeslání do náramku selže (třeba číslo v Péče doma chybí): čísla jsou přesto uložená, odpověď 200 s důvodem – ne neúspěch uložení
+  const naramkyChyba = { stav() { return { port: 5093 }; }, pripojen: () => true, async prikaz() { const e = new Error('Péče doma: telefon (služba) není nastavený.'); e.status = 400; throw e; } };
+  const { h: h3 } = handler({ naramky: naramkyChyba, sluzba });
+  await h3(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
+  r = await h3(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['sluzba', '', ''] } }));
+  j = await r.json(); assert.equal(r.status, 200); assert.equal(j.ok, true); assert.equal(j.odeslano, false); assert.match(j.chyba, /Péče doma: telefon/);
+  const st3 = (await (await h3(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
+  assert.deepEqual(st3.patients[0].naramek.sos, ['sluzba', '', '']); assert.equal(st3.patients[0].naramek.sosOdeslano, null, 'uloženo, zatím neposláno');
+  const { h: h4 } = handler({ naramky: { ...naramkyChyba, async prikaz() { const e = new Error('nepřipojený'); e.status = 409; throw e; } }, sluzba });
+  await h4(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
+  j = await (await h4(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['sluzba', '', ''] } }))).json();
+  assert.equal(j.odeslano, false); assert.equal(j.chyba, undefined, 'nepřipojený náramek není chyba, jen se pošle později');
 });

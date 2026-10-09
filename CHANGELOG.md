@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.32 · 9. 10. 2026 · telefonní čísla náramku v Kontaktech
+
+- **Telefonní čísla náramku (SOS 1 → 2 → 3)** jsou nový oddíl v Komunikaci
+  a kontaktech → Kontakty (pod Poskytovatelem, před E-maily); ukládají se
+  tlačítkem Uložit kontakty spolu s ostatními kontakty. Bez přiřazeného
+  náramku jsou výběry neaktivní s vysvětlením. V záložce Náramek zůstal jen
+  přehled „Náramek volá: …“ (jen ke čtení) a formulář čísel SOS je pryč.
+- **Uložení čísel SOS už nezhatí chyba odeslání do náramku**: `POST
+  /api/naramek/sos` čísla uloží vždy; když se do náramku teď neposlala
+  (odpojený, chybí číslo v Péče doma, jhn-apps neodpovídá), vrátí
+  `odeslano: false` a `chyba` s důvodem (a zapíše ho do logu serveru) místo
+  neúspěchu. Dispečink důvod ukáže pod výběry; server čísla pošle sám při
+  příštím ozvání nebo v pravidelné kontrole.
+- Nápověda: Náramek, Kontakty, Co je nové.
+
 ## 3.31 · 9. 10. 2026 · náramek v aplikaci na telefonu (rodina i mobilní dispečer)
 
 - **Karta ⌚ Náramek SOS** v aplikaci rodiny (`/proto/rodina.html`), tedy i u
