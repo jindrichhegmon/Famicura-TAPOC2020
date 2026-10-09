@@ -55,6 +55,7 @@ test('seznam streamů a kontrola kamery', async () => {
     [/\/api\/streams$/, () => text(JSON.stringify({ tapoc2020: { producers: [] }, druha: {} }), 200, 'application/json')],
     [/stream\.mp4\?src=tapoc2020/, () => text('mp4 data', 200, 'video/mp4')],
     [/stream\.mp4\?src=mrtva/, () => text('dial tcp: connection refused', 500)],
+    [/stream\.mp4\?src=hevc/, () => text('streams: codecs not matched: video:H265, audio:PCMA => video:H264', 500)],
   ]);
   const g = createGo2rtc({ fetchImpl: f });
   assert.deepEqual(await g.streams(), ['tapoc2020', 'druha']);
@@ -63,6 +64,9 @@ test('seznam streamů a kontrola kamery', async () => {
   assert.equal(dead.ok, false);
   assert.match(dead.detail, /refused/);
   assert.equal((await g.probe('nikde')).ok, false, 'síťová chyba = neodpovídá');
+  // kamera v H.265: srozumitelná hláška místo textu go2rtc, u proxy (nahrávka, HTTPS obraz) bez opakování
+  const hevc = await g.probe('hevc'); assert.equal(hevc.ok, false); assert.equal(hevc.h265, true); assert.match(hevc.detail, /H\.265.*aplikaci Tapo.*H\.264/);
+  await assert.rejects(() => g.proxy('/api/stream.mp4?src=hevc&video=h264'), (e) => /H\.265/.test(e.message) && e.retry === false);
 });
 
 test('úložiště: soubor s právy 600, zápis bez rozbitého mezistavu', async () => {

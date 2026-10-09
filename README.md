@@ -363,7 +363,12 @@ ukazují na špatnou linku k prohlížeči.
 ### Prohlížeč
 
 Kamera posílá H.264. Umí ho Chrome, Edge a Safari, na počítači i na
-iPhonu. Prohlížeč bez H.264 (např. Chromium v některých Linuxech) dostane
+iPhonu. Kamera přepnutá v aplikaci Tapo na **H.265 (HEVC)** server
+nezpracuje: nahrávky selžou („codecs not matched: video:H265“ v logu
+go2rtc), obraz přes HTTPS ani v prohlížeči nejde; server to hlásí jako
+„Kamera posílá obraz v H.265 …“ v diagnostice, v dispečinku i u nahrávky.
+Náprava je v aplikaci Tapo: Nastavení kamery → Pokročilá nastavení →
+Video / Kódování videa → H.264. Prohlížeč bez H.264 (např. Chromium v některých Linuxech) dostane
 hlášku „Tento prohlížeč neumí obraz H.264 z kamery“. Znovu se pak
 nepřipojuje, protože by to nepomohlo.
 

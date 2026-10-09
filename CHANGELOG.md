@@ -5,7 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
-## 3.37 · 9. 10. 2026 · historie: nepovedená nahrávka srozumitelně
+## 3.38 · 9. 10. 2026 · kamera v H.265 se hlásí srozumitelně
+
+- go2rtc umí pro nahrávky, obraz přes HTTPS i prohlížeč jen H.264; kamera
+  přepnutá v aplikaci Tapo na H.265 (HEVC) dávala v logu „codecs not
+  matched: video:H265“ a v aplikaci jen „Kamera neodpovídá“. Teď server
+  (`src/go2rtc.mjs`: `jeH265`, `H265_TEXT`) hlásí „Kamera posílá obraz
+  v H.265 … přepněte v aplikaci Tapo na H.264“ v diagnostice hlavní
+  aplikace (`probe` má `h265: true`), u obrazu v dispečinku i u nahrávky
+  v historii; bez opakovaných pokusů. Nápověda (Obraz), README.
+
 
 - V historii dispečinku je u události s chybou nahrávky text „🎞 nahrávka se
   nepořídila: Kamera neodpovídá …“ místo holého „🎞 Kamera neodpovídá …“, které

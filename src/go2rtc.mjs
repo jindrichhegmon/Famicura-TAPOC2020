@@ -10,6 +10,11 @@
  *   GET  /api/stream.mp4?src=X&video=h264 → fMP4 jen s obrazem (Chrome, Edge); zvuk G.711 prohlížeč v MP4 neumí
  *   GET  /api/stream.m3u8?src=X&video=h264 → HLS pro Safari; odkazuje na hls/playlist.m3u8?id=, hls/init.mp4, hls/segment.m4s?id=&n=
  */
+/** go2rtc hlásí „codecs not matched: video:H265 …“: kamera posílá H.265 (HEVC), server pro nahrávky, obraz přes HTTPS i prohlížeč
+ *  potřebuje H.264. Přepíná se v aplikaci Tapo u kamery, ne na serveru. */
+export const H265_TEXT = 'Kamera posílá obraz v H.265 (HEVC), který server nezpracuje. V aplikaci Tapo přepněte u kamery kódování videa na H.264 (Nastavení kamery → Pokročilá nastavení → Video / Kódování videa) – nahrávky i obraz pak půjdou.';
+export const jeH265 = (text) => /codecs not matched[^"]*H265|video:H265/i.test(String(text || ''));
+
 export class Go2rtcError extends Error {
   /** retry: false when trying again cannot help (the browser lacks the codec). */
   constructor(message, status, detail, { retry = true } = {}) {
@@ -53,6 +58,7 @@ export function createGo2rtc({ url = process.env.GO2RTC_URL || 'http://127.0.0.1
       if (res.ok) return body;
       // Bez společného kodeku go2rtc hlásí "RTPSender created with no codecs":
       // prohlížeč neumí H.264, které kamera posílá (třeba Chromium bez kodeků).
+      if (jeH265(body)) throw new Go2rtcError(H265_TEXT, 502, body.slice(0, 300), { retry: false });
       if (/no codecs|codec/i.test(body)) {
         throw new Go2rtcError('Tento prohlížeč neumí obraz H.264 z kamery. Použijte Chrome, Edge nebo Safari.', 502, body.slice(0, 300), { retry: false });
       }
@@ -69,7 +75,8 @@ export function createGo2rtc({ url = process.env.GO2RTC_URL || 'http://127.0.0.1
       try { res = await fetchImpl(api(pathWithQuery), { signal }); }
       catch (e) { throw new Go2rtcError('Převodník go2rtc na serveru neodpovídá.', 502, e.message); }
       if (!res.ok) {
-        throw new Go2rtcError('Kamera neodpovídá – zkontrolujte tunel WireGuard a kameru.', 502, (await res.text().catch(() => '')).slice(0, 300));
+        const text = (await res.text().catch(() => '')).slice(0, 300);
+        throw new Go2rtcError(jeH265(text) ? H265_TEXT : 'Kamera neodpovídá – zkontrolujte tunel WireGuard a kameru.', 502, text, jeH265(text) ? { retry: false } : undefined);
       }
       return new Response(res.body, { status: 200, headers: {
         'Content-Type': res.headers.get('content-type') || 'application/octet-stream', 'Cache-Control': 'no-store' } });
@@ -82,8 +89,9 @@ export function createGo2rtc({ url = process.env.GO2RTC_URL || 'http://127.0.0.1
       try {
         const res = await fetchImpl(api(`/api/stream.mp4?src=${encodeURIComponent(src)}`), { signal: ctrl.signal });
         const ok = res.status === 200;
-        const detail = ok ? null : (await res.text().catch(() => '')).slice(0, 200);
-        return { ok, status: res.status, detail };
+        const text = ok ? '' : (await res.text().catch(() => '')).slice(0, 200);
+        const detail = ok ? null : jeH265(text) ? H265_TEXT : text;
+        return { ok, status: res.status, detail, ...(jeH265(text) ? { h265: true } : {}) };
       } catch (e) {
         return { ok: false, status: 0, detail: ctrl.signal.aborted ? 'bez odpovědi' : e.message };
       } finally {
