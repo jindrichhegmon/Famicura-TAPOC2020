@@ -5,6 +5,19 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.27 · 9. 10. 2026 · jeden telefon = jeden účet s oběma rolemi, bezpečnostní dotaz u pozvánky dispečera
+
+- **Rodina i dispečer na jednom účtu**: pozvánka dispečera na telefon, který už
+  má účet rodiny, účtu přidá roli dispečera (`nastavRoli`), kamery rodiny mu
+  zůstávají a pošle se nová pozvánka s textem dispečera (odpověď `povysen`).
+  Dispečerovi jde u kamery přidat účet rodiny (kamera se přidá do `Kamery`).
+  U kamer, kde je rodina, nastavuje jako rodina (souhlas, klid, deaktivace,
+  odemknutí nahrávky); u ostatních jen sleduje (`rodinaKamery` v
+  `/api/rodina/ja`, pruh v aplikaci to říká). Odebrat u kamery, kde je rodina,
+  mu odebere jen tu kameru; u ostatních smaže účet dispečera.
+- **Bezpečnostní dotaz** v dispečinku před založením dispečera i před novou
+  pozvánkou dispečera: „Opravdu poslat pozvánku DISPEČERA… uvidí VŠECHNY kamery“.
+
 ## 3.26 · 9. 10. 2026 · mobilní dispečer (účet rodiny s rolí dispečer), deaktivace účtů
 
 - **Mobilní dispečer**: v detailu kamery → Uživatelé rodiny má formulář **Typ

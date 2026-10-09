@@ -516,7 +516,7 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Jana Dispečerka', telefon: '777000111', kamery: [], role: 'dispecer', poslatSms: true } }))).json();
   assert.equal(b.ok, true); assert.equal(b.uzivatel.role, 'dispecer'); assert.deepEqual(b.uzivatel.kamery, []);
   assert.match(b.text, /pristup DISPECERA k dohledu \(FamiCura s.r.o.\)/, 'SMS říká, že je to dispečer a jmenuje poskytovatele');
-  assert.equal((await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Jana', telefon: '777000111', kamery: ['tapoc2020'] } }))).status, 409, 'telefon dispečera nejde použít pro účet rodiny');
+  assert.equal((await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Jana', telefon: '777000111', kamery: [], role: 'dispecer' } }))).status, 409, 'druhý účet dispečera na stejný telefon ne');
   const seznam = await (await h(req('GET', '/api/rodina/uzivatele', { cookies: cookie() }))).json();
   assert.equal(seznam.uzivatele[0].role, 'dispecer');
   const token = b.odkaz.split('/r/')[1];
@@ -546,9 +546,24 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/deaktivace`, { cookies: cookie(), body: { on: false } }));
   assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777000111', heslo: 'Dispecer2026' } }))).status, 200);
   assert.equal((await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/deaktivace`, { cookies: c, body: { on: true } }))).status, 403, 'deaktivuje jen poskytovatel');
-  // odebrání dispečera z kamery = smazání účtu
+  // dispečer je u kamery tapoc2020 zároveň rodina: tam nastavuje jako rodina, u druhé jen sleduje
+  const pr = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Jana', telefon: '777000111', kamery: ['tapoc2020'] } }))).json();
+  assert.equal(pr.pridano, true); assert.equal(pr.uzivatel.role, 'dispecer'); assert.deepEqual(pr.uzivatel.kamery, ['tapoc2020']);
+  const lg2 = await h(req('POST', '/api/rodina/login', { body: { telefon: '777000111', heslo: 'Dispecer2026' } })); const c2 = setCookie(lg2);
+  assert.deepEqual((await (await h(req('GET', '/api/rodina/ja', { cookies: c2 }))).json()).rodinaKamery, ['tapoc2020']);
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c2, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }))).status, 200, 'u své kamery nastavuje jako rodina');
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c2, body: { akce: 'setConsent', args: ['druha', { den: 'full' }] } }))).status, 403, 'u ostatních jen sleduje');
+  // odebrání u kamery, kde je rodina: zůstane dispečer; u kamery, kde rodina není: smazání účtu
+  const d1 = await (await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}?kamera=tapoc2020`, { cookies: cookie() }))).json();
+  assert.equal(d1.smazan, false); assert.equal(d1.uzivatel.role, 'dispecer'); assert.deepEqual(d1.uzivatel.kamery, []);
   const d = await (await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}?kamera=tapoc2020`, { cookies: cookie() }))).json();
   assert.equal(d.smazan, true);
+  // účet rodiny + pozvánka dispečera = povýšení na dispečera (kamera zůstává), nová pozvánka s textem dispečera, staré heslo neplatí
+  const r1 = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777000222', kamery: ['druha'] } }))).json();
+  await h(req('POST', '/api/rodina/aktivace', { body: { token: r1.odkaz.split('/r/')[1], heslo: 'Rodina2026x' } }));
+  const pv = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777000222', kamery: [], role: 'dispecer' } }))).json();
+  assert.equal(pv.povysen, true); assert.equal(pv.uzivatel.role, 'dispecer'); assert.deepEqual(pv.uzivatel.kamery, ['druha']); assert.match(pv.text, /pristup DISPECERA/);
+  assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777000222', heslo: 'Rodina2026x' } }))).status, 401, 'po pozvánce dispečera staré heslo neplatí');
   assert.equal(go2rtc.calls.length, 1);
 });
 

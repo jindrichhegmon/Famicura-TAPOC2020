@@ -451,7 +451,7 @@ body.pending .desk,body.pending #critBanner{visibility:hidden}
 html[data-schema=modra]{--hdr1:#1f6fc2;--hdr2:#3a8ee0;--blue:#106fd5;--navy:#1a5fa3}
 html[data-schema] .apphead{background:linear-gradient(135deg,var(--hdr1),var(--hdr2))}
 .dispecerPruh{margin:10px 0 0;padding:8px 12px;border-radius:12px;background:#fff3e0;border:2px solid #e8873b;color:#7a3d00;font-weight:700;font-size:.85rem;line-height:1.35}
-body.dispecer #soukromi,body.dispecer #klid,body.dispecer #testBtn{display:none!important}
+body.jenSleduje #soukromi,body.jenSleduje #klid,body.jenSleduje #testBtn{display:none!important}
 body.dispecer .apphead{border-bottom:4px solid #e8873b}
 html[data-schema=tyrkys]{--hdr1:#0f8a8a;--hdr2:#2bb3b1;--blue:#0e8f8f;--navy:#0b5e5e}
 html[data-schema=zelena]{--hdr1:#2e8b57;--hdr2:#4caf7a;--blue:#2a8c4a;--navy:#1d5c33}

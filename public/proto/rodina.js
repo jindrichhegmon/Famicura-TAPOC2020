@@ -82,11 +82,13 @@ function boot(ja) {
   // mobilní dispečer: účet rodiny s rolí dispecer – všechny kamery poskytovatele, jen sledování (server odmítne každé nastavení), jasné označení
   const dispecerMobil = ja.role === 'rodina' && ja.ucet === 'dispecer';
   document.body.classList.toggle('dispecer', dispecerMobil);
+  document.body.classList.toggle('jenSleduje', dispecerMobil);   // u kamer, kde je dispečer zároveň rodina, se v render() odkryje nastavení rodiny
   $('dispecerPruh').classList.toggle('hide', !dispecerMobil);
   $('schemaCard').classList.toggle('hide', !dispecerMobil);
   if (dispecerMobil) {
     $('whoami').textContent = `${ja.jmeno} · DISPEČER${posk ? ' · ' + posk : ''}`;
-    $('ucetInfo').textContent = `Přihlášen(a) jako DISPEČER ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. Vidíte všechny kamery poskytovatele. Souhlas s obrazem, klid a deaktivaci kamery nastavuje rodina, hlídání dispečink na počítači – tady se nic nemění. ${ja.kamery.length ? '' : (ja.zprava || '')}`;
+    const moje = (ja.rodinaKamery || []).map((id) => (ja.kamery || []).find((k) => k.id === id)?.name).filter(Boolean);
+    $('ucetInfo').textContent = `Přihlášen(a) jako DISPEČER ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. Vidíte všechny kamery poskytovatele. Souhlas s obrazem, klid a deaktivaci kamery nastavuje rodina, hlídání dispečink na počítači – tady se nic nemění.${moje.length ? ` U kamery ${moje.join(', ')} jste zároveň rodina a nastavujete tam jako rodina.` : ''} ${ja.kamery.length ? '' : (ja.zprava || '')}`;
     kresliSchemata();
   } else if (ja.role === 'rodina') {
     $('whoami').textContent = `${ja.jmeno} · rodina${posk ? ' · ' + posk : ''}`;
@@ -293,7 +295,7 @@ let deaktZobrazeno = null;
 function kresliDeaktivaci(p) {
   const card = $('deaktCard'); if (!card) return;
   const ja = JA;
-  const smi = !sim.naServeru || (ja.role === 'rodina' && ja.ucet !== 'dispecer');   // mobilní dispečer kameru (de)aktivovat nesmí
+  const smi = !sim.naServeru || (ja.role === 'rodina' && jsemRodina(patientId));   // mobilní dispečer kameru (de)aktivovat nesmí, leda u kamery, kde je i rodina
   const d = p.deaktivace;
   if (d && deaktZobrazeno !== true) { deaktZobrazeno = true; src?.odpoj?.('kamera je deaktivovaná'); }
   if (!d && deaktZobrazeno === true) { deaktZobrazeno = false; if (src) src.connect(); else startSource(patientId); }
@@ -344,7 +346,7 @@ function ton() {
 }
 function renderZadost() {
   const el = $('zadost');
-  if (JA.ucet === 'dispecer') { el.classList.add('hide'); return; }   // žádost o plný obraz vyřizuje rodina, ne mobilní dispečer
+  if (JA.ucet === 'dispecer' && !jsemRodina(patientId)) { el.classList.add('hide'); return; }   // žádost o plný obraz vyřizuje rodina, ne mobilní dispečer
   const r = sim.state.requests.find((x) => x.patientId === patientId && !zadostZavrene.has(x.id) && (x.state === 'čeká' || (x.state === 'vypršelo' && zadostZobrazena === x.id)));
   if (!r) { el.classList.add('hide'); zadostZobrazena = null; return; }
   const ceka = r.state === 'čeká';
@@ -363,9 +365,12 @@ $('zadostNe').onclick = () => { if (zadostZobrazena) sim.answerRequest(zadostZob
 $('zadostZavrit').onclick = () => { if (zadostZobrazena) zadostZavrene.add(zadostZobrazena); renderZadost(); };
 setInterval(renderZadost, 1000);
 
+/** Mobilní dispečer je u téhle kamery zároveň rodina (má ji v účtu) → nastavení rodiny platí; jinak jen sleduje. Rodina a ukázka: vždy. */
+function jsemRodina(id) { return JA.ucet !== 'dispecer' || (JA.rodinaKamery || []).includes(id); }
 function render() {
   const s = sim.state;
   const p = sim.patient(patientId); if (!p) return;
+  if (JA.ucet === 'dispecer') { const r = jsemRodina(patientId); document.body.classList.toggle('jenSleduje', !r); $('dispecerPruh').textContent = r ? '👁 APLIKACE DISPEČERA · u této kamery jste zároveň rodina, nastavujete tu jako rodina. U ostatních kamer jen sledujete.' : '👁 APLIKACE DISPEČERA · jen sledování všech kamer poskytovatele. Nastavení kamer dělá rodina a dispečink na počítači, tady se nic nemění.'; }
   $('pname').textContent = p.name;
   const posk = sim.poskytovatel;
   $('provider').textContent = `${sim.poskytovatelPro(p)}${p.real && posk.telefon ? ' · ' + posk.telefon : ''} · nastavení platí pro dispečink i pečovatele v terénu`;

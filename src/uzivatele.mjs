@@ -7,6 +7,9 @@
  * Role účtu: 'rodina' (své kamery, nastavuje souhlas, klid, deaktivaci) nebo
  * 'dispecer' – mobilní dispečer: stejná aplikace na telefonu, vidí všechny kamery
  * tenanta, nic nenastavuje (jen barevné schéma), ukazuje se u všech kamer.
+ * Jeden telefon = jeden účet: dispečer může mít v Kamery i kamery, u kterých je
+ * zároveň rodina (tam nastavuje jako rodina); pozvánka dispečera na účet rodiny
+ * mu roli dispečera přidá (nastavRoli), kamera jde přidat i dispečerovi.
  * Tenant jich může mít víc. Oba druhy jde deaktivovat (Deaktivovan = kdy):
  * deaktivovaný se nepřihlásí, přihlášený je odhlášen, pozvánka mu neplatí.
  *
@@ -120,6 +123,15 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
       async smaz(id) {
         if (!(await tabulky.smaz(t, TAB, { Id: String(id) }))) throw chyba('Uživatel neexistuje.', 404);
       },
+      /** Role účtu: 'dispecer' (všechny kamery tenanta; své kamery dál jako rodina) nebo 'rodina' (jen své kamery; bez kamer nejde). */
+      async nastavRoli(id, role) {
+        if (!ROLE_UCTU.includes(role)) throw chyba('Typ účtu: rodina, nebo dispecer.');
+        const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
+        if (!r) throw chyba('Uživatel neexistuje.', 404);
+        if (role === 'rodina' && !kameryZ(r.Kamery).length) throw chyba('Účet rodiny potřebuje aspoň jednu kameru; dispečera bez kamer raději odeberte.');
+        await tabulky.uprav(t, TAB, { Id: r.Id }, { Role: role });
+        return verejne({ ...r, Role: role });
+      },
       /** Deaktivace (on = true) / aktivace účtu: heslo i kamery zůstávají, jen se nepřihlásí (a přihlášený je odhlášen). */
       async deaktivuj(id, on) {
         const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
@@ -144,12 +156,13 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
         await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k });
         return verejne({ ...r, Kamery: JSON.stringify(k) });
       },
-      /** Odebere účtu jednu kameru; když to byla poslední, účet smaže. Dispečer kamery nemá – odebrání ho smaže. → { smazan, uzivatel } */
+      /** Odebere účtu jednu kameru; když to byla poslední, účet smaže. Dispečer: kameru, u které je i rodina, jen odebere (zůstane dispečer); jinak ho smaže. → { smazan, uzivatel } */
       async odeberKameru(id, kameraId) {
         const r = (await tabulky.vyber(t, TAB, { kde: { Id: String(id) }, limit: 1 }))[0];
         if (!r) throw chyba('Uživatel neexistuje.', 404);
-        if (r.Role === 'dispecer') { await tabulky.smaz(t, TAB, { Id: r.Id }); return { smazan: true, uzivatel: null }; }
+        if (r.Role === 'dispecer' && !kameryZ(r.Kamery).includes(String(kameraId))) { await tabulky.smaz(t, TAB, { Id: r.Id }); return { smazan: true, uzivatel: null }; }
         const k = kameryZ(r.Kamery).filter((x) => x !== String(kameraId));
+        if (r.Role === 'dispecer') { await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k }); return { smazan: false, uzivatel: verejne({ ...r, Kamery: JSON.stringify(k) }) }; }
         if (!k.length) { await tabulky.smaz(t, TAB, { Id: r.Id }); return { smazan: true, uzivatel: null }; }
         await tabulky.uprav(t, TAB, { Id: r.Id }, { Kamery: k });
         return { smazan: false, uzivatel: verejne({ ...r, Kamery: JSON.stringify(k) }) };

@@ -149,3 +149,17 @@ test('mobilní dispečer: role dispecer bez kamer, pozvánka s jasným textem, d
   assert.deepEqual(await u.odeberKameru(d.uzivatel.id, 'k1'), { smazan: true, uzivatel: null });
   assert.equal(await u.podleId(d.uzivatel.id), null);
 });
+
+test('jeden telefon = jeden účet: rodině jde přidat roli dispečera (nastavRoli), dispečerovi kameru jako rodině; odebrání kamery dispečera ho nesmaže', async () => {
+  const vsichni = createUzivatele(createMockTabulky()); const u = vsichni.pro(T);
+  const r = await u.vytvor({ jmeno: 'Jindřich', telefon: '602520069', kamery: ['k1'] });
+  const d = await u.nastavRoli(r.uzivatel.id, 'dispecer');
+  assert.equal(d.role, 'dispecer'); assert.deepEqual(d.kamery, ['k1'], 'kamera rodiny zůstává');
+  assert.deepEqual((await u.pridejKameru(d.id, 'k2')).kamery, ['k1', 'k2'], 'dispečerovi jde přidat kamera jako rodině');
+  assert.deepEqual(await u.odeberKameru(d.id, 'k1'), { smazan: false, uzivatel: { ...(await u.podleId(d.id)), kamery: ['k2'] } });
+  assert.equal((await u.podleId(d.id)).role, 'dispecer', 'po odebrání kamery zůstává dispečerem');
+  assert.deepEqual(await u.odeberKameru(d.id, 'jina'), { smazan: true, uzivatel: null }, 'odebrání u kamery, kde není rodina, smaže účet dispečera');
+  const r2 = await u.vytvor({ jmeno: 'Bez kamer', telefon: '602000000', role: 'dispecer' });
+  await assert.rejects(u.nastavRoli(r2.uzivatel.id, 'rodina'), /aspoň jednu kameru/);
+  await assert.rejects(u.nastavRoli(r2.uzivatel.id, 'x'), /Typ účtu/);
+});
