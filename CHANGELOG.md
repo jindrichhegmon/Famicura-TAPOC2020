@@ -5,6 +5,13 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.37 · 9. 10. 2026 · historie: nepovedená nahrávka srozumitelně
+
+- V historii dispečinku je u události s chybou nahrávky text „🎞 nahrávka se
+  nepořídila: Kamera neodpovídá …“ místo holého „🎞 Kamera neodpovídá …“, které
+  vypadalo jako důvod upozornění. 📱 1/1 a ✉ jsou odeslaná upozornění podle
+  události (např. překročení čáry), nahrávka je samostatná věc.
+
 ## 3.36 · 9. 10. 2026 · SMS i na účty rodiny
 
 - **Nastavení alertů → SMS komu**: vedle lidí z Kontaktů (Rodina) a telefonů
