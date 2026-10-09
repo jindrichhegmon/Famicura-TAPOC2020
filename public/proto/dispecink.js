@@ -1,4 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -671,7 +672,7 @@ function renderDetail(rebuild = false) {
       };
     });
     // měření zdraví: z A_KAM_Mereni (GET /api/naramek/mereni), stránkování 10/20/50/100 (volba v tomhle prohlížeči), export do Excelu
-    const mer = d.__mereni = { radky: null, cas: null, strana: 0, na: (() => { try { return Number(localStorage.getItem(MERENI_NA_KEY)) || 10; } catch { return 10; } })() };
+    const mer = d.__mereni = pametMereni((() => { try { return Number(localStorage.getItem(MERENI_NA_KEY)) || 10; } catch { return 10; } })());
     const selNa = d.querySelector('#dnaramekNa'); selNa.value = String([10, 20, 50, 100].includes(mer.na) ? mer.na : 10);
     selNa.onchange = () => { mer.na = Number(selNa.value) || 10; mer.strana = 0; try { localStorage.setItem(MERENI_NA_KEY, String(mer.na)); } catch { /* bez paměti */ } kresliMereni(d); };
     d.querySelector('#dnaramekPrev').onclick = () => { if (mer.strana > 0) { mer.strana--; kresliMereni(d); } };
@@ -778,18 +779,11 @@ function renderDetail(rebuild = false) {
   {
     const n = p.naramek;
     const stav = d.querySelector('#dnaramekStav'), info = d.querySelector('#dnaramekInfo');
-    const fmtZ = (z) => { const c = []; if (z?.tep) c.push(`tep ${z.tep}`); if (z?.tlakS && z?.tlakD) c.push(`tlak ${z.tlakS}/${z.tlakD}`); if (z?.spo2) c.push(`kyslík ${z.spo2} %`); if (z?.teplota) c.push(`teplota ${String(z.teplota).replace('.', ',')} °C`); return c.join(', '); };
-    if (!n?.id) { stav.textContent = 'Zatím žádný náramek.'; info.textContent = 'Náramek není přiřazen.'; }
-    else if (!n.posledni) { stav.textContent = `Náramek ${n.id} přiřazen.`; info.textContent = 'Zatím se neozval. Zařízení musí mít nastavenou adresu serveru (SMS příkaz je v nápovědě → Náramek); po nastavení se ozve do minuty.'; }
-    else {
-      stav.textContent = `Náramek ${n.id} přiřazen.`;
-      const ticho = Date.now() - n.posledni > 2 * 60 * 60 * 1000;
-      info.innerHTML = `Naposledy se ozval <strong${ticho ? ' class="bad"' : ''}>${esc(ago(n.posledni))}</strong>${ticho && !n.vypnuto ? ' <span class="bad">(neozývá se přes 2 hodiny – vybitý, bez signálu, nebo vypnutý tlačítkem)</span>' : ''}${Number.isFinite(n.baterie) ? `, baterie <strong>${n.baterie} %</strong>` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha${n.poloha.priblizna ? ' (přibližná, z mobilní sítě)' : ' (GPS)'}</a> ${esc(ago(n.poloha.cas || n.posledni))}` : ' · poloha zatím není'}`
-        + (n.zdravi ? `<br>Poslední měření (${esc(ago(n.zdravi.cas))}): <strong>${esc(fmtZ(n.zdravi))}</strong>` : '');
-    }
+    stav.textContent = n?.id ? `Náramek ${n.id} přiřazen.` : 'Zatím žádný náramek.';
+    setHtml(info, popisStavu(n));
     const vyp = d.querySelector('#dnaramekVyp'), tabVyp = d.querySelector('#dtabVyp');
     vyp.classList.toggle('hide', !n?.vypnuto); tabVyp.classList.toggle('hide', !n?.vypnuto);
-    if (n?.vypnuto) setHtml(vyp, `⏻ NÁRAMEK JE VYPNUTÝ – příkaz k vypnutí poslal(a) ${esc(n.vypnulKdo || 'dispečink')} ${esc(fmtDT(n.vypnuto))}. Nehlásí SOS, pád ani polohu. Zapne se jen tlačítkem na náramku; jakmile se ozve, tohle hlášení zmizí.`);
+    if (n?.vypnuto) setHtml(vyp, popisVypnuti(n));
     const mapa = d.querySelector('#dnaramekMapa');
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
     const sf = d.querySelector('#dnaramekSos');
@@ -801,7 +795,7 @@ function renderDetail(rebuild = false) {
     const as = d.querySelector('#dnaramekAutoStav');
     if (as && !d.querySelector('#dnaramekAuto').contains(document.activeElement)) as.textContent = n?.auto?.min > 0 ? `uloženo: každých ${n.auto.min} min` : 'vypnuto';
     nactiMereni(d, p, n);
-    const popl = sim.state.events.filter((e) => e.patientId === p.id && ['sos', 'devfall', 'battery'].includes(e.kind)).slice(0, 20);
+    const popl = poplachyNaramku(sim.state.events, p.id);
     setHtml(d.querySelector('#dnaramekPoplachy'), popl.length
       ? popl.map((e) => `<li><span class="badge ${esc(urovenUdalosti(e) || 'info')}">${esc(KINDS[e.kind]?.source || 'náramek')}</span><span class="when">${esc(fmtDT(e.at))}</span><span class="grow">${escOdkazy(eventText(e))}${e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''}</span></li>`).join('')
       : '<li class="muted">Zatím žádný poplach z náramku.</li>');
@@ -903,25 +897,6 @@ function renderHistorie(d, p, s) {
  * a přihlašuje se telefonem a heslem (src/uzivatele.mjs). */
 let posledniPozvanka = null;   // { uzivatelId, odkaz, text, sms } – ukázat po založení / nové pozvánce
 const rodinaUzivatele = new Map();   // id kamery → účty rodiny ze serveru (pro „Zavolat rodině“)
-/** Mapa polohy náramku: dlaždice OpenStreetMap (zoom 16) kolem bodu, značka uprostřed; kreslí se znovu jen při změně souřadnic. */
-function kresliMapu(el, lat, lon) {
-  const klic = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-  if (el.dataset.k === klic) return;
-  el.dataset.k = klic;
-  const z = 16, n = 2 ** z, W = el.clientWidth || 600, H = el.clientHeight || 320;
-  el.dataset.wh = `${W}x${H}`;
-  const la = lat * Math.PI / 180;
-  const px = (lon + 180) / 360 * n * 256, py = (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n * 256;
-  const x0 = px - W / 2, y0 = py - H / 2;
-  const casti = [];
-  for (let tx = Math.floor(x0 / 256); tx <= Math.floor((x0 + W) / 256); tx++) {
-    for (let ty = Math.floor(y0 / 256); ty <= Math.floor((y0 + H) / 256); ty++) {
-      if (ty < 0 || ty >= n) continue;
-      casti.push(`<img alt="" src="https://tile.openstreetmap.org/${z}/${((tx % n) + n) % n}/${ty}.png" style="left:${Math.round(tx * 256 - x0)}px;top:${Math.round(ty * 256 - y0)}px">`);
-    }
-  }
-  el.innerHTML = casti.join('') + '<div class="znacka" title="poslední poloha náramku"></div><span class="osm">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></span>';
-}
 
 /** Telefon pro Péče doma plus v mezinárodním tvaru (jako jhn-apps): mezery pryč, 9 číslic dostane +420. */
 const mezinarodni = (v) => { let t = String(v || '').replace(/[\s\-()]/g, ''); if (/^00\d+$/.test(t)) t = '+' + t.slice(2); if (/^\d{9}$/.test(t)) t = '+420' + t; return t; };
@@ -992,85 +967,13 @@ function kresliVola(d, p) {
   setHtml(el, `Náramek bude volat: ${radky.join(' · ')}${posl}`);
 }
 const MERENI_NA_KEY = 'famicura.mereniNa';
-/** Jako slucMereni na serveru (src/log-udalosti.mjs): hodnoty jedné sady (do 2 minut, bez překryvu) v jednom řádku. */
-function slucMereni(radky, oknoMs = 120_000) {
-  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota']; const out = [];
-  for (const r of radky) {
-    const g = out[out.length - 1];
-    if (g && g.cas - r.cas <= oknoMs && r.cas <= g.cas && !POLE.some((k) => r[k] != null && g[k] != null)) { for (const k of POLE) if (r[k] != null) g[k] = r[k]; }
-    else out.push({ ...r });
-  }
-  return out;
-}
-/** Měření zdraví: načte ze serveru, když přibylo (čas posledního měření ve stavu se změnil) nebo ještě nebylo načteno; bez serveru vezme n.mereni ze stavu. */
-function nactiMereni(d, p, n) {
-  const m = d.__mereni; if (!m) return;
-  const cas = n?.zdravi?.cas || null;
-  if (m.radky && m.cas === cas && m.kamera === p.id) return;
-  m.kamera = p.id; m.cas = cas;
-  if (!sim.naServeru) { m.radky = slucMereni(Array.isArray(n?.mereni) ? n.mereni : []); m.strana = 0; kresliMereni(d); return; }
-  if (m.nacitam) return; m.nacitam = true;
-  apiJson(`/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}`).then((r) => { m.radky = r.mereni || []; if (m.strana * m.na >= m.radky.length) m.strana = 0; kresliMereni(d); })
-    .catch(() => { m.radky = slucMereni(Array.isArray(n?.mereni) ? n.mereni : []); kresliMereni(d); })
-    .finally(() => { m.nacitam = false; });
-}
+/** Měření zdraví: načte ze serveru, když přibylo (naramek-ui.nactiMereni), a překreslí tabulku, grafy a mapu. */
+function nactiMereni(d, p, n) { nactiMereniNaramku(d.__mereni, p.id, n, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereni(d) }); }
 function kresliMereni(d) {
   const m = d.__mereni; const el = d.querySelector('#dnaramekMereni'); if (!m || !el) return;
-  const radky = m.radky || []; const stran = Math.max(1, Math.ceil(radky.length / m.na)); if (m.strana >= stran) m.strana = stran - 1;
-  const vyrez = radky.slice(m.strana * m.na, (m.strana + 1) * m.na);
-  d.querySelector('#dnaramekStrana').textContent = radky.length ? `${m.strana + 1} / ${stran} · ${radky.length}${radky.length >= 2000 ? '+' : ''} měření` : '';
-  d.querySelector('#dnaramekPrev').disabled = m.strana === 0; d.querySelector('#dnaramekNext').disabled = m.strana >= stran - 1;
-  // hodnota mimo běžné rozmezí oranžově (warn), mimo varovné rozmezí červeně (bad); meze v sim-core MEZE_ZDRAVI
-  const bunka = (k, v, text) => { const u = urovenHodnoty(k, v); const m = MEZE_ZDRAVI[k]; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ` title="mimo běžné rozmezí ${m.ok[0]}–${m.ok[1]} ${m.jednotka}"` : ''}>${text}</td>`; };
-  const bunkaTlak = (z) => { if (!(z.tlakS && z.tlakD)) return '<td></td>'; const u = ['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || ''; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ' title="mimo běžné rozmezí 90–139 / 60–89 mmHg"' : ''}>${z.tlakS}/${z.tlakD}</td>`; };
-  setHtml(el, vyrez.length
-    ? `<table class="mereni"><thead><tr><th>Čas</th><th>Tep</th><th>Tlak</th><th>Kyslík</th><th>Teplota</th></tr></thead><tbody>${vyrez.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td>${bunka('tep', z.tep, z.tep ?? '')}${bunkaTlak(z)}${bunka('spo2', z.spo2, z.spo2 ? z.spo2 + ' %' : '')}${bunka('teplota', z.teplota, z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : '')}</tr>`).join('')}</tbody></table>`
-    : '<p class="small muted">Zatím žádné měření.</p>');
-  kresliGraf(d, radky);
-}
-/* Graf vývoje měření za posledních 24 h vedle mapy: čtyři malé grafy (tep, tlak, kyslík, teplota) se společnou časovou osou,
-   jedna osa hodnot na graf, světlé pásmo = běžné rozmezí, body mimo rozmezí oranžově/červeně, popisek bodu po najetí myší. */
-const GRAFY = [
-  { k: 'tep', nazev: 'Tep', jednotka: '/min', serie: [['tep', 'tep', 's1']] },
-  { k: 'tlak', nazev: 'Krevní tlak', jednotka: 'mmHg', serie: [['tlakS', 'horní', 's1'], ['tlakD', 'dolní', 's2']] },
-  { k: 'spo2', nazev: 'Kyslík v krvi', jednotka: '%', serie: [['spo2', 'kyslík', 's1']] },
-  { k: 'teplota', nazev: 'Teplota', jednotka: '°C', serie: [['teplota', 'teplota', 's1']] },
-];
-function kresliGraf(d, radky, now = Date.now()) {
-  const el = d.querySelector('#dnaramekGraf'); if (!el) return;
-  const DEN = 24 * 3600 * 1000; const od = now - DEN;
-  const data = (radky || []).filter((r) => r.cas >= od && r.cas <= now + 60_000).sort((a, b) => a.cas - b.cas);
-  const W = 320, H = 96, L = 38, R = 10, T = 8, B = 20;
-  const x = (t) => L + ((t - od) / DEN) * (W - L - R);
-  const fmtCas = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
-  const fmtV = (v) => String(v).replace('.', ',');
-  setHtml(el, GRAFY.map((g) => {
-    const serie = g.serie.filter(([k]) => data.some((r) => r[k] != null));
-    if (!serie.length) return `<figure class="graf prazdny"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span></figcaption><p class="small muted">bez měření za 24 h</p></figure>`;
-    const hodnoty = []; for (const [k] of serie) for (const r of data) if (r[k] != null) hodnoty.push(Number(r[k]));
-    const meze = serie.length === 1 ? MEZE_ZDRAVI[serie[0][0]] : null;
-    let min = Math.min(...hodnoty, ...(meze ? [meze.ok[0]] : [])), max = Math.max(...hodnoty, ...(meze ? [meze.ok[1]] : []));
-    if (max - min < 4) { const s = (4 - (max - min)) / 2; min -= s; max += s; }
-    const krok = (max - min) / 2; min -= krok * 0.08; max += krok * 0.08;
-    const y = (v) => T + ((max - v) / (max - min)) * (H - T - B);
-    const osaY = [min, (min + max) / 2, max].map((v) => `<line class="osa" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${L - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmtV(Math.round(v * 10) / 10)}</text>`).join('');
-    const osaX = [0, 6, 12, 18, 24].map((h) => { const t = od + h * 3600 * 1000; return `<line class="osa" x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="${T}" y2="${H - B}"/><text class="tick" x="${x(t).toFixed(1)}" y="${H - 8}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${h === 24 ? 'teď' : fmtCas(t)}</text>`; }).join('');
-    const pasmo = meze ? `<rect class="pasmo" x="${L}" y="${y(Math.min(meze.ok[1], max)).toFixed(1)}" width="${W - L - R}" height="${Math.max(0, y(Math.max(meze.ok[0], min)) - y(Math.min(meze.ok[1], max))).toFixed(1)}"><title>běžné rozmezí ${fmtV(meze.ok[0])}–${fmtV(meze.ok[1])} ${esc(meze.jednotka)}</title></rect>` : '';
-    const cary = serie.map(([k, nazev, cls]) => {
-      const body = data.filter((r) => r[k] != null);
-      const cara = body.length > 1 ? `<path class="cara ${cls}" d="${body.map((r, i) => `${i ? 'L' : 'M'}${x(r.cas).toFixed(1)} ${y(Number(r[k])).toFixed(1)}`).join(' ')}"/>` : '';
-      const tecky = body.map((r) => { const u = urovenHodnoty(k, r[k]); return `<circle class="bod ${cls} ${u}" cx="${x(r.cas).toFixed(1)}" cy="${y(Number(r[k])).toFixed(1)}" r="4"><title>${esc(fmtDT(r.cas))} · ${esc(nazev)} ${fmtV(r[k])} ${esc(g.jednotka)}${u === 'warn' ? ' · mimo běžné rozmezí' : u === 'bad' ? ' · výrazně mimo rozmezí' : ''}</title></circle>`; }).join('');
-      const posl = body[body.length - 1];
-      const vpravo = x(posl.cas) + 40 > W - R;   // u pravého okraje popisek vlevo od bodu, jinak vpravo
-      const popis = serie.length > 1 ? `<text class="popis" x="${(vpravo ? x(posl.cas) - 7 : x(posl.cas) + 7).toFixed(1)}" y="${(y(Number(posl[k])) + 3).toFixed(1)}" text-anchor="${vpravo ? 'end' : 'start'}">${esc(nazev)}</text>` : '';
-      return cara + tecky + popis;
-    }).join('');
-    const legenda = serie.length > 1 ? `<span class="legenda">${serie.map(([, nazev, cls]) => `<i class="lg ${cls}"></i>${esc(nazev)}`).join(' ')}</span>` : '';
-    return `<figure class="graf"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span>${legenda}</figcaption><svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.nazev)} za posledních 24 hodin">${pasmo}${osaY}${osaX}${cary}</svg></figure>`;
-  }).join(''));
-  // mapa vedle grafů se natáhne na jejich výšku; dlaždice jsou spočítané pro původní rozměr, proto překreslit
-  const mapa = d.querySelector('#dnaramekMapa');
-  if (mapa && mapa.dataset.k && !mapa.classList.contains('hide') && mapa.dataset.wh !== `${mapa.clientWidth}x${mapa.clientHeight}`) { const [la, lo] = mapa.dataset.k.split(','); mapa.dataset.k = ''; kresliMapu(mapa, Number(la), Number(lo)); }
+  const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dnaramekStrana'), prev: d.querySelector('#dnaramekPrev'), next: d.querySelector('#dnaramekNext') });
+  kresliGrafy(d.querySelector('#dnaramekGraf'), radky);
+  prekresliMapu(d.querySelector('#dnaramekMapa'));   // mapa vedle grafů se natáhne na jejich výšku
 }
 async function apiJson(path, init) {
   const r = await fetch(path, init);

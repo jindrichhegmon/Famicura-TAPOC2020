@@ -481,9 +481,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           return json({ ok: true, nastaveno: true, poskytovatel: v.poskytovatel, pecedoma: v.pecedoma, pecedomaplus: v.pecedomaplus, zastarale: !!v.zastarale });
         } catch (e) { if (m === 'POST') throw e; return json({ ok: true, nastaveno: true, ...prazdne, chyba: e.message }); }
       }
-      // Měření zdraví z náramku jedné kamery (jen poskytovatel), nejnovější první, nejvýš 2000 (stránkuje stránka); format=xlsx = sešit Excelu (až 10000).
+      // Měření zdraví z náramku jedné kamery, nejnovější první, nejvýš 2000 (stránkuje stránka); format=xlsx = sešit Excelu (až 10000).
+      // Kdo kameru smí vidět, vidí i měření: poskytovatel, rodina u své kamery, mobilní dispečer u kamer poskytovatele (karta Náramek v aplikaci na telefonu).
       if (m === 'GET' && path === '/api/naramek/mereni') {
-        if (rodina) return jenPoskytovatel();
         const kam = url.searchParams.get('kamera') || '';
         if (!isDeviceId(kam) || !(await smiKameruId(kam))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         const st = await stavTenanta();

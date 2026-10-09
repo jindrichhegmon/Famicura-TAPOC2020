@@ -113,7 +113,11 @@ jednotlivé veličiny): server každou minutu zkontroluje připojené náramky a
 uplynutí intervalu pošle celou sadu. Každé hlášení je trvale řádek
 v `A_KAM_Mereni` (KameraID, NaramekId, Cas, Tep, TlakS, TlakD, Spo2, Teplota);
 `GET /api/naramek/mereni?kamera=…` vrací nejnovějších až 2000 (stránka
-stránkuje po 10/20/50/100), `&format=xlsx` sešit Excelu až 10000 řádků. Názvy `hrtstart,1`, `CR`, `UPLOAD`, `POWEROFF` jsou z dokumentace
+stránkuje po 10/20/50/100), `&format=xlsx` sešit Excelu až 10000 řádků;
+měření vidí každý, kdo kameru smí vidět (rodina u své, mobilní dispečer
+u kamer poskytovatele – karta ⌚ Náramek SOS v aplikaci na telefonu, jen
+ke čtení). Mapu, grafy a tabulku kreslí společný modul
+`public/proto/naramek-ui.js` pro dispečink i aplikaci rodiny. Názvy `hrtstart,1`, `CR`, `UPLOAD`, `POWEROFF` jsou z dokumentace
 protokolu SeTracker/Beesure; `bphrt` a `oxygen` jako příkazy V48 přijímá
 (ověřeno v logu), `btemp2` je jen hlášení teploty (náramek příkaz
 po přijetí zopakuje jako potvrzení). Mapa poslední polohy je z dlaždic
@@ -528,7 +532,8 @@ doma (kód z SMS od centrály), navíc s heslem, protože rodina vidí obraz:
 1. **Poskytovatel založí účet** v dispečinku (detail skutečné kamery →
    Uživatelé rodiny): typ účtu (Rodina – jen tato kamera / **Dispečer** –
    mobilní dispečer: vidí všechny kamery tenanta, nic nenastavuje, jen
-   barevné schéma; `Role` v tabulce, `ucet` v `/api/rodina/ja`, server mu
+   barevné schéma; u kamery s náramkem má – stejně jako rodina – kartu
+   ⌚ Náramek SOS (stav, mapa, grafy, měření, poplachy, jen ke čtení); `Role` v tabulce, `ucet` v `/api/rodina/ja`, server mu
    akce stavu kromě `setWatching` odmítá), jméno a telefon. Účet rodiny i
    dispečera jde deaktivovat (`POST /api/rodina/uzivatele/:id/deaktivace`,
    sloupec `Deaktivovan`: nepřihlásí se, přihlášený je odhlášen). Server

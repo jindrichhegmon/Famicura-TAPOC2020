@@ -177,6 +177,20 @@
     <ul class="timeline" id="nahravkySeznam"><li class="muted">Načítám…</li></ul>
   </section>
 
+  <!-- náramek / přívěsek SOS: jen ke čtení (stav, poloha, grafy, měření, poplachy); karta je vidět jen u kamery s přiřazeným náramkem -->
+  <section class="card hide" id="naramek">
+    <div class="cardhead"><span class="ic">⌚</span><h2>Náramek SOS</h2><span class="badge tech hide" id="naramekVypBadge">⏻ vypnutý</span></div>
+    <div class="naramekVyp hide" id="naramekVyp"></div>
+    <p class="now" id="naramekInfo"></p>
+    <div class="mapagraf"><div class="mapa hide" id="naramekMapa"></div><div class="grafy" id="naramekGraf"></div></div>
+    <h3 class="sub">Měření zdraví</h3>
+    <div class="tabwrap" id="naramekMereni"></div>
+    <div class="row hide" id="naramekPaging" style="justify-content:space-between;margin-top:6px"><button type="button" class="sm sec" id="naramekPrev">◀ Novějších 10</button><span class="small muted" id="naramekStrana"></span><button type="button" class="sm sec" id="naramekNext">Starších 10 ▶</button></div>
+    <h3 class="sub">Poplachy z náramku</h3>
+    <ul class="timeline" id="naramekPoplachy"></ul>
+    <p class="hint">Nouzové tlačítko, pád a slabá baterie hlásí náramek přímo na server, vyřizuje je dispečink. Měření, polohu, čísla SOS a vypnutí náramku ovládá dispečink na počítači; tady se jen sleduje.</p>
+  </section>
+
   <section class="card" id="nastaveni">
     <div class="cardhead"><span class="ic">⚙️</span><h2>Co poskytovatel hlídá</h2></div>
     <p class="hint">Nastavuje dispečink poskytovatele; rodina nic nenastavuje. Symboly: 🎞 událost se nahrává (15 s, plus 5 s před ní), 📱 jde SMS a ✉ e-mail na kontakty, které poskytovatel zadal.</p>
@@ -234,6 +248,7 @@
   <a href="#domu"><span class="ic">🏠</span>Domů</a>
   <a href="#soukromi"><span class="ic">🔒</span>Soukromí</a>
   <a href="#historie"><span class="ic">🕓</span>Historie</a>
+  <a href="#naramek" class="hide" id="navNaramek"><span class="ic">⌚</span>Náramek</a>
   <a href="#nastaveni"><span class="ic">⚙️</span>Nastavení</a>
 </nav>
 <script type="module" src="/proto/rodina.js"></script>

@@ -5,6 +5,22 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.31 · 9. 10. 2026 · náramek v aplikaci na telefonu (rodina i mobilní dispečer)
+
+- **Karta ⌚ Náramek SOS** v aplikaci rodiny (`/proto/rodina.html`), tedy i u
+  mobilního dispečera: stav a baterie, odkaz na polohu a mapa (OSM), grafy
+  za 24 h, tabulka měření zdraví po 10 (Novějších / Starších), poplachy
+  z náramku (nouzové tlačítko, pád, slabá baterie) a červené hlášení
+  vypnutého náramku s odznakem. Jen ke čtení: ovládání (měření, poloha,
+  čísla SOS, vypnutí, přiřazení) zůstává v dispečinku. Karta i záložka
+  Náramek v dolní liště jsou vidět jen u kamery s přiřazeným náramkem.
+- **`GET /api/naramek/mereni`** nově i pro rodinu (jen její kamery) a mobilního
+  dispečera (kamery poskytovatele); dřív jen poskytovatel (rodina 403).
+- **Společný modul `public/proto/naramek-ui.js`**: mapa, grafy, tabulka
+  měření, popis stavu a vypnutí, načítání měření – dispečink i aplikace
+  rodiny kreslí totéž ze stejného kódu (z dispecink.js přesunuto).
+- Nápověda: téma Náramek a Uživatelé rodiny / mobilní dispečer, Co je nové.
+
 ## 3.30 · 9. 10. 2026 · nápověda zkontrolovaná a k tisku do PDF
 
 - **Tisk / PDF**: v Nápovědě dispečinku je vpravo na liště Témata / Asistent

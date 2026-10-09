@@ -521,3 +521,9 @@ svg.g{width:100%;height:auto;display:block}
 .mapa .znacka{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#d93025;border:3px solid #fff;box-shadow:0 0 0 2px #d93025}
 .mapa .osm{position:absolute;right:4px;bottom:2px;font-size:.65rem;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:4px}
 .mapa .osm a{color:inherit}
+
+/* karta Náramek v aplikaci na telefonu: mapa nižší, tabulka měření jde posouvat do strany */
+#naramek .mapagraf .mapa{min-height:220px;height:220px}
+#naramek .tabwrap{overflow-x:auto}
+#naramek .mereni{width:100%;border-collapse:collapse;font-size:.85rem}
+#naramek .cardhead .badge{margin-left:auto}

@@ -1,4 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
 import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -335,6 +336,35 @@ function kresliDeaktivaci(p) {
   }
 }
 
+/* ---------- náramek / přívěsek SOS: karta jen ke čtení (rodina i mobilní dispečer) ----------
+ * Stav, baterie a poloha jsou ve stavu poskytovatele (p.naramek), měření zdraví se načítá
+ * z GET /api/naramek/mereni (kdo kameru smí vidět, vidí i měření); poplachy jsou události
+ * sos / devfall / battery. Ovládání náramku je jen v dispečinku na počítači. */
+const mereni = pametMereni(10);
+function kresliNaramek(p) {
+  const card = $('naramek'); if (!card) return;
+  const n = p.naramek; const je = !!n?.id;
+  card.classList.toggle('hide', !je); $('navNaramek').classList.toggle('hide', !je);
+  if (!je) return;
+  setHtml($('naramekInfo'), popisStavu(n, { proRodinu: true }));
+  const vyp = $('naramekVyp'); vyp.classList.toggle('hide', !n.vypnuto); $('naramekVypBadge').classList.toggle('hide', !n.vypnuto);
+  if (n.vypnuto) setHtml(vyp, popisVypnuti(n));
+  const mapa = $('naramekMapa');
+  if (n.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
+  nactiMereni(mereni, p.id, n, { naServeru: sim.naServeru, apiJson: (path) => api(path), hotovo: kresliMereni });
+  const popl = poplachyNaramku(sim.state.events, p.id, 10);
+  setHtml($('naramekPoplachy'), popl.length
+    ? popl.map((e) => { const u = urovenUdalosti(e); const tail = e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''; return `<li class="${u}"><span class="when">${fmtDT(e.at)}</span><span class="grow"><span class="badge ${levelClass(u)}">${esc(KINDS[e.kind]?.source || 'náramek')}</span> ${escOdkazy(eventText(e))}${tail}</span></li>`; }).join('')
+    : '<li class="muted">Zatím žádný poplach z náramku.</li>');
+}
+function kresliMereni() {
+  const radky = kresliStranuMereni(mereni, { el: $('naramekMereni'), strana: $('naramekStrana'), prev: $('naramekPrev'), next: $('naramekNext') });
+  $('naramekPaging').classList.toggle('hide', radky.length <= mereni.na);
+  kresliGrafy($('naramekGraf'), radky); prekresliMapu($('naramekMapa'));
+}
+$('naramekPrev').onclick = () => { if (mereni.strana > 0) { mereni.strana--; kresliMereni(); } };
+$('naramekNext').onclick = () => { mereni.strana++; kresliMereni(); };
+
 function levelClass(l) { return l === 'crit' ? 'crit' : l === 'warn' ? 'warn' : l === 'tech' ? 'tech' : 'info'; }
 
 /* ---------- žádost o plný obraz přes celou obrazovku ----------
@@ -408,6 +438,7 @@ function render() {
   $('heroT').textContent = { ok: 'Vše v pořádku', warn: 'Varování, podívejte se', crit: 'Kritická událost', off: 'Kamera je nedostupná', deakt: 'Kamera je deaktivovaná' }[heroKind];
   $('heroS').textContent = p.deaktivace ? `Vypnuto od ${fmtDT(p.deaktivace.od)} · bez obrazu, nahrávek a událostí` : lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
   kresliDeaktivaci(p);
+  kresliNaramek(p);
   kresliKamVyber();
   $('modeTag').textContent = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
   const efZdroj = { deaktivace: 'kameru jste deaktivovali', povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';

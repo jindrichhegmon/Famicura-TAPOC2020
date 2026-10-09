@@ -978,7 +978,7 @@ test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený ná
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: rc, body: { akce: 'setNaramekAuto', args: ['tapoc2020', { min: 10, tep: true }] } }))).status, 403);
 });
 
-test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, export do Excelu, rodina 403, cizí kamera 404', async () => {
+test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, export do Excelu, rodina a mobilní dispečer jen u kamer, které vidí, cizí kamera 404', async () => {
   const tabulky = createMockTabulky();
   for (const [i, r] of [[1, { Tep: 70, TlakS: 120, TlakD: 80 }], [2, { Spo2: 97 }], [3, { Teplota: '36.6' }]].entries()) {
     await tabulky.vloz(T, 'A_KAM_Mereni', { Id: 'm' + i, KameraID: 'tapoc2020', NaramekId: '9705357211', Cas: 1_700_000_000_000 + r[0] * 300_000, ...r[1] });
@@ -994,7 +994,14 @@ test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, 
   assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=cizi', { cookies: cookie() }))).status, 404);
   const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000444', kamery: ['tapoc2020'] });
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
-  assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: cookieRodina(T, rod.id).split(';')[0] }))).status, 403);
+  // rodina u své kamery měření vidí (karta Náramek v aplikaci na telefonu), u cizí ne; mobilní dispečer u všech kamer poskytovatele
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  r = await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: rc })); assert.equal(r.status, 200); assert.equal((await r.json()).mereni.length, 3);
+  assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=jina', { cookies: rc }))).status, 404, 'kamera, kde rodina není');
+  const d = await uzivatele.vytvor({ jmeno: 'Jana Dispečerka', telefon: '777000111', kamery: [], role: 'dispecer' });
+  const dis = await vsichni.aktivuj(d.token, 'Dispecer2026');
+  r = await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: cookieRodina(T, dis.id).split(';')[0] })); assert.equal(r.status, 200, 'mobilní dispečer vidí měření kamer poskytovatele');
+  assert.equal((await h(req('GET', '/api/naramek/mereni?kamera=jina', { cookies: cookieRodina(T, dis.id).split(';')[0] }))).status, 404, 'kamera mimo poskytovatele');
 });
 
 test('slucMereni: hodnoty jedné sady (do 2 minut, bez překryvu) v jednom řádku, další sada zvlášť', () => {
