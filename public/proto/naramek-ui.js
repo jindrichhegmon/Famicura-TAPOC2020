@@ -108,7 +108,7 @@ const GRAFY = [
 ];
 export function kresliGrafy(el, radky, pocet = GRAF_MERENI) {
   if (!el) return;
-  const W = 320, H = 104, L = 38, R = 10, T = 8, B = 24, OKRAJ = 16;   // OKRAJ: body odsazené od krajů, ať se popisky časů vejdou pod ně
+  const W = 320, H = 150, L = 36, R = 10, T = 10, B = 24, OKRAJ = 16;   // OKRAJ: body odsazené od krajů, ať se popisky časů vejdou pod ně
   const fmtCas = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
   const fmtDen = (t) => new Date(t).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
   const fmtV = (v) => String(v).replace('.', ',');
@@ -132,7 +132,7 @@ export function kresliGrafy(el, radky, pocet = GRAF_MERENI) {
     const cary = serie.map(([k, nazev, cls]) => {
       const body = vsechna.map((r, i) => [r, i]).filter(([r]) => r[k] != null);
       const cara = body.length > 1 ? `<path class="cara ${cls}" d="${body.map(([r, i], j) => `${j ? 'L' : 'M'}${x(i).toFixed(1)} ${y(Number(r[k])).toFixed(1)}`).join(' ')}"/>` : '';
-      const tecky = body.map(([r, i]) => { const u = urovenHodnoty(k, r[k]); return `<circle class="bod ${cls} ${u}" cx="${x(i).toFixed(1)}" cy="${y(Number(r[k])).toFixed(1)}" r="4"><title>${esc(fmtDT(r.cas))} · ${esc(nazev)} ${fmtV(r[k])} ${esc(g.jednotka)}${u === 'warn' ? ' · mimo běžné rozmezí' : u === 'bad' ? ' · výrazně mimo rozmezí' : ''}</title></circle>`; }).join('');
+      const tecky = body.map(([r, i]) => { const u = urovenHodnoty(k, r[k]); return `<circle class="bod ${cls} ${u}" cx="${x(i).toFixed(1)}" cy="${y(Number(r[k])).toFixed(1)}" r="3"><title>${esc(fmtDT(r.cas))} · ${esc(nazev)} ${fmtV(r[k])} ${esc(g.jednotka)}${u === 'warn' ? ' · mimo běžné rozmezí' : u === 'bad' ? ' · výrazně mimo rozmezí' : ''}</title></circle>`; }).join('');
       const [posl, poslI] = body[body.length - 1];
       const vpravo = x(poslI) + 40 > W - R;   // u pravého okraje popisek vlevo od bodu, jinak vpravo
       const popis = serie.length > 1 ? `<text class="popis" x="${(vpravo ? x(poslI) - 7 : x(poslI) + 7).toFixed(1)}" y="${(y(Number(posl[k])) + 3).toFixed(1)}" text-anchor="${vpravo ? 'end' : 'start'}">${esc(nazev)}</text>` : '';
@@ -141,7 +141,7 @@ export function kresliGrafy(el, radky, pocet = GRAF_MERENI) {
     const legenda = serie.length > 1 ? `<span class="legenda">${serie.map(([, nazev, cls]) => `<i class="lg ${cls}"></i>${esc(nazev)}`).join(' ')}</span>` : '';
     const prvni = vsechna[0].cas, posledni = vsechna[n - 1].cas;
     const obdobi = fmtDen(prvni) === fmtDen(posledni) ? fmtDen(posledni) : `${fmtDen(prvni)} – ${fmtDen(posledni)}`;
-    return `<figure class="graf"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span>${legenda}<span class="legenda obdobi">${n === 1 ? '1 měření' : `posledních ${n} měření`} · ${esc(obdobi)}</span></figcaption><svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.nazev)}, posledních ${n} měření">${pasmo}${osaY}${osaX}${cary}</svg></figure>`;
+    return `<figure class="graf"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span>${legenda}<span class="legenda obdobi">${n} ${n === 1 ? 'měření' : 'měření'} · ${esc(obdobi)}</span></figcaption><svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.nazev)}, posledních ${n} měření">${pasmo}${osaY}${osaX}${cary}</svg></figure>`;
   }).join(''));
 }
 

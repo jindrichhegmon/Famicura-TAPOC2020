@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.34 · 9. 10. 2026 · grafy náramku jemnější, 2×2 vedle mapy
+
+- **Stav náramku v dispečinku**: čtyři grafy (tep, tlak, kyslík, teplota) jsou
+  v mřížce 2×2 vedle mapy a dohromady mají její výšku; bílé karty s tenkým
+  rámečkem, menší písmo os a titulků, tenčí čáry, menší body, světlejší pásmo
+  běžného rozmezí; titulek „10 měření · 9. 10.“. V aplikaci na telefonu 2×2
+  pod mapou (na úzkém displeji pod sebou).
+
 ## 3.33 · 9. 10. 2026 · grafy náramku: posledních 10 měření
 
 - **Mango přes SSH**: `deploy/wireguard/mango-ssh.sh <famicura-mango*.conf>
