@@ -46,6 +46,17 @@ test('Tapo: špatné heslo = chyba přihlášení (auth), po opakování blokace
   await assert.rejects(kb.svetloStav(), (e) => e instanceof TapoError && e.nepodporuje);
 });
 
+test('Tapo: počítání Seq – výchozí start_seq+1 (pytapo); kamera, která chce start_seq, se pozná po prvním odmítnutí a drží se', async () => {
+  const post = fakeTapo({ password: 'tajne', seqRezim: 'post' });
+  const k = createTapo({ host: 'k', pass: 'tajne', fetchImpl: post.fetchImpl, log: { log() {} } });
+  assert.equal((await k.info()).device_model, 'C560WS');
+  assert.equal(k.seqRezim, 'post'); assert.equal(post.st.prihlaseni, 2, 'po odmítnutí nové přihlášení');
+  assert.equal((await k.svetloStav()).zapnuto, false); assert.equal(post.st.prihlaseni, 2, 'dál už bez přihlašování');
+  const pre = fakeTapo({ password: 'tajne', seqRezim: 'pre' });
+  const k2 = createTapo({ host: 'k', pass: 'tajne', fetchImpl: pre.fetchImpl });
+  await k2.info(); assert.equal(k2.seqRezim, 'pre'); assert.equal(pre.st.prihlaseni, 1);
+});
+
 test('Tapo: vypršelý stok (-40401) = přihlásí se znovu a požadavek zopakuje', async () => {
   const kam = fakeTapo({ password: 'tajne' });
   const k = createTapo({ host: 'k', pass: 'tajne', fetchImpl: kam.fetchImpl });

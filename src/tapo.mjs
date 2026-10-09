@@ -71,6 +71,9 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
   const hashe = { md5: md5hex(pass), sha256: sha256hex(pass) };
   let secure = null;        // null = nezjištěno
   let stok = null, seq = 0, lsk = null, ivb = null, cnonce = '', metoda = 'sha256';
+  // Pořadové číslo Seq: 'pre' = první požadavek nese start_seq + 1 (pytapo), 'post' = start_seq. Když kamera první
+  // požadavek po přihlášení odmítne (-40401), zkusí se druhá varianta; co kameře sedlo, se drží.
+  let seqRezim = 'pre', cerstve = false, prepnuto = false;
   const H = () => hashe[metoda];
 
   const post = async (path, data, extra = {}) => {
@@ -91,11 +94,12 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
     return secure;
   };
 
-  const chybaPrihlaseni = (j) => {
+  const chybaPrihlaseni = (j, krok) => {
     const code = j?.result?.data?.code ?? j?.error_code ?? null;
     const sec = j?.result?.data?.sec_left;
     if (sec) return new TapoError(`kamera dočasně blokuje přihlášení, zkuste za ${sec} s`, { code, auth: true });
-    return new TapoError(popisKodu(code), { code, auth: code === -40411 || code === -40401 || code === -40404 || code === 401 });
+    const text = code === -40401 ? `kamera odmítla přihlášení (${krok}, kód -40401)` : popisKodu(code);
+    return new TapoError(text, { code, auth: code === -40411 || code === -40401 || code === -40404 || code === 401 });
   };
 
   async function login() {
@@ -104,7 +108,7 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
       cnonce = random();
       const prvni = await post('/', { method: 'login', params: { cnonce, encrypt_type: '3', username: user } });
       const d = prvni.j?.result?.data;
-      if (!d?.nonce || !d?.device_confirm) throw chybaPrihlaseni(prvni.j);
+      if (!d?.nonce || !d?.device_confirm) throw chybaPrihlaseni(prvni.j, 'krok 1');
       const nonce = String(d.nonce);
       // Kamera dokazuje, že zná heslo: device_confirm z cnonce, hashe hesla (SHA256 nebo MD5) a nonce.
       metoda = null;
@@ -113,16 +117,16 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
       const digest = sha256hex(H() + cnonce + nonce) + cnonce + nonce;
       const druha = await post('/', { method: 'login', params: { cnonce, encrypt_type: '3', digest_passwd: digest, username: user } });
       const r = druha.j?.result;
-      if (!r?.stok || r.start_seq === undefined) throw chybaPrihlaseni(druha.j);
+      if (!r?.stok || r.start_seq === undefined) throw chybaPrihlaseni(druha.j, 'krok 2, digest');
       if (r.user_group && r.user_group !== 'root') throw new TapoError('účet nemá práva správce kamery (user_group ' + r.user_group + ')', { auth: true });
       const hashedKey = sha256hex(cnonce + H() + nonce);
       lsk = createHash('sha256').update('lsk' + cnonce + nonce + hashedKey, 'utf8').digest().subarray(0, 16);
       ivb = createHash('sha256').update('ivb' + cnonce + nonce + hashedKey, 'utf8').digest().subarray(0, 16);
-      seq = Number(r.start_seq) || 0; stok = String(r.stok);
+      seq = Number(r.start_seq) || 0; stok = String(r.stok); cerstve = true;
     } else {
       metoda = 'md5';
       const { j } = await post('/', { method: 'login', params: { hashed: true, password: hashe.md5, username: user } });
-      if (!j?.result?.stok) throw chybaPrihlaseni(j);
+      if (!j?.result?.stok) throw chybaPrihlaseni(j, 'starší přihlášení');
       stok = String(j.result.stok);
     }
     return stok;
@@ -137,11 +141,20 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
     if (secure) {
       const full = { method: 'securePassthrough', params: { request: zasifruj(JSON.stringify(data)) } };
       const body = JSON.stringify(full);
-      const tag = sha256hex(sha256hex(H() + cnonce) + body + String(seq));
-      const extra = { Seq: String(seq), Tapo_tag: tag }; seq++;
+      if (seqRezim === 'pre') seq++;
+      const pouzity = seq;
+      if (seqRezim === 'post') seq++;
+      const tag = sha256hex(sha256hex(H() + cnonce) + body + String(pouzity));
+      const extra = { Seq: String(pouzity), Tapo_tag: tag };
       const { j } = await post(`/stok=${stok}/ds`, full, extra);
-      if (j?.error_code === -40401 && znovu) { stok = null; return raw(data, { znovu: false }); }
-      if (j?.error_code && j.error_code !== 0) throw new TapoError(popisKodu(j.error_code), { code: j.error_code, auth: j.error_code === -40401 });
+      const byloCerstve = cerstve; cerstve = false;
+      if (j?.error_code === -40401) {
+        // hned po přihlášení = nejspíš jiné počítání Seq: přepnout a přihlásit znovu (jen jednou)
+        if (byloCerstve && !prepnuto) { prepnuto = true; seqRezim = seqRezim === 'pre' ? 'post' : 'pre'; if (log?.log) log.log('[tapo]', host, 'první požadavek odmítnut (-40401), zkouším Seq', seqRezim); stok = null; return raw(data, { znovu }); }
+        if (znovu) { stok = null; return raw(data, { znovu: false }); }
+        throw new TapoError(`kamera odmítla zašifrovaný požadavek (kód -40401, Seq ${seqRezim})`, { code: -40401, auth: true });
+      }
+      if (j?.error_code && j.error_code !== 0) throw new TapoError(popisKodu(j.error_code), { code: j.error_code });
       if (!j?.result?.response) throw new TapoError('kamera neposlala zašifrovanou odpověď', {});
       try { odpoved = JSON.parse(desifruj(j.result.response)); } catch { throw new TapoError('odpověď kamery nejde rozšifrovat (jiné heslo?)', { auth: true }); }
     } else {
@@ -165,6 +178,7 @@ export function createTapo({ host, port = 443, user = 'admin', pass = '', fetchI
   return {
     login, call,
     get prihlasen() { return !!stok; },
+    get seqRezim() { return seqRezim; },
     /** Model a jméno kamery: { device_model, device_alias, sw_version, … }. */
     async info() { const r = await call('getDeviceInfo', { device_info: { name: ['basic_info'] } }); return r?.device_info?.basic_info || r?.basic_info || r; },
     /** Světlo (přísvit): { zapnuto, vynuceno, intenzita } – kamera bez světla = TapoError.nepodporuje. */

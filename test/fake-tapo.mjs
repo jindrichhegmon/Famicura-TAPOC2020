@@ -9,7 +9,7 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:
 const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex').toUpperCase();
 const md5 = (s) => createHash('md5').update(s, 'utf8').digest('hex').toUpperCase();
 
-export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, model = 'C560WS', user = 'admin', hashMetoda = 'sha256', blokovatPo = 3, bezPrav = false } = {}) {
+export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, model = 'C560WS', user = 'admin', hashMetoda = 'sha256', blokovatPo = 3, bezPrav = false, seqRezim = 'pre' } = {}) {
   const H = hashMetoda === 'md5' ? md5(password) : sha(password);
   const st = { zapnuto: false, intenzita: 3, stok: null, seq: 0, nonce: '', cnonce: '', lsk: null, ivb: null, spatne: 0, volani: [], prihlaseni: 0, neplatnyStok: 0 };
   const odp = (status, j) => ({ status, text: async () => JSON.stringify(j) });
@@ -48,8 +48,8 @@ export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, mod
         const key = sha(st.cnonce + H + st.nonce);
         st.lsk = createHash('sha256').update('lsk' + st.cnonce + st.nonce + key, 'utf8').digest().subarray(0, 16);
         st.ivb = createHash('sha256').update('ivb' + st.cnonce + st.nonce + key, 'utf8').digest().subarray(0, 16);
-        st.stok = 'stok' + (++st.prihlaseni); st.seq = 100; st.spatne = 0;
-        return odp(200, { error_code: 0, result: { stok: st.stok, start_seq: st.seq, user_group: 'root' } });
+        st.stok = 'stok' + (++st.prihlaseni); st.seq = seqRezim === 'pre' ? 101 : 100; st.spatne = 0;
+        return odp(200, { error_code: 0, result: { stok: st.stok, start_seq: 100, user_group: 'root' } });
       }
       if (p.hashed !== true || p.password !== md5(password)) { st.spatne++; return odp(401, { error_code: -40401, result: { data: { code: -40411 } } }); }
       st.stok = 'stok' + (++st.prihlaseni); st.spatne = 0;
