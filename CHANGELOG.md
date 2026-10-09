@@ -5,6 +5,17 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.33 · 9. 10. 2026 · grafy náramku: posledních 10 měření
+
+- **Grafy tepu, tlaku, kyslíku a teploty** (dispečink i aplikace na telefonu)
+  ukazují posledních 10 měření rovnoměrně vedle sebe, pod každým bodem čas
+  (a datum, když měření nejsou z jednoho dne); v titulku počet a období.
+  Dřív měla osa pevných 24 hodin a měření z jedné hodiny se slila do
+  jednoho chumlu. Pásmo běžného rozmezí a barvy bodů zůstávají
+  (`kresliGrafy` v `naramek-ui.js`, `GRAF_MERENI = 10`).
+- Ukázka aplikace rodiny z odkazu `?ukazka=1` spadla při načtení (proměnné
+  dál v souboru ještě nebyly inicializované); opraveno.
+
 ## 3.32 · 9. 10. 2026 · telefonní čísla náramku v Kontaktech
 
 - **Telefonní čísla náramku (SOS 1 → 2 → 3)** jsou nový oddíl v Komunikaci

@@ -160,6 +160,7 @@ $('pwForm').onsubmit = async (e) => {
 };
 
 (async () => {
+  await Promise.resolve();   // až po načtení celého modulu (proměnné níže v souboru), jinak ukázka z odkazu ?ukazka=1 spadla
   if (params.get('ukazka') === '1') { startDemo(); return; }
   // Platná pozvánka má přednost před čímkoli přihlášeným v tomhle prohlížeči
   // (jiný člen rodiny, nebo poskytovatel, který odkaz zkouší na svém počítači):

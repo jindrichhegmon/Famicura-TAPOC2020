@@ -511,7 +511,7 @@ html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
 .graf .lg.s2,.g .cara.s2,.g .bod.s2{stroke:#d9822b}.graf .lg.s2{background:#d9822b}.g .bod.s2{fill:#d9822b}
 .graf.prazdny p{margin:6px 0}
 svg.g{width:100%;height:auto;display:block}
-.g .osa{stroke:var(--line);stroke-width:1}.g .tick{font-size:10px;fill:var(--muted)}
+.g .osa{stroke:var(--line);stroke-width:1}.g .tick{font-size:9px;fill:var(--muted)}.g .tick.den{font-size:8px}.graf .legenda.obdobi{margin-left:auto}
 .g .cara{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .g .bod{stroke:#fff;stroke-width:1.5}.g .bod.warn{fill:var(--oranz);stroke:var(--oranz)}.g .bod.bad{fill:var(--bad);stroke:var(--bad);r:5}
 .g .pasmo{fill:#2a78d6;opacity:.09}.g .popis{font-size:10px;fill:var(--ink)}

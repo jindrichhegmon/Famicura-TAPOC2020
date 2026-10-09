@@ -96,45 +96,52 @@ export function kresliStranuMereni(m, { el, strana, prev, next }) {
   return radky;
 }
 
-/* Graf vývoje měření za posledních 24 h: čtyři malé grafy (tep, tlak, kyslík, teplota) se společnou časovou osou,
-   jedna osa hodnot na graf, světlé pásmo = běžné rozmezí, body mimo rozmezí oranžově/červeně, popisek bodu po najetí myší. */
+/* Grafy posledních 10 měření: čtyři malé grafy (tep, tlak, kyslík, teplota), měření rovnoměrně vedle sebe (ne podle času – měření
+   bývají nahloučená, na časové ose se slila do chumlu), pod každým bodem jeho čas, jedna osa hodnot na graf, světlé pásmo = běžné
+   rozmezí, body mimo rozmezí oranžově/červeně, popisek bodu (datum, čas, hodnota) po najetí myší. */
+export const GRAF_MERENI = 10;
 const GRAFY = [
   { k: 'tep', nazev: 'Tep', jednotka: '/min', serie: [['tep', 'tep', 's1']] },
   { k: 'tlak', nazev: 'Krevní tlak', jednotka: 'mmHg', serie: [['tlakS', 'horní', 's1'], ['tlakD', 'dolní', 's2']] },
   { k: 'spo2', nazev: 'Kyslík v krvi', jednotka: '%', serie: [['spo2', 'kyslík', 's1']] },
   { k: 'teplota', nazev: 'Teplota', jednotka: '°C', serie: [['teplota', 'teplota', 's1']] },
 ];
-export function kresliGrafy(el, radky, now = Date.now()) {
+export function kresliGrafy(el, radky, pocet = GRAF_MERENI) {
   if (!el) return;
-  const DEN = 24 * 3600 * 1000; const od = now - DEN;
-  const data = (radky || []).filter((r) => r.cas >= od && r.cas <= now + 60_000).sort((a, b) => a.cas - b.cas);
-  const W = 320, H = 96, L = 38, R = 10, T = 8, B = 20;
-  const x = (t) => L + ((t - od) / DEN) * (W - L - R);
+  const W = 320, H = 104, L = 38, R = 10, T = 8, B = 24, OKRAJ = 16;   // OKRAJ: body odsazené od krajů, ať se popisky časů vejdou pod ně
   const fmtCas = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+  const fmtDen = (t) => new Date(t).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
   const fmtV = (v) => String(v).replace('.', ',');
   setHtml(el, GRAFY.map((g) => {
-    const serie = g.serie.filter(([k]) => data.some((r) => r[k] != null));
-    if (!serie.length) return `<figure class="graf prazdny"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span></figcaption><p class="small muted">bez měření za 24 h</p></figure>`;
-    const hodnoty = []; for (const [k] of serie) for (const r of data) if (r[k] != null) hodnoty.push(Number(r[k]));
+    // posledních N měření, ve kterých je některá veličina grafu (sada jen s teplotou se v grafu tepu nepočítá)
+    const vsechna = (radky || []).filter((r) => g.serie.some(([k]) => r[k] != null)).sort((a, b) => b.cas - a.cas).slice(0, pocet).sort((a, b) => a.cas - b.cas);
+    const serie = g.serie.filter(([k]) => vsechna.some((r) => r[k] != null));
+    if (!serie.length) return `<figure class="graf prazdny"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span></figcaption><p class="small muted">zatím bez měření</p></figure>`;
+    const n = vsechna.length;
+    const x = (i) => n === 1 ? (L + W - R) / 2 : L + OKRAJ + (i / (n - 1)) * (W - L - R - 2 * OKRAJ);
+    const hodnoty = []; for (const [k] of serie) for (const r of vsechna) if (r[k] != null) hodnoty.push(Number(r[k]));
     const meze = serie.length === 1 ? MEZE_ZDRAVI[serie[0][0]] : null;
     let min = Math.min(...hodnoty, ...(meze ? [meze.ok[0]] : [])), max = Math.max(...hodnoty, ...(meze ? [meze.ok[1]] : []));
     if (max - min < 4) { const s = (4 - (max - min)) / 2; min -= s; max += s; }
     const krok = (max - min) / 2; min -= krok * 0.08; max += krok * 0.08;
     const y = (v) => T + ((max - v) / (max - min)) * (H - T - B);
     const osaY = [min, (min + max) / 2, max].map((v) => `<line class="osa" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${L - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmtV(Math.round(v * 10) / 10)}</text>`).join('');
-    const osaX = [0, 6, 12, 18, 24].map((h) => { const t = od + h * 3600 * 1000; return `<line class="osa" x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="${T}" y2="${H - B}"/><text class="tick" x="${x(t).toFixed(1)}" y="${H - 8}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${h === 24 ? 'teď' : fmtCas(t)}</text>`; }).join('');
+    // čas pod každým měřením; když měření nejsou z jednoho dne, u prvního měření každého dne je nad časem i datum
+    const osaX = vsechna.map((r, i) => { const novyDen = i === 0 ? false : fmtDen(r.cas) !== fmtDen(vsechna[i - 1].cas); const anchor = 'middle'; return `<line class="osa" x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${T}" y2="${H - B}"/><text class="tick" x="${x(i).toFixed(1)}" y="${H - 11}" text-anchor="${anchor}">${fmtCas(r.cas)}</text>${novyDen ? `<text class="tick den" x="${x(i).toFixed(1)}" y="${H - 2}" text-anchor="${anchor}">${esc(fmtDen(r.cas))}</text>` : ''}`; }).join('');
     const pasmo = meze ? `<rect class="pasmo" x="${L}" y="${y(Math.min(meze.ok[1], max)).toFixed(1)}" width="${W - L - R}" height="${Math.max(0, y(Math.max(meze.ok[0], min)) - y(Math.min(meze.ok[1], max))).toFixed(1)}"><title>běžné rozmezí ${fmtV(meze.ok[0])}–${fmtV(meze.ok[1])} ${esc(meze.jednotka)}</title></rect>` : '';
     const cary = serie.map(([k, nazev, cls]) => {
-      const body = data.filter((r) => r[k] != null);
-      const cara = body.length > 1 ? `<path class="cara ${cls}" d="${body.map((r, i) => `${i ? 'L' : 'M'}${x(r.cas).toFixed(1)} ${y(Number(r[k])).toFixed(1)}`).join(' ')}"/>` : '';
-      const tecky = body.map((r) => { const u = urovenHodnoty(k, r[k]); return `<circle class="bod ${cls} ${u}" cx="${x(r.cas).toFixed(1)}" cy="${y(Number(r[k])).toFixed(1)}" r="4"><title>${esc(fmtDT(r.cas))} · ${esc(nazev)} ${fmtV(r[k])} ${esc(g.jednotka)}${u === 'warn' ? ' · mimo běžné rozmezí' : u === 'bad' ? ' · výrazně mimo rozmezí' : ''}</title></circle>`; }).join('');
-      const posl = body[body.length - 1];
-      const vpravo = x(posl.cas) + 40 > W - R;   // u pravého okraje popisek vlevo od bodu, jinak vpravo
-      const popis = serie.length > 1 ? `<text class="popis" x="${(vpravo ? x(posl.cas) - 7 : x(posl.cas) + 7).toFixed(1)}" y="${(y(Number(posl[k])) + 3).toFixed(1)}" text-anchor="${vpravo ? 'end' : 'start'}">${esc(nazev)}</text>` : '';
+      const body = vsechna.map((r, i) => [r, i]).filter(([r]) => r[k] != null);
+      const cara = body.length > 1 ? `<path class="cara ${cls}" d="${body.map(([r, i], j) => `${j ? 'L' : 'M'}${x(i).toFixed(1)} ${y(Number(r[k])).toFixed(1)}`).join(' ')}"/>` : '';
+      const tecky = body.map(([r, i]) => { const u = urovenHodnoty(k, r[k]); return `<circle class="bod ${cls} ${u}" cx="${x(i).toFixed(1)}" cy="${y(Number(r[k])).toFixed(1)}" r="4"><title>${esc(fmtDT(r.cas))} · ${esc(nazev)} ${fmtV(r[k])} ${esc(g.jednotka)}${u === 'warn' ? ' · mimo běžné rozmezí' : u === 'bad' ? ' · výrazně mimo rozmezí' : ''}</title></circle>`; }).join('');
+      const [posl, poslI] = body[body.length - 1];
+      const vpravo = x(poslI) + 40 > W - R;   // u pravého okraje popisek vlevo od bodu, jinak vpravo
+      const popis = serie.length > 1 ? `<text class="popis" x="${(vpravo ? x(poslI) - 7 : x(poslI) + 7).toFixed(1)}" y="${(y(Number(posl[k])) + 3).toFixed(1)}" text-anchor="${vpravo ? 'end' : 'start'}">${esc(nazev)}</text>` : '';
       return cara + tecky + popis;
     }).join('');
     const legenda = serie.length > 1 ? `<span class="legenda">${serie.map(([, nazev, cls]) => `<i class="lg ${cls}"></i>${esc(nazev)}`).join(' ')}</span>` : '';
-    return `<figure class="graf"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span>${legenda}</figcaption><svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.nazev)} za posledních 24 hodin">${pasmo}${osaY}${osaX}${cary}</svg></figure>`;
+    const prvni = vsechna[0].cas, posledni = vsechna[n - 1].cas;
+    const obdobi = fmtDen(prvni) === fmtDen(posledni) ? fmtDen(posledni) : `${fmtDen(prvni)} – ${fmtDen(posledni)}`;
+    return `<figure class="graf"><figcaption>${esc(g.nazev)} <span class="muted">(${esc(g.jednotka)})</span>${legenda}<span class="legenda obdobi">${n === 1 ? '1 měření' : `posledních ${n} měření`} · ${esc(obdobi)}</span></figcaption><svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.nazev)}, posledních ${n} měření">${pasmo}${osaY}${osaX}${cary}</svg></figure>`;
   }).join(''));
 }
 
