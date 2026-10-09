@@ -450,6 +450,7 @@ body.pending .desk,body.pending #critBanner{visibility:hidden}
 /* Barevná schémata dispečinku (⚙ Nastavení → Zobrazení; jen tento prohlížeč, html[data-schema]) */
 html[data-schema=modra]{--hdr1:#1f6fc2;--hdr2:#3a8ee0;--blue:#106fd5;--navy:#1a5fa3}
 html[data-schema] .apphead{background:linear-gradient(135deg,var(--hdr1),var(--hdr2))}
+.rezim{margin:6px 0 10px}.rezim .seg{max-width:360px}
 .dispecerPruh{margin:10px 0 0;padding:8px 12px;border-radius:12px;background:#fff3e0;border:2px solid #e8873b;color:#7a3d00;font-weight:700;font-size:.85rem;line-height:1.35}
 body.jenSleduje #soukromi,body.jenSleduje #klid,body.jenSleduje #testBtn{display:none!important}
 body.dispecer .apphead{border-bottom:4px solid #e8873b}

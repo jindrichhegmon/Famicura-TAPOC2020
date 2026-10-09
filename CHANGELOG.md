@@ -5,6 +5,17 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.28 · 9. 10. 2026 · přepínač Rodina / Dispečer v mobilní aplikaci, odznak RODINA
+
+- Účet s oběma rolemi má v aplikaci na telefonu v **Můj účet** přepínač
+  **Režim aplikace: Rodina / Dispečer** (uloženo v telefonu, přepnutí stránku
+  obnoví). Rodina: jen vlastní kamery, nastavení rodiny (souhlas, klid,
+  deaktivace). Dispečer: všechny kamery poskytovatele, jen sledování – kameru
+  nejde deaktivovat ani aktivovat ani u vlastní (to smí jen rodina). Výchozí
+  režim je Dispečer.
+- Dispečink: u dispečera, který je u kamery zároveň rodina, je vedle DISPEČER
+  odznak **RODINA**.
+
 ## 3.27 · 9. 10. 2026 · jeden telefon = jeden účet s oběma rolemi, bezpečnostní dotaz u pozvánky dispečera
 
 - **Rodina i dispečer na jednom účtu**: pozvánka dispečera na telefon, který už

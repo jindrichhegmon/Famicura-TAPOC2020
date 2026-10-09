@@ -79,17 +79,26 @@ function boot(ja) {
   const posk = ja.tenant ? (ja.tenant.nazev || ja.tenant.id) : '';
   for (const k of ja.kamery || []) sim.ensurePatient({ id: k.id, name: k.name });
   FAMILY = (ja.kamery || []).map((k) => k.id);
-  // mobilní dispečer: účet rodiny s rolí dispecer – všechny kamery poskytovatele, jen sledování (server odmítne každé nastavení), jasné označení
-  const dispecerMobil = ja.role === 'rodina' && ja.ucet === 'dispecer';
+  // mobilní dispečer: účet rodiny s rolí dispecer – všechny kamery poskytovatele, jen sledování (server odmítne každé nastavení), jasné označení.
+  // Kdo je zároveň rodina u svých kamer, přepíná si v Můj účet režim: Rodina (jen své kamery, nastavuje) / Dispečer (všechny kamery, jen sleduje).
+  const obeRole = ja.role === 'rodina' && ja.ucet === 'dispecer' && (ja.rodinaKamery || []).length > 0;
+  JA.rezim = obeRole ? rezimAktualni() : ja.ucet === 'dispecer' ? 'dispecer' : 'rodina';
+  const dispecerMobil = ja.role === 'rodina' && ja.ucet === 'dispecer' && JA.rezim === 'dispecer';
+  if (obeRole && JA.rezim === 'rodina') FAMILY = (ja.rodinaKamery || []).filter((id) => FAMILY.includes(id));   // režim Rodina: jen kamery, kde je rodina
   document.body.classList.toggle('dispecer', dispecerMobil);
-  document.body.classList.toggle('jenSleduje', dispecerMobil);   // u kamer, kde je dispečer zároveň rodina, se v render() odkryje nastavení rodiny
+  document.body.classList.toggle('jenSleduje', dispecerMobil);
   $('dispecerPruh').classList.toggle('hide', !dispecerMobil);
   $('schemaCard').classList.toggle('hide', !dispecerMobil);
+  $('rezimBox').classList.toggle('hide', !obeRole);
+  if (obeRole) { $('rezimSeg').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.r === JA.rezim)); b.onclick = () => { if (b.dataset.r !== JA.rezim) { nastavRezim(b.dataset.r); location.reload(); } }; }); }
+  const moje = (ja.rodinaKamery || []).map((id) => (ja.kamery || []).find((k) => k.id === id)?.name).filter(Boolean);
   if (dispecerMobil) {
     $('whoami').textContent = `${ja.jmeno} · DISPEČER${posk ? ' · ' + posk : ''}`;
-    const moje = (ja.rodinaKamery || []).map((id) => (ja.kamery || []).find((k) => k.id === id)?.name).filter(Boolean);
-    $('ucetInfo').textContent = `Přihlášen(a) jako DISPEČER ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. Vidíte všechny kamery poskytovatele. Souhlas s obrazem, klid a deaktivaci kamery nastavuje rodina, hlídání dispečink na počítači – tady se nic nemění.${moje.length ? ` U kamery ${moje.join(', ')} jste zároveň rodina a nastavujete tam jako rodina.` : ''} ${ja.kamery.length ? '' : (ja.zprava || '')}`;
+    $('ucetInfo').textContent = `Přihlášen(a) jako DISPEČER ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. Vidíte všechny kamery poskytovatele, jen sledujete: souhlas s obrazem, klid a deaktivaci kamery nastavuje rodina, hlídání dispečink na počítači.${moje.length ? ` U kamery ${moje.join(', ')} jste zároveň rodina – přepněte se na režim Rodina.` : ''} ${ja.kamery.length ? '' : (ja.zprava || '')}`;
     kresliSchemata();
+  } else if (obeRole) {
+    $('whoami').textContent = `${ja.jmeno} · rodina${posk ? ' · ' + posk : ''}`;
+    $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}, režim Rodina: jen vaše kamery (${moje.join(', ')}), nastavujete tu jako rodina. Jste zároveň dispečer – přepnutím na režim Dispečer uvidíte všechny kamery poskytovatele (jen sledování).`;
   } else if (ja.role === 'rodina') {
     $('whoami').textContent = `${ja.jmeno} · rodina${posk ? ' · ' + posk : ''}`;
     $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. ${ja.kamery.length ? '' : (ja.zprava || 'Poskytovatel vám zatím nepřiřadil kameru.')}`;
@@ -365,12 +374,14 @@ $('zadostNe').onclick = () => { if (zadostZobrazena) sim.answerRequest(zadostZob
 $('zadostZavrit').onclick = () => { if (zadostZobrazena) zadostZavrene.add(zadostZobrazena); renderZadost(); };
 setInterval(renderZadost, 1000);
 
-/** Mobilní dispečer je u téhle kamery zároveň rodina (má ji v účtu) → nastavení rodiny platí; jinak jen sleduje. Rodina a ukázka: vždy. */
-function jsemRodina(id) { return JA.ucet !== 'dispecer' || (JA.rodinaKamery || []).includes(id); }
+/** Nastavení rodiny platí: rodina vždy; mobilní dispečer jen v režimu Rodina (u svých kamer). V režimu Dispečer jen sleduje – i u své kamery (deaktivovat a aktivovat kameru smí jen rodina). */
+function jsemRodina(id) { return JA.ucet !== 'dispecer' || (JA.rezim === 'rodina' && (JA.rodinaKamery || []).includes(id)); }
+const REZIM_KEY = 'famicura.rodina.rezim';
+function rezimAktualni() { try { return localStorage.getItem(REZIM_KEY) === 'rodina' ? 'rodina' : 'dispecer'; } catch { return 'dispecer'; } }
+function nastavRezim(r) { try { localStorage.setItem(REZIM_KEY, r === 'rodina' ? 'rodina' : 'dispecer'); } catch { /* bez paměti */ } }
 function render() {
   const s = sim.state;
   const p = sim.patient(patientId); if (!p) return;
-  if (JA.ucet === 'dispecer') { const r = jsemRodina(patientId); document.body.classList.toggle('jenSleduje', !r); $('dispecerPruh').textContent = r ? '👁 APLIKACE DISPEČERA · u této kamery jste zároveň rodina, nastavujete tu jako rodina. U ostatních kamer jen sledujete.' : '👁 APLIKACE DISPEČERA · jen sledování všech kamer poskytovatele. Nastavení kamer dělá rodina a dispečink na počítači, tady se nic nemění.'; }
   $('pname').textContent = p.name;
   const posk = sim.poskytovatel;
   $('provider').textContent = `${sim.poskytovatelPro(p)}${p.real && posk.telefon ? ' · ' + posk.telefon : ''} · nastavení platí pro dispečink i pečovatele v terénu`;
