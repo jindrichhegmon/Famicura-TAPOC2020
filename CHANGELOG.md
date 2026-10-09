@@ -5,7 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
-## 3.35 · 9. 10. 2026 · telefon náramku
+## 3.36 · 9. 10. 2026 · SMS i na účty rodiny
+
+- **Nastavení alertů → SMS komu**: vedle lidí z Kontaktů (Rodina) a telefonů
+  poskytovatele jdou zatrhnout i **účty rodiny** z Uživatelů rodiny (čip
+  „Jméno (účet)“; mobilní dispečer jen u kamery, kde je i rodina). Příjemce
+  je `u:<id účtu>`, telefon dosadí server z účtu při každé události
+  (`createUpozorneni({ uzivatele })`), deaktivovaný účet se vynechá, stejné
+  číslo jako v Kontaktech se nenabízí dvakrát.
+- Nápověda: Nastavení alertů, Co je nové.
+
 
 - **Telefon SIM karty v náramku** je povinný při přiřazení (Přiřazení náramku:
   ID zařízení + telefon; akce `setNaramek` má čtvrtý parametr `telefon`,

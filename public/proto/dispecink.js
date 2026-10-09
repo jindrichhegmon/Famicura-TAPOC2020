@@ -577,7 +577,10 @@ function renderDetail(rebuild = false) {
     // příjemci upozornění: rodina (Kontakty), dispečink a služba (⚙ Nastavení) pro SMS; sada 1 / sada 2 pro e-mail
     const volbyPrijemcu = (pp) => {
       const kk = kontaktyPro(pp), rod = rodinaSTelefonem(pp), tp = telefonyPoskytovatele(sim.state);
+      // účty rodiny (Uživatelé rodiny) s telefonem: také příjemci SMS (u:<id>, telefon dosadí server z účtu); stejné číslo jako v Kontaktech se nenabízí dvakrát
+      const ucty = (rodinaUzivatele.get(pp.id) || []).filter((u) => u.telefon && !u.deaktivovan && (u.role !== 'dispecer' || u.kamery.includes(pp.id)) && !rod.some((r) => normalizeTelefonCz(r.telefon) === normalizeTelefonCz(u.telefon)));
       const sms = [...rod.map((r) => ({ id: r.id, text: r.jmeno || formatTelefon(r.telefon), title: 'SMS ' + popisPrijemce(r) })),
+        ...ucty.map((u) => ({ id: 'u:' + u.id, text: `${u.jmeno} (účet)`, title: `SMS na účet rodiny ${u.jmeno} ${formatTelefon(u.telefon)} (Uživatelé rodiny; telefon se bere z účtu)` })),
         ...ROLE_POSKYTOVATELE.filter((r) => tp[r].telefon || tp[r].zdroj !== 'vlastni').map((r) => ({ id: r, text: POPIS_ROLE[r], title: tp[r].telefon ? `SMS na telefon (${POPIS_ROLE[r]}) ${formatTelefon(tp[r].telefon)} (Kontakty → Poskytovatel)` : `SMS na telefon (${POPIS_ROLE[r]}) z ${POPIS_ZDROJE_TELEFONU[tp[r].zdroj]} (dosadí server)` }))];
       const mail = [...(kk.maily1.length ? [{ id: 's1', text: 'sada 1', title: kk.maily1.join(', ') }] : []), ...(kk.maily2.length ? [{ id: 's2', text: 'sada 2', title: kk.maily2.join(', ') }] : [])];
       return { sms, mail };
@@ -594,8 +597,8 @@ function renderDetail(rebuild = false) {
         setHtml(tr.querySelector('.prij[data-t="mail"]'), chips(volby.mail, mailIdsPro(w, k), 'mail'));
       });
       d.querySelector('#dwatchPozn').textContent = volby.sms.length || volby.mail.length
-        ? `Příjemci: ${describeKontakty(pp) || 'bez kontaktů rodiny'}${volby.sms.some((v) => ROLE_POSKYTOVATELE.includes(v.id)) ? ' · telefony poskytovatele: ' + volby.sms.filter((v) => ROLE_POSKYTOVATELE.includes(v.id)).map((v) => v.title.replace(/^SMS na /, '').replace(/ \(Kontakty → Poskytovatel\)$/, '')).join(', ') : ''}. Zatržení platí pro události, které projdou sloupcem Hlídat a hodinami.`
-        : 'Nejsou zadané žádné kontakty: vyplňte rodinu, telefony poskytovatele a e-maily v Komunikaci → Kontakty.';
+        ? `Příjemci: ${describeKontakty(pp) || 'bez kontaktů rodiny'}${volby.sms.some((v) => v.id.startsWith('u:')) ? ' · účty rodiny: ' + volby.sms.filter((v) => v.id.startsWith('u:')).map((v) => v.text.replace(' (účet)', '')).join(', ') : ''}${volby.sms.some((v) => ROLE_POSKYTOVATELE.includes(v.id)) ? ' · telefony poskytovatele: ' + volby.sms.filter((v) => ROLE_POSKYTOVATELE.includes(v.id)).map((v) => v.title.replace(/^SMS na /, '').replace(/ \(Kontakty → Poskytovatel\)$/, '')).join(', ') : ''}. Zatržení platí pro události, které projdou sloupcem Hlídat a hodinami.`
+        : 'Nejsou zadané žádné kontakty: vyplňte rodinu, telefony poskytovatele a e-maily v Komunikaci → Kontakty, nebo založte účty rodiny (Uživatelé rodiny).';
     };
     naplnWatch();
     d.querySelectorAll('#dwatch tr').forEach((tr) => {
@@ -1041,6 +1044,7 @@ async function renderUzivatele(p) {
   // u každé kamery: rodina s touhle kamerou + všichni mobilní dispečeři poskytovatele (vidí všechny kamery)
   const users = data.uzivatele.filter((u) => u.role === 'dispecer' || u.kamery.includes(p.id));
   rodinaUzivatele.set(p.id, users);
+  $('detail').__naplnWatch?.();   // účty rodiny jsou i příjemci SMS v Nastavení alertů
   const inv = posledniPozvanka;
   box.innerHTML = `<ul class="users">${users.map((u) => `<li data-u="${u.id}"${u.deaktivovan ? ' class="deakt"' : ''}><span class="grow">${u.role === 'dispecer' ? '<span class="badge crit">DISPEČER</span> ' : ''}<strong>${esc(u.jmeno)}</strong> · ${esc(u.telefon.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}${u.deaktivovan ? ' <span class="badge tech">deaktivován</span>' : ''}${u.role === 'dispecer' && u.kamery.includes(p.id) ? ' <span class="badge ok">RODINA</span>' : ''}${u.role === 'dispecer' ? ` <span class="small muted">· dispečer: všechny kamery poskytovatele, jen sleduje${u.kamery.includes(p.id) ? '; u této kamery zároveň rodina (v aplikaci se přepíná režim Rodina / Dispečer)' : ''}</span>` : ''}${u.role !== 'dispecer' && u.kamery.length > 1 ? ` <span class="small muted">· také ${esc(u.kamery.filter((k) => k !== p.id).map((k) => sim.patient(k)?.name || k).join(', '))}</span>` : ''}<br><span class="small muted">${u.aktivni ? `přihlašuje se heslem${u.posledniPrihlaseni ? ', naposledy ' + fmtDT(u.posledniPrihlaseni) : ''}` : u.pozvankaPlatiDo ? `čeká na první přihlášení, pozvánka platí do ${fmtDT(u.pozvankaPlatiDo)}` : 'bez přístupu'}</span></span>
       <button class="sm sec" data-a="pozvanka">Nová pozvánka (nové heslo)</button><button class="sm sec" data-a="deakt">${u.deaktivovan ? 'Aktivovat' : 'Deaktivovat'}</button><button class="sm bad" data-a="smaz">Odebrat</button>

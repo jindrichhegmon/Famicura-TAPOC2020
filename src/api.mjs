@@ -117,7 +117,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
   asistent = asistent || createAsistent();
   pdp = pdp || createPdp();
   uzivatele = uzivatele || createUzivatele(pdp.tabulky || { async vyber() { return []; }, async vloz() {}, async uprav() { return 0; }, async smaz() { return 0; } });
-  najemci = najemci || createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms }) });
+  najemci = najemci || createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms, uzivatele }) });
   dispecer = dispecer || createDispecer();
   // Each camera carries what it can report itself and which tenant it belongs to (cameras.json).
   async function kamery() {

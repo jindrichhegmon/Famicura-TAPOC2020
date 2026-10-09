@@ -93,6 +93,8 @@ export const POPIS_ROLE = { dispecink: 'dispečink', sluzba: 'služba', administ
 export const ZDROJE_TELEFONU = ['vlastni', 'pecedoma', 'pecedomaplus'];
 export const POPIS_ZDROJE_TELEFONU = { vlastni: 'vlastní číslo', pecedoma: 'Péče doma', pecedomaplus: 'Péče doma plus' };
 export const SMS_PRIJEMCI = ['r1', 'r2', 'r3', 'r4', 'r5', ...ROLE_POSKYTOVATELE];
+/** Příjemce SMS „účet rodiny“: u:<id účtu z Uživatelů rodiny> – telefon dosadí server z účtu (src/upozorneni.mjs), takže platí vždy ten aktuální. */
+export const jeUcetPrijemce = (id) => /^u:[a-z0-9]{1,40}$/.test(String(id || ''));
 export const SOS_VOLBY = SMS_PRIJEMCI;    // slot SOS náramku: tytéž ID (člověk z rodiny, nebo telefon poskytovatele)
 export const MAIL_SADY = ['s1', 's2'];
 export const prazdneKontakty = () => ({ rodina: Array.from({ length: KONTAKTY_RODINA_MAX }, () => ({ jmeno: '', telefon: '' })), maily1: [], maily2: [] });
@@ -143,7 +145,7 @@ export const upozorneniVychozi = (kind) => KINDS[kind]?.level === 'crit';
 /** Seznam ID příjemců SMS z nastavení události: pole ID, nebo starší true = celá rodina. */
 export function smsIdsPro(w, kind, p) {
   const v = w?.sms ?? upozorneniVychozi(kind);
-  if (Array.isArray(v)) return v.filter((x) => SMS_PRIJEMCI.includes(x));
+  if (Array.isArray(v)) return v.filter((x) => SMS_PRIJEMCI.includes(x) || jeUcetPrijemce(x));
   return v ? rodinaSTelefonem(p).map((r) => r.id) : [];
 }
 export function mailIdsPro(w, kind) {
@@ -193,9 +195,10 @@ export function upozorneniPro(s, ev) {
   const k = kontaktyPro(p);
   const ids = smsIdsPro(w, ev.kind, p), mids = mailIdsPro(w, ev.kind);
   const tp = telefonyPoskytovatele(s);
-  const sms = []; const komu = []; const smsZdroje = [];
+  const sms = []; const komu = []; const smsZdroje = []; const smsUcty = [];
   for (const id of ids) {
     if (/^r[1-5]$/.test(id)) { const r = k.rodina[Number(id[1]) - 1]; if (r?.telefon) { sms.push(r.telefon); komu.push(r.jmeno || formatTelefon(r.telefon)); } }
+    else if (jeUcetPrijemce(id)) smsUcty.push(id.slice(2));   // telefon z účtu rodiny dosadí server
     else if (ROLE_POSKYTOVATELE.includes(id)) {
       const t = tp[id];
       if (t.telefon) { sms.push(t.telefon); komu.push(POPIS_ROLE[id]); }
@@ -203,8 +206,8 @@ export function upozorneniPro(s, ev) {
     }
   }
   const mail = [...new Set([...(mids.includes('s1') ? k.maily1 : []), ...(mids.includes('s2') ? k.maily2 : [])])];
-  if (!sms.length && !smsZdroje.length && !mail.length) return null;
-  return { sms: [...new Set(sms)], smsZdroje, mail, komu, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
+  if (!sms.length && !smsZdroje.length && !smsUcty.length && !mail.length) return null;
+  return { sms: [...new Set(sms)], smsZdroje, smsUcty, mail, komu, kind: ev.kind, label: KINDS[ev.kind]?.label || ev.kind, level: KINDS[ev.kind]?.level || 'info', patient: p };
 }
 
 /* Hodiny vždy pražské: server na VPS běží v UTC a „noc 22–6“ nebo „jen 7:00–20:00“
@@ -411,7 +414,7 @@ const akce = {
     if ('on' in patch) w.on = bool(patch.on);
     if ('rec' in patch) w.rec = bool(patch.rec);
     // příjemci: pole ID (r1–r5 rodina, dispecink, sluzba, administrace / s1, s2), nebo starší true/false (celá rodina / obě sady)
-    const prijemci = (v, povolene, nazev) => { if (Array.isArray(v)) { for (const x of v) if (!povolene.includes(x)) throw chyba(`Neznámý příjemce ${nazev}: ${x}.`); return [...new Set(v)]; } return bool(v); };
+    const prijemci = (v, povolene, nazev) => { if (Array.isArray(v)) { for (const x of v) if (!povolene.includes(x) && !(nazev === 'SMS' && jeUcetPrijemce(x))) throw chyba(`Neznámý příjemce ${nazev}: ${x}.`); return [...new Set(v)]; } return bool(v); };
     if ('sms' in patch) w.sms = prijemci(patch.sms, SMS_PRIJEMCI, 'SMS');
     if ('mail' in patch) w.mail = prijemci(patch.mail, MAIL_SADY, 'e-mailu');
     for (const k of ['from', 'to', 'from2', 'to2', 'from3', 'to3']) if (k in patch) w[k] = hodina(patch[k]);

@@ -30,7 +30,7 @@ export function textUpozorneniMail({ jmeno, misto, label, uroven, cas, text, pos
     odkaz ? `Aplikace rodiny: ${odkaz}` : null, '', 'Tuto zprávu posílá server Famicura Kamera automaticky podle kontaktů zadaných poskytovatelem.'].filter((r) => r !== null).join('\n');
 }
 
-export function createUpozorneni({ sms, sluzba = null, log = console, odkaz = process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL.replace(/\/$/, '')}/proto/rodina.html` : '' } = {}) {
+export function createUpozorneni({ sms, sluzba = null, uzivatele = null, log = console, odkaz = process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL.replace(/\/$/, '')}/proto/rodina.html` : '' } = {}) {
   const UROVEN = { crit: 'kritická', warn: 'varování', info: 'informativní', tech: 'technická' };
   return {
     /** Pošle, co událost vyžaduje; vrátí { sms: {prijemci, odeslano, chyba}, mail: {…} } nebo null, když není komu. */
@@ -43,7 +43,19 @@ export function createUpozorneni({ sms, sluzba = null, log = console, odkaz = pr
       let telDisp = tp.dispecink.telefon || '';
       if (!telDisp && tp.dispecink.zdroj !== 'vlastni' && sluzba?.nastaveno) { try { telDisp = cisloZdroje(await sluzba.telefon(tenant), tp.dispecink.zdroj, 'dispecink'); } catch { /* bez telefonu */ } }
       const spolecne = { jmeno: u.patient.name, misto: u.patient.place, label: u.label, uroven: UROVEN[u.level], cas: casText(ev.at), text: ev.text, poskytovatel: posk.nazev, telefon: telDisp, odkaz };
-      const vysledek = { sms: { prijemci: u.sms.length + u.smsZdroje.length, odeslano: 0, chyba: null, komu: u.komu }, mail: { prijemci: u.mail.length, odeslano: 0, chyba: null } };
+      const vysledek = { sms: { prijemci: u.sms.length + u.smsZdroje.length + u.smsUcty.length, odeslano: 0, chyba: null, komu: u.komu }, mail: { prijemci: u.mail.length, odeslano: 0, chyba: null } };
+      // účty rodiny (Uživatelé rodiny, příjemce u:<id>): telefon z účtu na serveru – platí vždy ten aktuální; deaktivovaný účet se vynechá
+      for (const id of u.smsUcty) {
+        try {
+          if (!uzivatele) throw new Error('účty rodiny nejsou na serveru k dispozici');
+          const a = await uzivatele.pro(tenant).podleId(id);
+          if (!a) throw new Error('účet rodiny už neexistuje – upravte příjemce v Nastavení alertů');
+          if (a.deaktivovan) { vysledek.sms.prijemci--; continue; }
+          const tel = normalizeTelefonCz(a.telefon);
+          if (!tel) throw new Error(`účet ${a.jmeno} nemá platný telefon`);
+          if (!u.sms.includes(tel)) { u.sms.push(tel); u.komu.push(a.jmeno); } else vysledek.sms.prijemci--;
+        } catch (e) { vysledek.sms.chyba = `účet rodiny: ${e.message}`; }
+      }
       // telefony poskytovatele ze zdroje Péče doma / Péče doma plus (Kontakty → Poskytovatel): dosadí se tady, ať platí vždy to aktuální
       for (const z of u.smsZdroje) {
         try {

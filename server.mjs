@@ -95,10 +95,10 @@ const { createRemux } = await import('./src/remux.mjs');
 const nahravky = pdp.nastaveno ? createNahravky({ go2rtc, disk, uloziste, tabulky: pdp.tabulky, kamery: kameryTenanty, zapisClb: (row) => zaznamy.zapsat(dbs, row), zasobnik, remux: createRemux() }) : null;
 // Automatické mazání nahrávek na serveru po době uchování (⚙ dispečinku): každou hodinu, poprvé po startu.
 if (nahravky) { const promaz = () => nahravky.promaz().catch((e) => console.error('[famicura-tapo] mazání nahrávek:', e.message)); setTimeout(promaz, 60 * 1000); setInterval(promaz, 60 * 60 * 1000); }
-const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms, sluzba }), nahravky });
+const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
+const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: createUpozorneni({ sms, sluzba, uzivatele }), nahravky });
 // Události kamer zpracovává server sám každé 2 s (zápis, SMS, e-mail, nahrávka), i když nikdo nemá otevřený dispečink.
 if (pdp.nastaveno) najemci.start(2000);
-const uzivatele = pdp.nastaveno ? createUzivatele(pdp.tabulky) : null;
 const ptz = createPtz({ kamery: nactiKamery });
 // Náramky a přívěsky SOS (ReachFar V48 a další s protokolem hodinek) se připojují mobilními daty přímo sem: TCP port NARAMKY_PORT (výchozí 5093, 0 = vypnuto).
 const { createNaramky } = await import('./src/naramky.mjs');

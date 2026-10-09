@@ -86,6 +86,17 @@ test('odeslání: číslo služby z Péče doma dosadí server přes sluzba.tele
   const v = await u.posli(s, { id: 'e1', patientId: p.id, kind: 'sos', at: T0, text: 'SOS' }, { tenant: '22202480FAMICURA' });
   assert.deepEqual(posl.map((x) => x[0]), ['602520069', '722972596', '602620069']); assert.equal(v.sms.odeslano, 3); assert.equal(v.sms.prijemci, 4); assert.match(v.sms.chyba, /administrace: telefon \(Péče doma plus\) není nastavený/); assert.deepEqual(v.sms.komu, ['Eva', 'služba', 'dispečink', 'administrace']);
   assert.match(posl[0][1], /602620069/, 'telefon dispečinku z Péče doma je v textu SMS');
+  // účty rodiny (u:<id>): telefon z účtu na serveru, deaktivovaný se vynechá, neexistující = chyba; stejné číslo jako v Kontaktech jen jednou
+  proved(s, 'setWatch', [p.id, 'sos', { sms: ['r1', 'u:abc', 'u:deakt', 'u:pryc', 'u:dup'], mail: [] }], T0);
+  const ucty = { abc: { jmeno: 'Petr', telefon: '777000222', deaktivovan: false }, deakt: { jmeno: 'Jana', telefon: '777000111', deaktivovan: true }, dup: { jmeno: 'Eva účet', telefon: '602520069', deaktivovan: false } };
+  const uzivatele = { pro(t) { assert.equal(t, '22202480FAMICURA'); return { async podleId(id) { return ucty[id] || null; } }; } };
+  posl.length = 0;
+  const u3 = createUpozorneni({ sms, sluzba: null, uzivatele, log: { log() {} }, odkaz: '' });
+  const v3 = await u3.posli(s, { id: 'e3', patientId: p.id, kind: 'sos', at: T0 }, { tenant: '22202480FAMICURA' });
+  assert.deepEqual(posl.map((x) => x[0]), ['602520069', '777000222'], 'rodina z Kontaktů + účet Petr; Jana deaktivovaná, duplicitní číslo jen jednou');
+  assert.equal(v3.sms.odeslano, 2); assert.match(v3.sms.chyba, /účet rodiny už neexistuje/); assert.ok(v3.sms.komu.includes('Petr'));
+  assert.throws(() => proved(s, 'setWatch', [p.id, 'sos', { sms: ['x:1'] }], T0), /Neznámý příjemce SMS/);
+  proved(s, 'setWatch', [p.id, 'sos', { sms: ['r1', 'sluzba', 'dispecink', 'administrace'], mail: [] }], T0);
   const u2 = createUpozorneni({ sms, sluzba: null, log: { log() {} }, odkaz: '' });
   const v2 = await u2.posli(s, { id: 'e2', patientId: p.id, kind: 'sos', at: T0 }, { tenant: '22202480FAMICURA' });
   assert.equal(v2.sms.odeslano, 1); assert.match(v2.sms.chyba, /: číslo z Péče doma \(plus\) není na serveru nastavené/);
