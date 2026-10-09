@@ -6,8 +6,8 @@
  * stav v tomhle prohlížeči: localStorage + BroadcastChannel mezi okny.
  * Data i akce jsou v sim-core.js, stejné pro prohlížeč i server.
  */
-import { MEZE_ZDRAVI, urovenHodnoty, KONTAKTY_RODINA_MAX, SMS_PRIJEMCI, MAIL_SADY, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, SOS_VOLBY, KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail, urovenUdalosti } from '/proto/sim-core.js';
-export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail, urovenUdalosti, MEZE_ZDRAVI, urovenHodnoty, KONTAKTY_RODINA_MAX, SMS_PRIJEMCI, MAIL_SADY, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, SOS_VOLBY };
+import { MEZE_ZDRAVI, urovenHodnoty, KONTAKTY_RODINA_MAX, SMS_PRIJEMCI, MAIL_SADY, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, SOS_VOLBY, telefonNaramku, formatTelefonMez, KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, seed, proved, jeNocPro, efektivni, casy, KLID_NAVZDY, RYCHLE, poskytovatel, poskytovatelPro, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail, urovenUdalosti } from '/proto/sim-core.js';
+export { KINDS, LEVEL_LABEL, CONSENT, WATCH_KINDS, defaultWatch, describeWatch, casy, KLID_NAVZDY, RYCHLE, kontaktyPro, describeKontakty, KONTAKTY_MAX, upozorneniVychozi, normalizeTelefonCz, jeEmail, urovenUdalosti, MEZE_ZDRAVI, urovenHodnoty, KONTAKTY_RODINA_MAX, SMS_PRIJEMCI, MAIL_SADY, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, SOS_VOLBY, telefonNaramku, formatTelefonMez };
 
 const KEY = 'famicura.proto.v1';
 const CH = 'famicura-proto';
@@ -134,7 +134,7 @@ export const sim = {
   closeAll(patientId, by, result) { return run('closeAll', [patientId, by, result]); },
   setWatch(patientId, kind, patch) { return run('setWatch', [patientId, kind, patch]); },
   setKontakty(patientId, kontakty, by) { return run('setKontakty', [patientId, kontakty, by]); },
-  setNaramek(patientId, id, by) { return run('setNaramek', [patientId, id, by]); },
+  setNaramek(patientId, id, by, telefon) { return run('setNaramek', telefon === undefined ? [patientId, id, by] : [patientId, id, by, telefon]); },
   setNaramekAuto(patientId, auto, by) { return run('setNaramekAuto', [patientId, auto, by]); },
   setNaramekSos(patientId, cisla, by) { return run('setNaramekSos', [patientId, cisla, by]); },
   setConsent(patientId, consent) { return run('setConsent', [patientId, consent]); },

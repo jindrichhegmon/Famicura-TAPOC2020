@@ -3,7 +3,7 @@
  * dispečera): stav a poslední měření, mapa polohy, grafy za 24 hodin,
  * tabulka měření zdraví, poplachy a načítání měření ze serveru. Ovládání
  * náramku (příkazy, čísla SOS, přiřazení) zůstává jen v dispečinku. */
-import { MEZE_ZDRAVI, urovenHodnoty, fmtDT, esc, ago, setHtml } from '/proto/sim.js';
+import { MEZE_ZDRAVI, urovenHodnoty, fmtDT, esc, ago, setHtml, formatTelefonMez } from '/proto/sim.js';
 
 /** Mapa polohy náramku: dlaždice OpenStreetMap (zoom 16) kolem bodu, značka uprostřed; kreslí se znovu jen při změně souřadnic. */
 export function kresliMapu(el, lat, lon) {
@@ -46,6 +46,12 @@ export function popisStavu(n, { now = Date.now(), proRodinu = false } = {}) {
   const ticho = jeTicho(n, now);
   return `Naposledy se ozval <strong${ticho ? ' class="bad"' : ''}>${esc(ago(n.posledni))}</strong>${ticho && !n.vypnuto ? ' <span class="bad">(neozývá se přes 2 hodiny – vybitý, bez signálu, nebo vypnutý tlačítkem)</span>' : ''}${Number.isFinite(n.baterie) ? `, baterie <strong>${n.baterie} %</strong>` : ''}${n.poloha ? ` · <a href="https://maps.google.com/?q=${n.poloha.lat.toFixed(5)},${n.poloha.lon.toFixed(5)}" target="_blank" rel="noopener">poslední poloha${n.poloha.priblizna ? ' (přibližná, z mobilní sítě)' : ' (GPS)'}</a> ${esc(ago(n.poloha.cas || n.posledni))}` : ' · poloha zatím není'}`
     + (n.zdravi ? `<br>Poslední měření (${esc(ago(n.zdravi.cas))}): <strong>${esc(popisMereni(n.zdravi))}</strong>` : '');
+}
+/** Telefon SIM v náramku (HTML do .naramekTel): výrazně, s odkazem tel: – dispečer i rodina na náramek volají; chybějící číslo červeně. Vrací { html, chybi }. */
+export function popisTelefonu(n, { proRodinu = false } = {}) {
+  if (!n?.id) return { html: '', chybi: false };
+  if (!n.telefon) return { html: `<span class="ic">📞</span><span>Telefon náramku není zadaný${proRodinu ? ' – doplní ho poskytovatel' : ' – doplňte ho v Přiřazení náramku (dole v této záložce)'}.</span>`, chybi: true };
+  return { html: `<span class="ic">📞</span><span class="pop">Telefon náramku</span><a href="tel:${esc(n.telefon)}">${esc(formatTelefonMez(n.telefon))}</a>`, chybi: false };
 }
 /** Červené hlášení o vypnutém náramku (HTML), nebo '' když vypnutý není. */
 export function popisVypnuti(n) {

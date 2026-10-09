@@ -5,7 +5,19 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
-## 3.34 · 9. 10. 2026 · grafy náramku jemnější, 2×2 vedle mapy
+## 3.35 · 9. 10. 2026 · telefon náramku
+
+- **Telefon SIM karty v náramku** je povinný při přiřazení (Přiřazení náramku:
+  ID zařízení + telefon; akce `setNaramek` má čtvrtý parametr `telefon`,
+  `naramek.telefon` v mezinárodním tvaru, 9 českých číslic dostane +420;
+  starší volání bez telefonu ho nechá, jak je). Změna jen telefonu jde bez
+  nového přiřazení.
+- **Výrazně vidět**: zelený rámeček „📞 TELEFON NÁRAMKU +420 777 123 456“
+  nahoře ve Stavu náramku v dispečinku a na kartě Náramek v aplikaci na
+  telefonu (rodina i mobilní dispečer); klepnutím se volá (`tel:`). Bez čísla
+  svítí červené upozornění.
+- Nápověda: Náramek, Co je nové.
+
 
 - **Stav náramku v dispečinku**: čtyři grafy (tep, tlak, kyslík, teplota) jsou
   v mřížce 2×2 vedle mapy a dohromady mají její výšku; bílé karty s tenkým

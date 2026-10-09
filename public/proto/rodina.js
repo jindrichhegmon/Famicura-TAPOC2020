@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
 import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -348,6 +348,8 @@ function kresliNaramek(p) {
   card.classList.toggle('hide', !je); $('navNaramek').classList.toggle('hide', !je);
   if (!je) return;
   setHtml($('naramekInfo'), popisStavu(n, { proRodinu: true }));
+  const pt = popisTelefonu(n, { proRodinu: true }); const telEl = $('naramekTel');
+  telEl.classList.toggle('hide', !pt.html); telEl.classList.toggle('chybi', pt.chybi); setHtml(telEl, pt.html);
   const vyp = $('naramekVyp'); vyp.classList.toggle('hide', !n.vypnuto); $('naramekVypBadge').classList.toggle('hide', !n.vypnuto);
   if (n.vypnuto) setHtml(vyp, popisVypnuti(n));
   const mapa = $('naramekMapa');

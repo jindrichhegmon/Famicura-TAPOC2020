@@ -105,6 +105,17 @@ export const jeEmail = (v) => /^[^\s@]{1,64}@[^\s@]{1,100}\.[a-z]{2,24}$/i.test(
 /** Seznam e-mailů z textu odděleného čárkou, středníkem nebo mezerou (nebo z pole). */
 export const rozdelMaily = (v) => (Array.isArray(v) ? v : String(v ?? '').split(/[,;\s]+/)).map((m) => String(m || '').trim()).filter(Boolean);
 export const formatTelefon = (n) => String(n || '').replace(/^(\d{3})(\d{3})(\d{3})$/, '$1 $2 $3');
+/** Telefon SIM karty v náramku v mezinárodním tvaru ('' = nezadaný): české 9 číslic dostane +420, 00… se převede na +…; nesmysl vyhodí chybu. */
+export function telefonNaramku(raw) {
+  let t = String(raw ?? '').replace(/[\s\-()./]/g, '');
+  if (!t) return '';
+  if (/^00\d{6,15}$/.test(t)) t = '+' + t.slice(2);
+  if (/^\d{9}$/.test(t)) t = '+420' + t;
+  if (!/^\+\d{6,15}$/.test(t)) throw chyba('Telefon náramku: 9 číslic českého čísla (777 123 456), nebo mezinárodní tvar +420…');
+  return t;
+}
+/** +420777123456 → +420 777 123 456 (jiné tvary beze změny). */
+export const formatTelefonMez = (t) => String(t || '').replace(/^(\+420)(\d{3})(\d{3})(\d{3})$/, '$1 $2 $3 $4');
 /** Kontakty kamery v novém tvaru (rodina vždy 5 pozic, prázdné povolené). */
 export function kontaktyPro(p) {
   const k = p?.kontakty || {};
@@ -434,15 +445,22 @@ const akce = {
     return { vysledek: nove };
   },
   /** Náramek / přívěsek SOS ke kameře: ID zařízení (jak ho hlásí v protokolu hodinek), prázdné = odebrat. Ozvání a baterii doplňuje server. */
-  setNaramek(s, now, patientId, id, by) {
+  /** Přiřazení náramku: ID zařízení a telefon SIM karty v něm (povinný, když se telefon posílá; starší volání bez telefonu ho nechá, jak je).
+   *  Telefon je ve Stavu náramku výrazně vidět v dispečinku i v aplikaci na telefonu – dispečer i rodina na náramek volají. */
+  setNaramek(s, now, patientId, id, by, telefon) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
     const nove = str(id, 40, 'id').trim();
     if (nove && !/^[A-Za-z0-9]{5,20}$/.test(nove)) throw chyba('ID náramku je 5 až 20 písmen a číslic (ID zařízení z aplikace náramku).');
-    const stare = p.naramek?.id || '';
-    if (nove === stare) return { zmena: false, vysledek: p.naramek || null };
-    if (nove) p.naramek = { id: nove }; else delete p.naramek;
+    let tel = p.naramek?.telefon || '';
+    if (telefon !== undefined) {
+      tel = telefonNaramku(telefon);
+      if (nove && !tel) throw chyba('Zadejte telefonní číslo SIM karty v náramku – dispečink i rodina na něj volají.');
+    }
+    const stare = p.naramek?.id || '', stareTel = p.naramek?.telefon || '';
+    if (nove === stare && tel === stareTel) return { zmena: false, vysledek: p.naramek || null };
+    if (nove) p.naramek = { ...(nove === stare ? p.naramek : {}), id: nove, telefon: tel }; else delete p.naramek;
     s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink',
-      text: nove ? `Náramek / přívěsek ${nove} přiřazen ke kameře${stare ? ` (místo ${stare})` : ''}: SOS, pád a slabá baterie půjdou do fronty této kamery.` : `Náramek / přívěsek ${stare} odebrán.`, note: '' });
+      text: !nove ? `Náramek / přívěsek ${stare} odebrán.` : nove === stare ? `Telefon náramku ${nove}: ${formatTelefonMez(tel)}.` : `Náramek / přívěsek ${nove} (telefon ${formatTelefonMez(tel) || 'nezadán'}) přiřazen ke kameře${stare ? ` (místo ${stare})` : ''}: SOS, pád a slabá baterie půjdou do fronty této kamery.`, note: '' });
     if (s.events.length > 400) s.events.length = 400;
     return { vysledek: p.naramek || null };
   },

@@ -534,3 +534,10 @@ svg.g{width:100%;height:auto;display:block;flex:1}
 #naramek .tabwrap{overflow-x:auto}
 #naramek .mereni{width:100%;border-collapse:collapse;font-size:.85rem}
 #naramek .cardhead .badge{margin-left:auto}
+
+/* telefon SIM v náramku: výrazně ve Stavu náramku (dispečink) a na kartě Náramek (telefon), s odkazem tel: */
+.naramekTel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e8f5ec;border:2px solid #2e8b57;color:#1b5e38;font-weight:700;font-size:1rem;padding:10px 14px;border-radius:10px;margin:6px 0 10px}
+.naramekTel .ic{font-size:1.4rem}.naramekTel .pop{font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#2e7d4f}
+.naramekTel a{color:#0d4a2b;font-size:1.5rem;font-weight:800;text-decoration:none;letter-spacing:.5px}.naramekTel a:hover{text-decoration:underline}
+.naramekTel.chybi{background:#fde8e8;border-color:#d04b4b;color:#8a1f1f;font-size:.95rem}
+.kontakty .kgrid.knaramek{grid-template-columns:1fr 1fr}

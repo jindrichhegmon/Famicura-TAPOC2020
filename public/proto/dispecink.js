@@ -1,6 +1,6 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole } from '/proto/sim.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -545,6 +545,7 @@ function renderDetail(rebuild = false) {
       <section class="dsec hide" data-sec="naramek">
         <div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <div class="naramekVyp hide" id="dnaramekVyp"></div>
+        <div class="naramekTel hide" id="dnaramekTelStav"></div>
         <p id="dnaramekInfo"></p>
         <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
@@ -556,9 +557,9 @@ function renderDetail(rebuild = false) {
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         <p class="small" id="dnaramekVolaUlozene"></p>
-        </div><div class="blok"><h3>Přiřazení náramku</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
+        </div><div class="blok"><h3>Přiřazení náramku</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení) a telefonní číslo SIM karty v náramku (povinné – dispečink i rodina na náramek volají, číslo je výrazně ve Stavu náramku); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
         <form class="kontakty" id="dnaramek">
-          <div class="kgrid"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label></div>
+          <div class="kgrid knaramek"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label><label>Telefon SIM v náramku (povinný)<input type="tel" id="dnaramekTel" maxlength="20" placeholder="777 123 456" value="${esc(p.naramek?.telefon ? formatTelefonMez(p.naramek.telefon) : '')}"></label></div>
           <div class="akce"><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekStav"></span></div>
           <p class="small bad hide" id="dnaramekErr"></p>
         </form>
@@ -663,10 +664,11 @@ function renderDetail(rebuild = false) {
     nf.onsubmit = async (e) => {
       e.preventDefault();
       const err = nf.querySelector('#dnaramekErr'); err.classList.add('hide');
-      const id = nf.querySelector('#dnaramekId').value.trim();
+      const id = nf.querySelector('#dnaramekId').value.trim(), tel = nf.querySelector('#dnaramekTel').value.trim();
       if (id && !/^[A-Za-z0-9]{5,20}$/.test(id)) { err.textContent = 'ID zařízení je 5 až 20 písmen a číslic.'; err.classList.remove('hide'); return; }
+      if (id && !tel) { err.textContent = 'Zadejte telefonní číslo SIM karty v náramku – dispečink i rodina na něj volají.'; err.classList.remove('hide'); nf.querySelector('#dnaramekTel').focus(); return; }
       try {
-        const r = await sim.setNaramek(p.id, id, ME());
+        const r = await sim.setNaramek(p.id, id, ME(), tel);
         if (r === undefined && sim.naServeru) { err.textContent = 'Uložení se nepodařilo.'; err.classList.remove('hide'); return; }
         toast(id ? `Náramek ${id} přiřazen. Až se ozve, uvidíte tu čas ozvání a baterii.` : 'Náramek odebrán.');
       } catch (ex) { err.textContent = ex.message; err.classList.remove('hide'); }
@@ -793,6 +795,8 @@ function renderDetail(rebuild = false) {
     const vyp = d.querySelector('#dnaramekVyp'), tabVyp = d.querySelector('#dtabVyp');
     vyp.classList.toggle('hide', !n?.vypnuto); tabVyp.classList.toggle('hide', !n?.vypnuto);
     if (n?.vypnuto) setHtml(vyp, popisVypnuti(n));
+    const telSt = d.querySelector('#dnaramekTelStav'); const pt = popisTelefonu(n);
+    telSt.classList.toggle('hide', !pt.html); telSt.classList.toggle('chybi', pt.chybi); setHtml(telSt, pt.html);
     const mapa = d.querySelector('#dnaramekMapa');
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
     const sf = d.querySelector('#dksos');   // Telefonní čísla náramku v Kontaktech (Komunikace)
@@ -813,7 +817,7 @@ function renderDetail(rebuild = false) {
     setHtml(d.querySelector('#dnaramekPoplachy'), popl.length
       ? popl.map((e) => `<li><span class="badge ${esc(urovenUdalosti(e) || 'info')}">${esc(KINDS[e.kind]?.source || 'náramek')}</span><span class="when">${esc(fmtDT(e.at))}</span><span class="grow">${escOdkazy(eventText(e))}${e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''}</span></li>`).join('')
       : '<li class="muted">Zatím žádný poplach z náramku.</li>');
-    if (n?.id && !d.querySelector('#dnaramek').contains(document.activeElement)) d.querySelector('#dnaramekId').value = n.id;
+    if (n?.id && !d.querySelector('#dnaramek').contains(document.activeElement)) { d.querySelector('#dnaramekId').value = n.id; d.querySelector('#dnaramekTel').value = n.telefon ? formatTelefonMez(n.telefon) : ''; }
   }
   if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();
   d.querySelector('#dtrvala').textContent = p.note || 'zatím žádná (tlačítko Upravit)';

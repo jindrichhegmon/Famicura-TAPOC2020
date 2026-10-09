@@ -978,6 +978,22 @@ test('náramek přes API: příkaz posílá jen poskytovatel, nepřiřazený ná
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: rc, body: { akce: 'setNaramekAuto', args: ['tapoc2020', { min: 10, tep: true }] } }))).status, 403);
 });
 
+test('telefon náramku: setNaramek se čtvrtým parametrem telefon (povinný, mezinárodní tvar), změna jen telefonu, starší volání bez telefonu', async () => {
+  const { h } = handler({});
+  const stav = async () => (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((p) => p.id === 'tapoc2020').naramek;
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer', ''] } }))).status, 400, 'bez telefonu nejde přiřadit');
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer', 'abc'] } }))).status, 400, 'nesmysl místo čísla');
+  let r = await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer', '777 123 456'] } }));
+  assert.equal(r.status, 200); let n = await stav(); assert.equal(n.id, '9705357211'); assert.equal(n.telefon, '+420777123456');
+  r = await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer', '0049 170 1234567'] } }));
+  assert.equal(r.status, 200); n = await stav(); assert.equal(n.telefon, '+491701234567', 'změna jen telefonu, ID zůstává');
+  const st = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state; assert.match(st.events[0].text, /Telefon náramku 9705357211: \+49/);
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
+  n = await stav(); assert.equal(n.telefon, '+491701234567', 'bez čtvrtého parametru telefon zůstává');
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '', 'Dispečer', ''] } }));
+  assert.equal(await stav(), undefined, 'odebrání náramku');
+});
+
 test('měření náramku přes API: seznam z A_KAM_Mereni nejnovější první, export do Excelu, rodina a mobilní dispečer jen u kamer, které vidí, cizí kamera 404', async () => {
   const tabulky = createMockTabulky();
   for (const [i, r] of [[1, { Tep: 70, TlakS: 120, TlakD: 80 }], [2, { Spo2: 97 }], [3, { Teplota: '36.6' }]].entries()) {
