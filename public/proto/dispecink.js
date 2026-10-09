@@ -72,6 +72,21 @@ async function nactiNahravky(pid) {
   const el2 = document.querySelector('#detail #dnahravky'); if (el2 && selected === pid) ukaz(html, ver);
 }
 /* Otočení kamery (ONVIF PTZ): krátký krok na každé stisknutí; server hlídá, aby šel jeden pohyb najednou. */
+/* Světlo kamery (Tapo C320WS/C520WS/C560WS): tlačítko jen u kamery, která světlo má – server se jí zeptá (GET /api/svetlo). */
+function svetloOvladani(btn, pid) {
+  if (!btn) return;
+  const ukaz = (s) => { btn.classList.toggle('hide', s.podporuje !== true); btn.classList.toggle('on', !!s.zapnuto); btn.querySelector('span').textContent = s.zapnuto ? 'Světlo svítí' : 'Světlo'; btn.title = s.zapnuto ? 'světlo kamery svítí – klepnutím zhasnete' : 'světlo kamery (reflektor) – klepnutím rozsvítíte'; };
+  const nacti = async () => { try { const r = await fetch(`/api/svetlo?kamera=${encodeURIComponent(pid)}`, { credentials: 'same-origin' }); const j = await r.json(); if (j.ok) ukaz(j); } catch { /* bez světla */ } };
+  btn.onclick = async () => {
+    if (btn.classList.contains('busy')) return;
+    btn.classList.add('busy'); const zapnout = !btn.classList.contains('on');
+    try { const r = await fetch('/api/svetlo', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kamera: pid, zapnout }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'nepodařilo se'); ukaz({ podporuje: true, zapnuto: j.zapnuto }); toast(j.zapnuto ? 'Světlo kamery svítí.' : 'Světlo kamery zhaslo.'); }
+    catch (e) { toast(`Světlo kamery: ${e.message}`, 'crit'); }
+    btn.classList.remove('busy');
+  };
+  nacti();
+}
+
 function ptzOvladani(box, pid) {
   if (!box) return;
   box.querySelectorAll('[data-ptz]').forEach((b) => { b.onclick = async () => {
@@ -495,12 +510,12 @@ function renderDetail(rebuild = false) {
     const kon = kontaktyPro(p);
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
       <div class="dtabsSk" id="dtabs" role="tablist">
-        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="seg dtabs"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span></button></div></div>
+        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="seg dtabs"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></button></div></div>
         <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="seg dtabs"><button type="button" data-t="komunikace" role="tab">💬 Komunikace a kontakty</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení alertů</button></div></div>
       </div>
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
-        <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div>` : ''}</div>
+        <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div><button type="button" class="svetlo hide" id="dsvetlo" title="světlo kamery (reflektor): rozsvítit / zhasnout">💡 <span>Světlo</span></button>` : ''}</div>
         <div class="modebar"><span class="small" id="dmode"></span><button type="button" class="sm" id="ovl" aria-pressed="true" title="kostra postavy spočítaná v prohlížeči přes plný nebo rozostřený obraz (model MediaPipe); nezapisuje se, jen zobrazení">🦴 Drátěný model přes obraz: zapnuto</button></div>
         <div class="akce" id="dbtn"></div>
         </div><div class="blok"><h3>Přidat poznámku</h3><p class="small muted">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</p>
@@ -543,6 +558,8 @@ function renderDetail(rebuild = false) {
         <div class="notes"><ul id="dnotes"></ul></div>
       </div></section>
       <section class="dsec hide" data-sec="naramek">
+        <div class="naramekBanner" id="dnaramekBanner"></div>
+        <div id="dnaramekAgenda">
         <div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <div class="naramekVyp hide" id="dnaramekVyp"></div>
         <div class="naramekTel hide" id="dnaramekTelStav"></div>
@@ -557,7 +574,7 @@ function renderDetail(rebuild = false) {
         <div class="akce"><button type="button" class="sm" data-nprikaz="zdravi">Změřit zdraví (tep, tlak, kyslík, teplotu)</button><button type="button" class="sm sec" data-nprikaz="poloha">Zjistit polohu</button><button type="button" class="sm bad" data-nprikaz="vypnout">Vypnout náramek</button><span class="small muted" id="dnaramekPrikazStav"></span></div>
         <form class="kontakty" id="dnaramekAuto"><div class="akce"><label class="small">automaticky každých <input type="number" id="dnaramekAutoMin" min="0" max="1440" style="width:70px" value="${Number(p.naramek?.auto?.min) || 0}"> min:</label><label class="small"><input type="checkbox" class="nauto" data-k="zdravi" ${p.naramek?.auto?.zdravi || p.naramek?.auto?.tlak || p.naramek?.auto?.tep || p.naramek?.auto?.kyslik || p.naramek?.auto?.teplota ? 'checked' : ''}> měřit zdraví (tep, tlak, kyslík, teplota)</label><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekAutoStav"></span></div></form>
         <p class="small" id="dnaramekVolaUlozene"></p>
-        </div><div class="blok"><h3>Přiřazení náramku</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení) a telefonní číslo SIM karty v náramku (povinné – dispečink i rodina na náramek volají, číslo je výrazně ve Stavu náramku); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
+        </div></div><div class="blok"><h3 id="dnaramekPrirH3">Přiřazení náramku</h3><p class="small muted">– ID zařízení z aplikace náramku (ReachFar V48: O zařízení → ID zařízení) a telefonní číslo SIM karty v náramku (povinné – dispečink i rodina na náramek volají, číslo je výrazně ve Stavu náramku); náramek musí mít nastavenou adresu našeho serveru (Nápověda → Náramek)</p>
         <form class="kontakty" id="dnaramek">
           <div class="kgrid knaramek"><label>ID zařízení<input type="text" id="dnaramekId" maxlength="20" placeholder="9705357211" value="${esc(p.naramek?.id || '')}"></label><label>Telefon SIM v náramku (povinný)<input type="tel" id="dnaramekTel" maxlength="20" placeholder="777 123 456" value="${esc(p.naramek?.telefon ? formatTelefonMez(p.naramek.telefon) : '')}"></label></div>
           <div class="akce"><button class="sm" type="submit">Uložit</button><span class="small muted" id="dnaramekStav"></span></div>
@@ -729,6 +746,7 @@ function renderDetail(rebuild = false) {
     d.querySelector('#dnote').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); pridej(); } });
     d.__naplnWatch = naplnWatch;
     ptzOvladani(d.querySelector('#dptz'), p.id);
+    svetloOvladani(d.querySelector('#dsvetlo'), p.id);
     dlog = null; historieOvladani(d, p);
   }
   const s = sim.state;
@@ -736,6 +754,7 @@ function renderDetail(rebuild = false) {
   d.querySelector('#dtag').textContent = MODE_TAG[mode];
   d.querySelector('#dmode').innerHTML = p.deaktivace ? `<strong>Kamera je deaktivovaná rodinou</strong> od ${fmtDT(p.deaktivace.od)} (${esc(p.deaktivace.kdo || 'rodina')}): bez obrazu, nahrávek a událostí, ${p.deaktivace.otoceni === 'ok' ? 'otočená do stropu' : p.deaktivace.otoceni ? 'otočení do stropu se nepodařilo (' + esc(p.deaktivace.otoceni) + ')' : 'otáčí se do stropu'}. Aktivovat ji může jen rodina ve své aplikaci.` : `Rodina povolila: <strong>${esc(sim.modeReason(p.id))}</strong>`;
   d.querySelector('#dptz')?.classList.toggle('hide', !!p.deaktivace);
+  d.querySelector('#dsvetlo')?.classList.toggle('deakt', !!p.deaktivace);
   kresliOvl(d, mode);
   const g = s.grants[p.id], pending = s.requests.find((r) => r.patientId === p.id && r.state === 'čeká');
   const crit = openAlerts(p.id).some((e) => KINDS[e.kind].level === 'crit');
@@ -794,6 +813,16 @@ function renderDetail(rebuild = false) {
     const n = p.naramek;
     const stav = d.querySelector('#dnaramekStav'), info = d.querySelector('#dnaramekInfo');
     stav.textContent = n?.id ? `Náramek ${n.id} přiřazen.` : 'Zatím žádný náramek.';
+    // Na první pohled: bez náramku je v záložce jen přiřazení (stav, měření, poplachy a ovládání nemají co ukázat);
+    // s náramkem je nahoře zelený pruh s ID a telefonem a formulář dole slouží ke změně nebo odebrání.
+    const je = !!n?.id;
+    d.querySelector('#dnaramekAgenda').classList.toggle('hide', !je);
+    d.querySelector('#dtabNeni').classList.toggle('hide', je);
+    const ban = d.querySelector('#dnaramekBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
+    setHtml(ban, je
+      ? `<span class="ic">⌚</span><span><b>Náramek ${esc(n.id)} je přiřazen</b>${n.telefon ? ` · telefon ${esc(formatTelefonMez(n.telefon))}` : ''}<br><span class="small">${esc(n.posledni ? `naposledy se ozval ${fmtDT(n.posledni)}` : 'zatím se neozval')}${Number.isFinite(n.baterie) ? ` · baterie ${esc(String(n.baterie))} %` : ''}${n.vypnuto ? ' · <b>vypnutý</b>' : ''}</span></span>`
+      : '<span class="ic">⌚</span><span><b>Náramek není přiřazen</b><br><span class="small">Zadejte ID zařízení a telefon SIM karty níže. Stav, měření, poplachy a ovládání se ukážou po přiřazení.</span></span>');
+    d.querySelector('#dnaramekPrirH3').textContent = je ? 'Změna nebo odebrání náramku' : 'Přiřazení nového náramku';
     setHtml(info, popisStavu(n));
     const vyp = d.querySelector('#dnaramekVyp'), tabVyp = d.querySelector('#dtabVyp');
     vyp.classList.toggle('hide', !n?.vypnuto); tabVyp.classList.toggle('hide', !n?.vypnuto);

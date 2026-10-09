@@ -14,6 +14,15 @@ test('platná kamera projde, název bez zadání = ID, výchozí stream1', () =>
   assert.equal(cameraAddress(r.kamera), '192.168.1.50');
 });
 
+test('účet TP-Link pro světlo kamery: jen když je zadaný, jinak v záznamu není', () => {
+  const bez = normalizeCamera(ok);
+  assert.equal('tapoPass' in bez.kamera, false);
+  const s = normalizeCamera({ ...ok, tapoPass: 'cloud-heslo' });
+  assert.equal(s.kamera.tapoUser, 'admin'); assert.equal(s.kamera.tapoPass, 'cloud-heslo');
+  assert.equal(normalizeCamera({ ...ok, tapoPass: 'a\nb' }).ok, false, 'konec řádku v hesle');
+  assert.ok(!go2rtcYaml([s.kamera]).includes('cloud-heslo'), 'heslo TP-Link do go2rtc.yaml nepatří');
+});
+
 test('kamera za tunelem SSH: porty VPS místo portů kamery', () => {
   const r = normalizeCamera({ ...ok, ip: '127.0.0.1', rtspPort: '10554', onvifPort: 12020 });
   assert.equal(r.ok, true);

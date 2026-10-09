@@ -233,6 +233,31 @@ smí každý, kdo kameru smí vidět (rodina jen svou); jeden pohyb na kameru
 najednou (409), kamera bez PTZ nebo bez odpovědi 502. Kříž šipek je na
 obraze v detailu dispečinku a v aplikaci rodiny (`.ptz` v `proto.css`).
 
+### Světlo kamery (od 3.39)
+
+Kamery Tapo s bílým reflektorem (C320WS, C520WS, C560WS…) rozsvítí
+dispečer z detailu kamery (tlačítko 💡 Světlo na obraze). ONVIF světlo
+neumí, jde to přes místní rozhraní Tapo – HTTPS na kameře (port 443,
+tunelem), kterým s kamerou mluví aplikace Tapo: `src/tapo.mjs` dělá
+přihlášení (`login`; nový firmware odpoví `-40413` a chce zabezpečené
+přihlášení s `cnonce`/`nonce`, `device_confirm`, `digest_passwd` a pak
+požadavky `securePassthrough` šifrované AES-128-CBC s hlavičkami `Seq`
+a `Tapo_tag`; starší bere MD5 hesla) a funkce kamery (`multipleRequest`:
+`getDeviceInfo`, `getWhitelampConfig`, `getWhitelampStatus`,
+`setWhitelampConfig` s `force_wtl_state`). Postup je podle knihovny
+pytapo (Home Assistant). `src/svetlo.mjs`: `stav(id)` → `{ podporuje,
+zapnuto, chyba, model }`, `nastav(id, zapnout)`; kamera bez světla
+(`-40210`) se pamatuje 10 min a nezkouší se dokola. Účty: nejdřív účet
+kamery z cameras.json, když kameru na rozhraní nepustí, „admin“ s heslem
+účtu TP-Link – `./deploy/vps-kamera.sh svetlo ID` (uloží `tapoUser`,
+`tapoPass` do cameras.json; do go2rtc.yaml nejde; nové zavedení kamery
+ho zachová; Enter = smazat). `GET /api/svetlo?kamera=ID` a `POST
+/api/svetlo { kamera, zapnout }` smí každý, kdo kameru vidí (rodina jen
+svou, mobilní dispečer jen stav); přepnutí jde do historie kamery.
+Diagnostika hlavní aplikace: řádek „Světlo kamery …“. Tunel: Mango musí
+pouštět ke kameře i port 443 (pravidla z `mango-ssh.sh` a
+`wireguard-vps.sh --dalsi` pouštějí vše).
+
 ### Nahrávky na Google Disku poskytovatele (od 2.1)
 
 Stejný princip jako Export dat v Péče doma plus: poskytovatel má Google

@@ -69,7 +69,7 @@ function handler(over = {}) {
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
   const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, uzivatele, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null , naramky: over.naramky || null, sluzba: over.sluzba || null }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null, svetlo: over.svetlo || null, naramky: over.naramky || null, sluzba: over.sluzba || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -247,6 +247,11 @@ test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
     assert.equal(b.go2rtc.version, '1.9.14');
     assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', tenant: T, events: [], online: false, detail: 'dial tcp: i/o timeout',
       eventsOk: null, eventsError: null, eventsLast: null, eventsRejected: null, clbError: null, eventsOther: [] }]);
+    // s modulem světla přibude u kamery řádek pro Diagnostiku (svítí / zhasnuté / nemá / chyba)
+    const svetlo = { async stav() { return { podporuje: true, zapnuto: true, chyba: null, model: 'C560WS', ucet: 'kamera' }; } };
+    const { h: hs } = handler({ go2rtc: fakeGo2rtc({ online: false }), svetlo });
+    const bs = await (await hs(req('GET', '/api/status', { cookies: cookieServer() }))).json();
+    assert.deepEqual(bs.cameras[0].svetlo, { podporuje: true, zapnuto: true, chyba: null, model: 'C560WS', ucet: 'kamera' });
   } finally { delete process.env.CAMERA_NAMES; }
 });
 
@@ -825,6 +830,27 @@ test('otočení kamery: kdo kameru smí vidět, smí ji otočit (rodina jen svou
   assert.equal((await h(req('POST', '/api/ptz', { cookies: rc, body: { kamera: 'cizi', smer: 'home' } }))).status, 404);
   const { h: h2 } = handler();
   assert.equal((await h2(req('POST', '/api/ptz', { cookies: cookie(), body: { kamera: 'tapoc2020', smer: 'up' } }))).status, 503);
+});
+
+test('světlo kamery: stav a přepnutí pro dispečera i rodinu (jen svou kameru), zápis do historie, bez modulu 503', async () => {
+  const volani = [];
+  const svetlo = { async stav(id) { return { podporuje: id === 'tapoc2020', zapnuto: false, chyba: null, model: 'C560WS', ucet: 'kamera' }; }, async nastav(id, z) { volani.push({ id, z }); return { zapnuto: z }; }, pamet() { return {}; } };
+  const { h, uzivatele, vsichni } = handler({ svetlo });
+  let b = await (await h(req('GET', '/api/svetlo?kamera=tapoc2020', { cookies: cookie() }))).json();
+  assert.deepEqual(b, { ok: true, podporuje: true, zapnuto: false, chyba: null, model: 'C560WS' });
+  assert.equal((await h(req('GET', '/api/svetlo?kamera=cizi', { cookies: cookie() }))).status, 404, 'kamera jiného tenanta');
+  b = await (await h(req('POST', '/api/svetlo', { cookies: cookie(), body: { kamera: 'tapoc2020', zapnout: true } }))).json();
+  assert.deepEqual(b, { ok: true, zapnuto: true }); assert.deepEqual(volani, [{ id: 'tapoc2020', z: true }]);
+  assert.equal((await h(req('POST', '/api/svetlo', { cookies: cookie(), body: { kamera: 'tapoc2020', zapnout: 'ano' } }))).status, 400);
+  const st = await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json();
+  assert.ok(st.state.events.some((e) => e.kind === 'poznamka' && /Světlo kamery rozsvíceno/.test(e.text)), 'historie: kdo světlo rozsvítil');
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  assert.equal((await h(req('POST', '/api/svetlo', { cookies: rc, body: { kamera: 'tapoc2020', zapnout: false } }))).status, 200, 'rodina u své kamery zhasne');
+  assert.equal((await h(req('POST', '/api/svetlo', { cookies: rc, body: { kamera: 'cizi', zapnout: false } }))).status, 404);
+  const { h: h2 } = handler();
+  assert.equal((await h2(req('GET', '/api/svetlo?kamera=tapoc2020', { cookies: cookie() }))).status, 503);
 });
 
 test('log událostí za období: JSON pro stránku a sešit Excelu; rodina nemá; špatné datum 400', async () => {

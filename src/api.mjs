@@ -26,6 +26,7 @@
  *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
  *   DELETE /api/nahravky/:id        smazání (poskytovatel)
  *   POST /api/ptz               { kamera, smer: left|right|up|down|home|stop } otočení kamery (ONVIF PTZ; rodina jen svou)
+ *   GET  /api/svetlo?kamera=ID  stav světla kamery { podporuje, zapnuto, chyba }; POST { kamera, zapnout } rozsvítí / zhasne (rodina jen svou)
  *   POST /api/nahravky/rucni    { kamera, delkaS } server nahraje N s z kamery (dispečink; rodina u své kamery) a uloží podle Nastavení
  *   POST /api/nahravky?kamera=&cas=&delkaS=&zdroj=&text=   tělo = soubor (video/mp4 | video/webm) z hlavní aplikace
  *
@@ -111,7 +112,7 @@ function verejnaAdresa(req) {
   return `${proto}://${host}`;
 }
 
-export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null, sluzba = null,
+export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null, svetlo = null, sluzba = null,
                                 pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
@@ -193,8 +194,11 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           out.cameras = await kamery();
           // Camera checks run side by side; each gives up after a few seconds.
           const probes = await Promise.all(out.cameras.map((c) => go2rtc.probe(c.id)));
+          // Světlo kamery: co si server pamatuje (Diagnostika); poprvé se zeptá kamery, kamera bez světla se pak už neobtěžuje.
+          const svetla = svetlo ? await Promise.all(out.cameras.map((c) => svetlo.stav(c.id).catch((e) => ({ podporuje: null, chyba: e.message })))) : [];
           const st = udalosti ? udalosti.stav() : {};
           out.cameras = out.cameras.map((c, i) => ({ ...c, online: probes[i].ok, detail: probes[i].detail,
+            ...(svetlo ? { svetlo: { podporuje: svetla[i]?.podporuje ?? null, zapnuto: svetla[i]?.zapnuto ?? null, chyba: svetla[i]?.chyba || null, model: svetla[i]?.model || null, ucet: svetla[i]?.ucet || null } } : {}),
             // null: the server does not subscribe at all (no cameras.json)
             eventsOk: st[c.id] ? st[c.id].ok : null, eventsError: st[c.id]?.error || null,
             eventsLast: st[c.id]?.posledni || null, eventsRejected: st[c.id]?.odmitnuto || null, clbError: st[c.id]?.clbChyba || null,
@@ -438,6 +442,20 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         return json({ ok: true, ...vysledek });
       }
 
+      // Světlo kamery (reflektor Tapo C320WS/C520WS/C560WS přes místní rozhraní Tapo): kdo kameru smí vidět, smí si posvítit (rodina jen svou).
+      if ((m === 'GET' || m === 'POST') && path === '/api/svetlo') {
+        const t = m === 'GET' ? { kamera: url.searchParams.get('kamera') } : await telo(req);
+        const kamera = String(t.kamera || '');
+        if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        if (!svetlo) return json({ ok: false, error: 'Světlo kamery není na serveru k dispozici.' }, 503);
+        if (m === 'GET') { const s = await svetlo.stav(kamera, { znovu: t.znovu === '1' }); return json({ ok: true, podporuje: s.podporuje, zapnuto: s.zapnuto, chyba: s.chyba || null, model: s.model || null }); }
+        if (mobilniDispecer) return jenSleduje();
+        if (typeof t.zapnout !== 'boolean') return json({ ok: false, error: 'Chybí zapnout: true / false.' }, 400);
+        const r = await svetlo.nastav(kamera, t.zapnout);
+        // do historie kamery, ať je vidět, kdo a kdy světlo přepnul
+        if (tenant && najemci) { const kdo = ja.jmeno || (rodina ? 'rodina' : ja.role === 'dispecer' ? 'Dispečer' : 'Správce'); (await stavTenanta()).proved('poznamka', [kamera, `💡 Světlo kamery ${r.zapnuto ? 'rozsvíceno' : 'zhasnuto'}.`, kdo]).catch(() => {}); }
+        return json({ ok: true, zapnuto: r.zapnuto });
+      }
       // Otočení kamery (Tapo pan/tilt přes ONVIF): kdo kameru smí vidět, smí ji i otočit (rodina jen svou).
       if (m === 'POST' && path === '/api/ptz') {
         const { kamera, smer, rychlost, ms } = await telo(req);

@@ -103,6 +103,8 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .ptz.busy button{opacity:.5}
 .ptz [data-ptz=up]{grid-column:2;grid-row:1}.ptz [data-ptz=left]{grid-column:1;grid-row:2}.ptz [data-ptz=home]{grid-column:2;grid-row:2}.ptz [data-ptz=right]{grid-column:3;grid-row:2}.ptz [data-ptz=down]{grid-column:2;grid-row:3}
 @media (max-width:480px){.ptz{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px)}.ptz button{font-size:17px}}
+.stage .svetlo{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;font:inherit;font-size:.9rem;font-weight:700;padding:7px 12px;cursor:pointer;opacity:.9}
+.stage .svetlo.on{background:#f5c542;color:#3a2a00;border-color:#f5c542}.stage .svetlo.busy{opacity:.5;cursor:wait}.stage .svetlo.deakt{display:none}
 .tile{background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px;cursor:pointer;transition:border-color .2s}
 .tile.sel{outline:3px solid var(--blue);outline-offset:1px}
 .tile.klid{border-color:var(--line)}
@@ -541,3 +543,7 @@ svg.g{width:100%;height:auto;display:block;flex:1}
 .naramekTel a{color:#0d4a2b;font-size:1.5rem;font-weight:800;text-decoration:none;letter-spacing:.5px}.naramekTel a:hover{text-decoration:underline}
 .naramekTel.chybi{background:#fde8e8;border-color:#d04b4b;color:#8a1f1f;font-size:.95rem}
 .kontakty .kgrid.knaramek{grid-template-columns:1fr 1fr}
+/* záložka Náramek: pruh nahoře říká na první pohled, jestli je náramek přiřazený (zelený) nebo ne (oranžový, pak je v záložce jen přiřazení) */
+.naramekBanner{display:flex;align-items:center;gap:12px;border-radius:12px;padding:12px 16px;margin:0 0 12px;font-size:1.05rem;line-height:1.35}.naramekBanner .ic{font-size:1.8rem}.naramekBanner .small{font-weight:400;font-size:.9rem}
+.naramekBanner.je{background:#e8f5ec;border:2px solid #2e8b57;color:#1b5e38}.naramekBanner.neni{background:#fff4e0;border:2px solid #e0a030;color:#7a4b00}
+.dtabs #dtabNeni{margin-left:6px;font-size:.7rem;vertical-align:middle;background:#fff4e0;color:#7a4b00;border:1px solid #e0a030}

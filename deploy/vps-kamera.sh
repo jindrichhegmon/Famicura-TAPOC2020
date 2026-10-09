@@ -4,6 +4,7 @@
 #   ./deploy/vps-kamera.sh seznam     (kamery bez hesel)
 #   ./deploy/vps-kamera.sh smaz ID
 #   ./deploy/vps-kamera.sh tenant ID_KAMERY ID_TENANTA [místo]   (kameru přiřadí poskytovateli z Péče doma plus)
+#   ./deploy/vps-kamera.sh svetlo ID        (heslo účtu TP-Link pro světlo kamery, když účet kamery nestačí; Enter = smazat)
 #
 # Kam go2rtc na kameru chodí, pozná z místa (brány) na VPS – /etc/wireguard/famicura-mista/<N>.rezim,
 # u jediného místa /etc/wireguard/famicura-rezim; víc míst = skript se zeptá na číslo místa:
@@ -43,6 +44,12 @@ case "$1" in
           $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs smaz $2'"; restart; exit 0 ;;
   tenant) platne_id "$2"; [[ "$3" =~ ^[A-Za-z0-9]{4,16}$ ]] || { echo "Použití: $0 tenant ID_KAMERY ID_TENANTA [místo]"; exit 1; }
           $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs tenant $2 $3 ${4:-}'"; restart; exit 0 ;;
+  svetlo) platne_id "$2"
+          # Světlo kamery jde přes místní rozhraní Tapo; když kameru účet kamery na něj nepustí, je potřeba „admin“
+          # s heslem účtu TP-Link (e-mail a heslo z aplikace Tapo). Heslo jde přes stdin do ssh, ne na příkazovou řádku.
+          read -rs -p "Heslo účtu TP-Link (aplikace Tapo; Enter = odebrat): " TAPO_HESLO; echo
+          TAPO_HESLO="$TAPO_HESLO" node -e 'process.stdout.write(JSON.stringify({ user: "admin", pass: process.env.TAPO_HESLO }))' | $SSH "$VPS" "$JAKO 'cd $DIR && node scripts/set-camera.mjs svetlo $2'"
+          unset TAPO_HESLO; restart; exit 0 ;;
 esac
 
 read -r -p "ID kamery [tapoc2020]: " ID;            ID="${ID:-tapoc2020}"; platne_id "$ID"

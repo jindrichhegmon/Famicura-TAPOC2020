@@ -100,13 +100,16 @@ const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti, upozorni: 
 // Události kamer zpracovává server sám každé 2 s (zápis, SMS, e-mail, nahrávka), i když nikdo nemá otevřený dispečink.
 if (pdp.nastaveno) najemci.start(2000);
 const ptz = createPtz({ kamery: nactiKamery });
+// Světlo kamery (Tapo C320WS/C520WS/C560WS…) přes místní rozhraní Tapo, HTTPS 443 tunelem – stejné účty z cameras.json.
+const { createSvetlo } = await import('./src/svetlo.mjs');
+const svetlo = createSvetlo({ kamery: nactiKamery });
 // Náramky a přívěsky SOS (ReachFar V48 a další s protokolem hodinek) se připojují mobilními daty přímo sem: TCP port NARAMKY_PORT (výchozí 5093, 0 = vypnuto).
 const { createNaramky } = await import('./src/naramky.mjs');
 const NARAMKY_PORT = process.env.NARAMKY_PORT === undefined ? 5093 : Number(process.env.NARAMKY_PORT) || 0;
 const naramky = pdp.nastaveno && NARAMKY_PORT > 0 ? createNaramky({ najemci, kamery: kameryTenanty, port: NARAMKY_PORT, sluzba }) : null;
 if (naramky) naramky.start().then((p) => console.log(`[famicura-tapo] náramky a přívěsky: poslouchám na TCP ${p}`)).catch((e) => console.error('[famicura-tapo] náramky:', e.message));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { naramky?.stop().catch(() => {}); });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, zasobnik, naramky, sluzba });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, svetlo, zasobnik, naramky, sluzba });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

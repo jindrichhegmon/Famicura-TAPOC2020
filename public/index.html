@@ -457,6 +457,10 @@ function renderDiag(s) {
       ? '<span class="ok">posílá obraz</span>'
       : `<span class="bad">neodpovídá</span>${c.detail ? `<br><span class="muted">${esc(c.detail)}</span>` : ''}`]);
     rows.push([`Události kamery ${esc(c.name)}`, describeEventsState(c)]);
+    if (c.svetlo) rows.push([`Světlo kamery ${esc(c.name)}`, c.svetlo.podporuje === true
+      ? `<span class="ok">${c.svetlo.zapnuto ? 'svítí' : 'zhasnuté'}</span> <span class="muted">${esc([c.svetlo.model, c.svetlo.ucet === 'tapo' ? 'účet TP-Link' : c.svetlo.ucet === 'kamera' ? 'účet kamery' : ''].filter(Boolean).join(', '))}</span>`
+      : c.svetlo.podporuje === false ? `<span class="muted">kamera světlo nemá${c.svetlo.model ? ' (' + esc(c.svetlo.model) + ')' : ''}</span>`
+      : `<span class="bad">nezjištěno</span>${c.svetlo.chyba ? `<br><span class="muted">${esc(c.svetlo.chyba)}</span>` : ''}`]);
   }
   if (g.ok && !(s.cameras || []).length) rows.push(['Kamery', '<span class="bad">v go2rtc.yaml není žádná</span>']);
 

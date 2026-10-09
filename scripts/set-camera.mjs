@@ -7,6 +7,7 @@
  *   node scripts/set-camera.mjs smaz ID
  *   node scripts/set-camera.mjs obnov            → jen znovu vygeneruje go2rtc.yaml
  *   node scripts/set-camera.mjs tenant ID TENANT [místo]  → přiřadí kameru poskytovateli (tenantovi z PeceDomaPlus)
+ *   node scripts/set-camera.mjs svetlo ID < {"pass"[,"user"]}  → heslo účtu TP-Link pro světlo kamery (prázdné = smazat)
  *
  * Přihlášení ke kameře jde přes stdin, ne na příkazovou řádku, a leží jen
  * v cameras.json a go2rtc.yaml, oba s právy 600.
@@ -46,7 +47,7 @@ async function main([akce, id]) {
   if (akce === 'seznam') {
     const k = nacti();
     if (!k.length) console.log('Zatím žádná kamera.');
-    for (const x of k) console.log(`${x.id.padEnd(16)} ${x.name}  (${cameraAddress(x)}, ${x.stream}, uživatel ${x.user}, tenant ${x.tenant || '– bez poskytovatele'}${x.place ? ', ' + x.place : ''})`);
+    for (const x of k) console.log(`${x.id.padEnd(16)} ${x.name}  (${cameraAddress(x)}, ${x.stream}, uživatel ${x.user}, tenant ${x.tenant || '– bez poskytovatele'}${x.place ? ', ' + x.place : ''}${x.tapoPass ? ', světlo: účet TP-Link ' + (x.tapoUser || 'admin') : ''})`);
     return;
   }
   if (akce === 'tenant') {
@@ -58,6 +59,19 @@ async function main([akce, id]) {
     kam.tenant = t; if (misto.length) kam.place = misto.join(' ').slice(0, 120);
     zapis(KAMERY, JSON.stringify(k, null, 2));
     console.log(`Kamera ${id} patří tenantovi ${t}${kam.place ? ' (' + kam.place + ')' : ''}.`);
+    return;
+  }
+  if (akce === 'svetlo') {
+    let raw;
+    try { raw = JSON.parse(await stdin()); } catch { throw new Error('Na vstupu čekám JSON {"pass"} s heslem účtu TP-Link.'); }
+    const k = nacti(); const kam = k.find((x) => x.id === id);
+    if (!kam) throw new Error(`Kamera ${id} není v cameras.json.`);
+    const r = normalizeCamera({ ...kam, tapoUser: raw.user || 'admin', tapoPass: raw.pass || '' });
+    if (!r.ok) throw new Error(r.error);
+    delete kam.tapoUser; delete kam.tapoPass;
+    if (r.kamera.tapoPass) { kam.tapoUser = r.kamera.tapoUser; kam.tapoPass = r.kamera.tapoPass; }
+    zapis(KAMERY, JSON.stringify(k, null, 2));
+    console.log(kam.tapoPass ? `Kamera ${id}: světlo půjde přes účet TP-Link „${kam.tapoUser}“.` : `Kamera ${id}: účet TP-Link pro světlo odebrán (zkusí se jen účet kamery).`);
     return;
   }
   if (akce === 'obnov') { obnov(nacti()); console.log('go2rtc.yaml vygenerován.'); return; }
@@ -76,13 +90,14 @@ async function main([akce, id]) {
     const stara = nacti().find((x) => x.id === r.kamera.id);
     if (stara && !r.kamera.tenant && stara.tenant) r.kamera.tenant = stara.tenant;   // nové heslo kamery nemaže poskytovatele
     if (stara && !r.kamera.place && stara.place) r.kamera.place = stara.place;
+    if (stara && !r.kamera.tapoPass && stara.tapoPass) { r.kamera.tapoUser = stara.tapoUser || 'admin'; r.kamera.tapoPass = stara.tapoPass; }   // nové heslo kamery nemaže účet pro světlo
     const k = nacti().filter((x) => x.id !== r.kamera.id).concat(r.kamera);
     zapis(KAMERY, JSON.stringify(k, null, 2));
     obnov(k);
     console.log(`Kamera ${r.kamera.id} („${r.kamera.name}“, ${cameraAddress(r.kamera)}, ${r.kamera.stream}${r.kamera.tenant ? ', tenant ' + r.kamera.tenant : ', zatím bez poskytovatele'}) uložena.`);
     return;
   }
-  throw new Error('Použití: nastav | seznam | smaz ID | obnov | tenant ID TENANT [místo]');
+  throw new Error('Použití: nastav | seznam | smaz ID | obnov | tenant ID TENANT [místo] | svetlo ID');
 }
 
 main(process.argv.slice(2)).catch((e) => { console.error(e.message); process.exit(1); });

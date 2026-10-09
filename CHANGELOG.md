@@ -5,6 +5,29 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.39 · 10. 10. 2026 · světlo kamery z dispečinku, záložka Náramek na první pohled
+
+- Světlo kamery: kamery Tapo s bílým reflektorem (C320WS, C520WS, C560WS…)
+  jdou rozsvítit a zhasnout z detailu kamery v dispečinku (tlačítko 💡 Světlo
+  na obraze vlevo dole; svítí = žluté). Ovládá se přes místní rozhraní Tapo
+  (`src/tapo.mjs`: přihlášení jako aplikace Tapo, u nového firmwaru
+  zabezpečené s AES, HTTPS 443 tunelem; `src/svetlo.mjs`: stav, přepnutí,
+  paměť „kamera světlo nemá“). Nejdřív účet kamery, když nestačí, účet
+  TP-Link uložený `./deploy/vps-kamera.sh svetlo ID` (`tapoPass` v
+  cameras.json, do go2rtc.yaml nejde). `GET/POST /api/svetlo` pro každého,
+  kdo kameru vidí (rodina jen svou; mobilní dispečer jen stav); přepnutí se
+  zapíše do historie kamery. Diagnostika hlavní aplikace má řádek „Světlo
+  kamery …“ (svítí / zhasnuté / kamera světlo nemá / nezjištěno s chybou).
+- Záložka Náramek v dispečinku: nahoře pruh, který na první pohled říká,
+  jestli je náramek přiřazený – zelený s ID, telefonem, ozváním a baterií,
+  nebo oranžový „Náramek není přiřazen“. Bez náramku je v záložce jen
+  Přiřazení nového náramku (stav, měření, poplachy a ovládání se schovají)
+  a na záložce ⌚ Náramek je štítek „nepřiřazen“ vidět už z Monitoringu.
+- Testy: `test/tapo.test.mjs` s napodobeninou kamery (`test/fake-tapo.mjs`:
+  oba způsoby přihlášení, šifrování, blokace po špatných heslech, kamera
+  bez světla), `/api/svetlo` v `test/api.test.mjs`, `tapoPass` v
+  `test/kamery.test.mjs`.
+
 ## 3.38 · 9. 10. 2026 · kamera v H.265 se hlásí srozumitelně
 
 - go2rtc umí pro nahrávky, obraz přes HTTPS i prohlížeč jen H.264; kamera
