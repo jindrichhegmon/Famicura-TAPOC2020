@@ -10,23 +10,26 @@
  * webhookem Make jako pozvánky (src/sms.mjs); výsledek se zapíše k události
  * (ev.upozorneni), aby dispečink viděl, kolik zpráv odešlo a proč ne.
  */
-import { upozorneniPro, casText, normalizeTelefonCz, telefonyPoskytovatele, POPIS_ROLE } from '../public/proto/sim-core.js';
+import { upozorneniPro, casText, normalizeTelefonCz, POPIS_ROLE } from '../public/proto/sim-core.js';
 import { cisloZdroje } from './sluzba.mjs';
 
 const bezDiakritiky = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-/** Text SMS: bez diakritiky, do 160 znaků. */
-export function textUpozorneniSms({ jmeno, label, cas, poskytovatel, telefon }) {
-  const kdo = bezDiakritiky(poskytovatel).slice(0, 30) || 'Dispecink';
-  let t = `Famicura: ${bezDiakritiky(jmeno).slice(0, 30)}: ${bezDiakritiky(label).toLowerCase().slice(0, 40)} (${cas}). ${kdo}${telefon ? ' ' + bezDiakritiky(telefon).slice(0, 16) : ''}.`;
+/** Text SMS: bez diakritiky, do 160 znaků; podstatné je kdo, kde (místo) a kdy – telefon dispečinku se neposílá (od 3.40). */
+export function textUpozorneniSms({ jmeno, misto, label, cas, poskytovatel }) {
+  // zkrácení na celá slova, ať v SMS nezůstane useknuté slovo nebo neuzavřená závorka
+  const zkrat = (s, n) => { s = bezDiakritiky(s || ''); return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, '').replace(/[\s(,;:-]+$/, ''); };
+  const kdo = zkrat(poskytovatel, 30) || 'Dispecink';
+  const kde = misto ? ` (${zkrat(misto, 40)})` : '';
+  let t = `Famicura: ${zkrat(jmeno, 30)}${kde}: ${zkrat(label, 40).toLowerCase()}, ${cas}. ${kdo}.`;
   if (t.length > 160) t = t.slice(0, 157) + '...';
   return t;
 }
 
-export function textUpozorneniMail({ jmeno, misto, label, uroven, cas, text, poskytovatel, telefon, odkaz }) {
-  return [`Famicura Kamera hlásí událost u klienta ${jmeno}${misto ? ` (${misto})` : ''}.`, '',
-    `Událost: ${label}${uroven ? ` (${uroven})` : ''}`, `Čas: ${cas}`, text ? `Kamera: ${text}` : null, '',
-    `Dispečink ${poskytovatel || ''}${telefon ? `, tel. ${telefon}` : ''} událost vidí a řeší podle nastavení.`,
+export function textUpozorneniMail({ jmeno, misto, label, uroven, cas, text, poskytovatel, odkaz }) {
+  return [`Famicura Kamera hlásí událost u klienta ${jmeno}.`, '',
+    `Událost: ${label}${uroven ? ` (${uroven})` : ''}`, `Místo: ${misto || '–'}`, `Čas: ${cas}`, text ? `Kamera: ${text}` : null, '',
+    `Dispečink ${poskytovatel || ''} událost vidí a řeší podle nastavení.`,
     odkaz ? `Aplikace rodiny: ${odkaz}` : null, '', 'Tuto zprávu posílá server Famicura Kamera automaticky podle kontaktů zadaných poskytovatelem.'].filter((r) => r !== null).join('\n');
 }
 
@@ -38,11 +41,8 @@ export function createUpozorneni({ sms, sluzba = null, uzivatele = null, log = c
       const u = upozorneniPro(state, ev);
       if (!u) return null;
       const posk = state.poskytovatel || {};
-      const tp = telefonyPoskytovatele(state);
-      // telefon dispečinku do textu zpráv: vlastní číslo, nebo ze zdroje Péče doma (plus) – když se nepodaří, zpráva jde bez něj
-      let telDisp = tp.dispecink.telefon || '';
-      if (!telDisp && tp.dispecink.zdroj !== 'vlastni' && sluzba?.nastaveno) { try { telDisp = cisloZdroje(await sluzba.telefon(tenant), tp.dispecink.zdroj, 'dispecink'); } catch { /* bez telefonu */ } }
-      const spolecne = { jmeno: u.patient.name, misto: u.patient.place, label: u.label, uroven: UROVEN[u.level], cas: casText(ev.at), text: ev.text, poskytovatel: posk.nazev, telefon: telDisp, odkaz };
+      // do textu zpráv jde jméno, místo a čas; telefon dispečinku ne (rodina ho má v aplikaci a v Kontaktech)
+      const spolecne = { jmeno: u.patient.name, misto: u.patient.place, label: u.label, uroven: UROVEN[u.level], cas: casText(ev.at), text: ev.text, poskytovatel: posk.nazev, odkaz };
       const vysledek = { sms: { prijemci: u.sms.length + u.smsZdroje.length + u.smsUcty.length, odeslano: 0, chyba: null, komu: u.komu }, mail: { prijemci: u.mail.length, odeslano: 0, chyba: null } };
       // účty rodiny (Uživatelé rodiny, příjemce u:<id>): telefon z účtu na serveru – platí vždy ten aktuální; deaktivovaný účet se vynechá
       for (const id of u.smsUcty) {

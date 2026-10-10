@@ -12,6 +12,10 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   e-mail komu) a nad každým z nich rolovací výběr **Vše / Bez**: Vše dosadí
   výchozí hodnotu toho sloupce do všech událostí, Bez ji u všech zruší.
   Jednotlivé řádky jdou pak doladit jako dřív.
+- SMS a e-mail o alertu už neobsahují telefon dispečinku: v SMS je jméno
+  klienta, místo, událost a čas (bez diakritiky, do 160 znaků), v e-mailu
+  událost, místo, čas a text kamery. Telefon dispečinku má rodina v aplikaci
+  a v Kontaktech.
 - Hodiny (jen v hodinách) se vybírají z rolovací nabídky po půlhodině
   (00:00–23:30) místo psaní času; uložený čas mimo mřížku se v nabídce ukáže
   také. Platí pro řádek Výchozí i všechny události.

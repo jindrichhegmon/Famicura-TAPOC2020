@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { seed, proved, kontaktyPro, describeKontakty, rodinaSTelefonem, smsIdsPro, mailIdsPro, upozorneniPro, telefonyPoskytovatele, rozdelMaily, cisloSosPro, popisTelefonuRole, SMS_PRIJEMCI } from '../public/proto/sim-core.js';
-import { createUpozorneni } from '../src/upozorneni.mjs';
+import { createUpozorneni, textUpozorneniSms, textUpozorneniMail } from '../src/upozorneni.mjs';
 
 const T0 = 1_700_000_000_000;
 const stavS = () => { const s = seed(T0); s.patients[0].real = true; return s; };
@@ -85,7 +85,8 @@ test('odeslání: číslo služby z Péče doma dosadí server přes sluzba.tele
   const u = createUpozorneni({ sms, sluzba, log: { log() {} }, odkaz: '' });
   const v = await u.posli(s, { id: 'e1', patientId: p.id, kind: 'sos', at: T0, text: 'SOS' }, { tenant: '22202480FAMICURA' });
   assert.deepEqual(posl.map((x) => x[0]), ['602520069', '722972596', '602620069']); assert.equal(v.sms.odeslano, 3); assert.equal(v.sms.prijemci, 4); assert.match(v.sms.chyba, /administrace: telefon \(Péče doma plus\) není nastavený/); assert.deepEqual(v.sms.komu, ['Eva', 'služba', 'dispečink', 'administrace']);
-  assert.match(posl[0][1], /602620069/, 'telefon dispečinku z Péče doma je v textu SMS');
+  assert.doesNotMatch(posl[0][1], /602620069|722972596/, 'telefon dispečinku v textu SMS není (od 3.40 jen kdo, kde a kdy)');
+  assert.match(posl[0][1], /^Famicura: TAPO Test \(Kancelar Famicura \(skutecna kamera\)\): nouzove tlacitko, \d{1,2}:\d{2}\. Pecovatelska sluzba Kladno\.$/, 'SMS: jméno, místo, událost, čas, poskytovatel');
   // účty rodiny (u:<id>): telefon z účtu na serveru, deaktivovaný se vynechá, neexistující = chyba; stejné číslo jako v Kontaktech jen jednou
   proved(s, 'setWatch', [p.id, 'sos', { sms: ['r1', 'u:abc', 'u:deakt', 'u:pryc', 'u:dup'], mail: [] }], T0);
   const ucty = { abc: { jmeno: 'Petr', telefon: '777000222', deaktivovan: false }, deakt: { jmeno: 'Jana', telefon: '777000111', deaktivovan: true }, dup: { jmeno: 'Eva účet', telefon: '602520069', deaktivovan: false } };
@@ -100,4 +101,17 @@ test('odeslání: číslo služby z Péče doma dosadí server přes sluzba.tele
   const u2 = createUpozorneni({ sms, sluzba: null, log: { log() {} }, odkaz: '' });
   const v2 = await u2.posli(s, { id: 'e2', patientId: p.id, kind: 'sos', at: T0 }, { tenant: '22202480FAMICURA' });
   assert.equal(v2.sms.odeslano, 1); assert.match(v2.sms.chyba, /: číslo z Péče doma \(plus\) není na serveru nastavené/);
+});
+
+test('text SMS a e-mailu o alertu: jméno, místo, událost a čas; bez telefonu dispečinku; SMS do 160 znaků bez diakritiky', () => {
+  const sms = textUpozorneniSms({ jmeno: 'Paní Nováková', misto: 'Byt 7, Kladno', label: 'Nouzové tlačítko', cas: '10. 10. 2026 14:05', poskytovatel: 'Pečovatelská služba Kladno', telefon: '312 123 456' });
+  assert.equal(sms, 'Famicura: Pani Novakova (Byt 7, Kladno): nouzove tlacitko, 10. 10. 2026 14:05. Pecovatelska sluzba Kladno.');
+  assert.ok(sms.length <= 160);
+  const dlouha = textUpozorneniSms({ jmeno: 'J'.repeat(60), misto: 'M'.repeat(60), label: 'L'.repeat(60), cas: '10. 10. 2026 14:05', poskytovatel: 'P'.repeat(60) });
+  assert.ok(dlouha.length <= 160);
+  assert.equal(textUpozorneniSms({ jmeno: 'Karel', misto: 'Domov pro seniory Slunecnice, pokoj 12 (prizemi vlevo)', label: 'Pád', cas: '14:05', poskytovatel: '' }), 'Famicura: Karel (Domov pro seniory Slunecnice, pokoj 12): pad, 14:05. Dispecink.', 'místo zkrácené na celá slova');
+  const mail = textUpozorneniMail({ jmeno: 'Paní Nováková', misto: 'Byt 7, Kladno', label: 'Nouzové tlačítko', uroven: 'kritická', cas: '10. 10. 2026 14:05', text: 'Nouzové tlačítko na náramku.', poskytovatel: 'Pečovatelská služba Kladno', telefon: '312 123 456', odkaz: 'http://x/proto/rodina.html' });
+  assert.match(mail, /^Famicura Kamera hlásí událost u klienta Paní Nováková\.\n\nUdálost: Nouzové tlačítko \(kritická\)\nMísto: Byt 7, Kladno\nČas: 10\. 10\. 2026 14:05\nKamera: Nouzové tlačítko na náramku\.\n\nDispečink Pečovatelská služba Kladno událost vidí/);
+  assert.doesNotMatch(mail, /312|tel\./);
+  assert.match(textUpozorneniMail({ jmeno: 'X', label: 'Pád', cas: 'teď' }), /Místo: –/);
 });
