@@ -5,6 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.44 · 10. 10. 2026 · dispečink: malé okno, velké okno, nebo seznam kamer
+
+- Nad dlaždicemi kamer v dispečinku je přepínač **Malé okno / Velké okno /
+  Seznam**: malé okno dá na obrazovku hodně kamer (dlaždice od 150 px),
+  velké okno je dosavadní zobrazení (velikost podle počtu kamer), seznam
+  ukáže každou kameru jako řádek s malým živým náhledem, jménem, stavem,
+  režimem obrazu a poslední událostí. Klepnutí otevře detail jako dřív.
+  Volba se pamatuje v prohlížeči (`famicura.dispecink.zobrazeni`),
+  `proto.css` `.tiles[data-zobrazeni]`.
+
 ## 3.43 · 10. 10. 2026 · hlavní aplikace jen monitoring a správa kamer
 
 - Z hlavní aplikace zmizel Plán nahrávání a Sledované události (karty,

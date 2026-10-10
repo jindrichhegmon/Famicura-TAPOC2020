@@ -377,6 +377,22 @@ function nastavZdroj(z) {
 }
 $('zdroj').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZdroj(b.dataset.z); });
 renderZdroj();
+/* Zobrazení výběru kamer: malé okno (hodně kamer na obrazovce), velké okno (výchozí, velikost podle počtu kamer),
+ * seznam (řádek s malým náhledem). Volba jen v tomhle prohlížeči (localStorage), proto.css .tiles[data-zobrazeni]. */
+const ZOBRAZENI_KEY = 'famicura.dispecink.zobrazeni';
+const ZOBRAZENI = ['male', 'velke', 'seznam'];
+let zobrazeni = (() => { try { const v = localStorage.getItem(ZOBRAZENI_KEY); return ZOBRAZENI.includes(v) ? v : 'velke'; } catch { return 'velke'; } })();
+function renderZobrazeni() {
+  $('tiles').dataset.zobrazeni = zobrazeni;
+  $('zobrazeni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === zobrazeni)));
+}
+function nastavZobrazeni(v) {
+  if (!ZOBRAZENI.includes(v)) return;
+  zobrazeni = v; try { localStorage.setItem(ZOBRAZENI_KEY, v); } catch { /* bez paměti prohlížeče */ }
+  renderZobrazeni();
+}
+$('zobrazeni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZobrazeni(b.dataset.v); });
+renderZobrazeni();
 const panel = mountPanel({ role: 'dispecink', patientIds: () => sim.state.patients.filter(visible).map((p) => p.id), onPatient: () => {} });
 
 // ?rezim=full|blur|skeleton|none opens the real camera in that mode (as if the
@@ -453,7 +469,9 @@ function renderTiles() {
     const z = zdroje.get(p.id);
     if (z) { if (p.deaktivace && !z.deakt) { z.deakt = true; z.odpoj('kamera deaktivovaná rodinou'); } else if (!p.deaktivace && z.deakt) { z.deakt = false; z.connect(); } }
     t.className = 'tile ' + st + (selected === p.id ? ' sel' : '') + (p.deaktivace ? ' deakt' : '');
-    t.querySelector('.tag').textContent = p.deaktivace ? MODE_TAG.deaktivace : p.offline ? 'kamera nedostupná' : MODE_TAG[tileMode(p.id)] || '';
+    const rezimText = p.deaktivace ? MODE_TAG.deaktivace : p.offline ? 'kamera nedostupná' : MODE_TAG[tileMode(p.id)] || '';
+    t.querySelector('.tag').textContent = rezimText;
+    t.querySelector('.st').dataset.rezim = rezimText;   // v zobrazení Seznam je štítek schovaný, režim se čte z řádku stavu
     const b = t.querySelector('.st-badge'); b.textContent = { crit: 'kritické', warn: 'varování', off: 'offline', klid: 'klid' }[st]; b.className = 'badge st-badge ' + (st === 'klid' ? 'ok' : st === 'off' ? 'tech' : st);
     const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent' && e.kind !== 'poznamka');
     t.querySelector('.st').textContent = (p.naramek?.vypnuto ? '⏻ náramek vypnutý · ' : '') + (last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí');
