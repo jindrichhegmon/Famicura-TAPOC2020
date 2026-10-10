@@ -5,6 +5,13 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.46 · 10. 10. 2026 · hlavní aplikace z dispečinku
+
+- V ⚙ Nastavení dispečinku je dole část **Hlavní aplikace (správce
+  serveru)** s tlačítkem Otevřít hlavní aplikaci: otevře `/` v nové kartě
+  (přihlášení heslem Famicura) – správa kamer, diagnostika, živý obraz.
+  Nápověda (téma Nastavení) to zmiňuje.
+
 ## 3.45 · 10. 10. 2026 · přehledná nápověda dispečinku
 
 - Témata nápovědy mají strukturu: nadpisy částí, odrážky, číslované kroky a

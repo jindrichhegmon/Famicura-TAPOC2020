@@ -330,6 +330,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.46 (10. 10. 2026)**: v ⚙ Nastavení dispečinku je dole tlačítko Otevřít hlavní aplikaci (nová karta, heslo Famicura) – správa kamer, diagnostika a živý obraz pro správce serveru.
 - **Verze 3.45 (10. 10. 2026)**: nápověda dispečinku je přehledně členěná – každé téma má nadpisy, odrážky, číslované kroky a zvýrazněná upozornění (v panelu Nápověda, v odpovědích asistenta i v tisku do PDF); obsah je stejný, jen čitelnější.
 - **Verze 3.44 (10. 10. 2026)**: nad dlaždicemi kamer je přepínač Malé okno / Velké okno / Seznam – hodně kamer najednou, velké dlaždice jako dosud, nebo řádky s malým náhledem; volba se pamatuje v prohlížeči.
 - **Verze 3.43 (10. 10. 2026)**: hlavní aplikace (heslo Famicura) je jen pro monitoring a správu kamer – Plán nahrávání a Sledované události z ní zmizely, sledování, nahrávání a upozornění se nastavují tady v dispečinku (Nastavení alertů).
@@ -399,7 +400,7 @@ Dlaždice ukazují kamery přiřazené vašemu poskytovateli (tenantovi).
 - Otevřete dva odkazy ve dvou kartách (…/proto/dispecink.html?tenant=ID jednoho a druhého) a v každé se přihlaste.
 - Každý poskytovatel má vlastní přihlášení (od verze 3.41): karty se nepřehazují a odhlášení v jedné druhou nechá přihlášenou.
 ` },
-  { id: 'poskytovatel', obrazky: [{ src: '/proto/napoveda/zahlavi.png', popis: 'Záhlaví: údaje poskytovatele vlevo, vpravo nahoře Nápověda a ozubené kolečko' }, { src: '/proto/napoveda/nastaveni.png', popis: 'Nastavení pod ozubeným kolečkem: poskytovatel, dispečink, zobrazení' }], nazev: 'Nastavení (ozubené kolečko)', klicova: ['nastaven', 'poskytovatel', 'zahlavi', 'dispecer', 'smena', 'zaloha', 'vedouci', 'eskalac', 'jmeno', 'upravit', 'nazev sluzby', 'kolecko'],
+  { id: 'poskytovatel', obrazky: [{ src: '/proto/napoveda/zahlavi.png', popis: 'Záhlaví: údaje poskytovatele vlevo, vpravo nahoře Nápověda a ozubené kolečko' }, { src: '/proto/napoveda/nastaveni.png', popis: 'Nastavení pod ozubeným kolečkem: poskytovatel, dispečink, zobrazení' }], nazev: 'Nastavení (ozubené kolečko)', klicova: ['nastaven', 'hlavni aplikac', 'sprava kamer', 'poskytovatel', 'zahlavi', 'dispecer', 'smena', 'zaloha', 'vedouci', 'eskalac', 'jmeno', 'upravit', 'nazev sluzby', 'kolecko'],
     obsah: `
 Ozubené kolečko vpravo nahoře otevře Nastavení. Ukládá se tlačítkem **Uložit** na server: stejné údaje vidí všichni dispečeři, záhlaví, karta Směna, detail kamery i aplikace rodiny (název a telefon dispečinku).
 
@@ -409,6 +410,7 @@ Ozubené kolečko vpravo nahoře otevře Nastavení. Ukládá se tlačítkem **U
 - **Nahrávky**: sekund po události, obraz před událostí, úložiště server / Google Disk, doba uchování, limit místa.
 - **Zobrazení**: barevné schéma dispečinku pro tento počítač.
 - **Zkušební SMS a e-mail** ze serveru.
+- **Hlavní aplikace**: tlačítko Otevřít hlavní aplikaci (nová karta, heslo Famicura) pro správce serveru – správa kamer, diagnostika, živý obraz.
 - Enter v poli jen přeskočí na další pole; okno zavře jen Uložit, Zavřít nebo Esc.
 ` },
   { id: 'prihlaseni', obrazky: [{ src: '/proto/napoveda/prihlaseni.png', popis: 'Bez přihlášení server pošle jen tuhle stránku; po přihlášení naběhne dispečink' }], nazev: 'Přihlášení a poskytovatel (tenant)', klicova: ['prihlas', 'heslo', 'odhlas', '12 hodin', 'nejde se prihlasit', 'prihlaseni', 'tenant', 'poskytovatel id', 'pece doma plus', 'ucet'],
