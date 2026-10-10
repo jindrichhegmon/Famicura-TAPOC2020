@@ -10,7 +10,7 @@
  * počítají v čase pečovatelů, ne serveru) a zapíše se do CLB1; posledních pár
  * set si server drží pro stránku (GET /api/events).
  */
-import { normalizeWatch, cameraEventAllowed, cameraEventLabel, cameraEventLevel } from '../public/watch.js';
+import { cameraEventLabel, cameraEventLevel } from '../public/watch.js';
 import { createOnvif } from './onvif.mjs';
 import * as zaznamy from './zaznamy.mjs';
 
@@ -35,28 +35,13 @@ export function createCameraEvents({ kamery, store, dbs, onvif = createOnvif, lo
   const naposledy = new Map();      // `${id}:${kind}` → ms
 
   function zaznam(id, zmena) {
-    stav.set(id, { ok: false, error: null, events: [], posledni: null, odmitnuto: null, clbChyba: null, nezarazene: [], ...(stav.get(id) || {}), ...zmena });
+    stav.set(id, { ok: false, error: null, events: [], posledni: null, clbChyba: null, nezarazene: [], ...(stav.get(id) || {}), ...zmena });
   }
 
   async function zpracuj(kam, ev) {
     const klic = `${kam.id}:${ev.kind}`;
     if (ev.at - (naposledy.get(klic) || 0) < STEJNA_MS) return;
     naposledy.set(klic, ev.at);
-
-    const vsechna = await store.nacti('watch');
-    const watch = normalizeWatch(vsechna[kam.id]).watch;
-    const mistni = mistniCas(ev.at, casPasmo);
-    if (!cameraEventAllowed(watch, ev.kind, mistni)) {
-      // Not silently: the log and the diagnostics say what was dropped and why,
-      // so "it stopped writing" can be traced to the setting that did it.
-      const r = watch[ev.kind] || {};
-      const hhmm = `${String(mistni.getHours()).padStart(2, '0')}:${String(mistni.getMinutes()).padStart(2, '0')}`;
-      const duvod = r.enabled === false ? 'v Událostech vypnuto' : `mimo hodiny ${r.from}–${r.to} (čas události ${hhmm})`;
-      const odmitnuto = { at: new Date(ev.at).toISOString(), kind: ev.kind, label: cameraEventLabel(ev.kind, ev.label), duvod };
-      log.log('[famicura-tapo] událost kamery', kam.id, 'nezapsána:', odmitnuto.label, '–', duvod);
-      zaznam(kam.id, { odmitnuto });
-      return;
-    }
 
     const label = cameraEventLabel(ev.kind, ev.label);
     const level = cameraEventLevel(ev.kind);

@@ -5,6 +5,19 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.43 · 10. 10. 2026 · hlavní aplikace jen monitoring a správa kamer
+
+- Z hlavní aplikace zmizel Plán nahrávání a Sledované události (karty,
+  tlačítka Plán a Události u kamer, štítek „× plán“, plánovač v prohlížeči).
+  Sledování událostí, nahrávání po události a upozornění se nastavují
+  v dispečinku poskytovatele (Nastavení alertů), hlavní aplikace slouží
+  k monitoringu (živý obraz, analýza, nahrávky, diagnostika) a správě kamer.
+- Server už události kamer nefiltruje podle starého nastavení z hlavní
+  aplikace (`data/watch.json`): každá událost z kamery jde do CLB1 i do
+  dispečinku, kde ji rozhoduje nastavení poskytovatele. API `/api/schedules`
+  a `/api/watch` je zrušené; `data/schedules.json` a `data/watch.json` na
+  serveru zůstávají bez použití.
+
 ## 3.42 · 10. 10. 2026 · správa kamer v aplikaci (zavedení, poskytovatel, smazání bez Terminálu)
 
 - Hlavní aplikace (heslo Famicura, bez poskytovatele v odkazu) má kartu

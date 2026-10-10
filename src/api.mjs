@@ -8,8 +8,6 @@
  *   POST /api/stream            { deviceId, sdpOffer } → { sdpAnswer } (WebRTC přes go2rtc)
  *   GET  /api/stream.mp4?deviceId=  obraz přes HTTPS (fMP4, Chrome/Edge), když síť nepustí WebRTC
  *   GET  /api/stream.m3u8?deviceId= totéž jako HLS (Safari); díly pod /api/hls/…
- *   GET|PUT /api/schedules      plány nahrávání
- *   GET|PUT /api/watch          sledované události analýzy i kamery
  *   GET  /api/events?since=ms   události, které nahlásila kamera (odebírá server)
  *   GET  /api/diag              počty řádků v CLB1
  *   POST /api/clb               { typ: 'udalost' | 'nahravka', ... } → zápis do CLB1
@@ -67,8 +65,7 @@ import { createDispecer } from './dispecer.mjs';
 import { normTenant } from './tabulky.mjs';
 import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
-import { normalizeIntervals, isDeviceId, MAX_INTERVALS } from './plan-pravidla.mjs';
-import { normalizeWatch, isDefaultWatch } from '../public/watch.js';
+import { isDeviceId } from './plan-pravidla.mjs';
 import * as zaznamy from './zaznamy.mjs';
 
 // Když hostname v Caddy spadne na sousední aplikaci, vrátí se její 404 a
@@ -204,7 +201,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
             ...(svetlo ? { svetlo: { podporuje: svetla[i]?.podporuje ?? null, zapnuto: svetla[i]?.zapnuto ?? null, chyba: svetla[i]?.chyba || null, model: svetla[i]?.model || null, ucet: svetla[i]?.ucet || null } } : {}),
             // null: the server does not subscribe at all (no cameras.json)
             eventsOk: st[c.id] ? st[c.id].ok : null, eventsError: st[c.id]?.error || null,
-            eventsLast: st[c.id]?.posledni || null, eventsRejected: st[c.id]?.odmitnuto || null, clbError: st[c.id]?.clbChyba || null,
+            eventsLast: st[c.id]?.posledni || null, clbError: st[c.id]?.clbChyba || null,
             eventsOther: st[c.id]?.nezarazene || [] }));
         } catch (e) {
           out.go2rtc = { ok: false, error: e.message };
@@ -712,32 +709,6 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       }
 
       if (ja.role !== 'admin') return jenPoskytovatel();   // everything below is the server itself: plans, analysis, CLB1
-
-      if (path === '/api/schedules') {
-        if (m === 'GET') return json({ ok: true, max: MAX_INTERVALS, schedules: await store.nacti('schedules') });
-        if (m !== 'PUT') return json({ ok: false, error: 'GET nebo PUT' }, 405);
-        const { deviceId, intervals } = await telo(req);
-        if (!isDeviceId(deviceId)) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
-        const r = normalizeIntervals(intervals);
-        if (!r.ok) return json({ ok: false, error: r.error }, 400);
-        const all = await store.nacti('schedules');
-        if (r.intervals.length) all[deviceId] = r.intervals; else delete all[deviceId];
-        await store.uloz('schedules', all);
-        return json({ ok: true, intervals: r.intervals });
-      }
-
-      if (path === '/api/watch') {
-        if (m === 'GET') return json({ ok: true, watch: await store.nacti('watch') });
-        if (m !== 'PUT') return json({ ok: false, error: 'GET nebo PUT' }, 405);
-        const { deviceId, watch } = await telo(req);
-        if (!isDeviceId(deviceId)) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
-        const r = normalizeWatch(watch);
-        if (!r.ok) return json({ ok: false, error: r.error }, 400);
-        const all = await store.nacti('watch');
-        if (isDefaultWatch(r.watch)) delete all[deviceId]; else all[deviceId] = r.watch;
-        await store.uloz('watch', all);
-        return json({ ok: true, watch: r.watch });
-      }
 
       // Správa kamer (zavedení, úprava, poskytovatel, světlo, smazání) – totéž co ./deploy/vps-kamera.sh, bez Terminálu.
       if (path === '/api/sprava/kamery' || path.startsWith('/api/sprava/')) {

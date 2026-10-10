@@ -70,26 +70,6 @@ test('stejná detekce těsně po sobě je jedna událost', async () => {
   } finally { await u.stop(); await chvilku(300); await cam.close(); }
 });
 
-test('sledované události platí i pro kameru: vypnutý druh a hodiny mimo se nezapíšou', async () => {
-  // Now: 03:00 in Prague (02:00 UTC in winter). Person is wanted 08:00–20:00 only.
-  const now = () => Date.parse('2026-12-01T02:00:00Z');
-  const cam = await startFakeOnvif({ now });
-  const { u, db } = sestav(cam, { now, watch: { tapoc2020: { 'cam-motion': { enabled: false }, 'cam-person': { from: '08:00', to: '20:00' } } } });
-  try {
-    await u.start();
-    await az(() => u.stav().tapoc2020?.ok);
-    cam.motion(); cam.person(); cam.vehicle();
-    await az(() => u.nedavne().length === 1);
-    await chvilku(300);
-    assert.deepEqual(u.nedavne().map((e) => e.kind), ['cam-vehicle']);
-    // What was dropped, and why, is visible: the last one was the person outside its hours.
-    const o = u.stav().tapoc2020.odmitnuto;
-    assert.equal(o.kind, 'cam-person');
-    assert.equal(o.duvod, 'mimo hodiny 08:00–20:00 (čas události 03:00)');
-    assert.equal(db.provedene.filter((p) => /FamicuraRingLog/.test(p.text)).length, 1);
-  } finally { await u.stop(); await chvilku(300); await cam.close(); }
-});
-
 test('výpadek CLB1 událost nezahodí a hlásí se ve stavu', async () => {
   const cam = await startFakeOnvif();
   const { u, db } = sestav(cam);

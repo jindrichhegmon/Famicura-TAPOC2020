@@ -246,7 +246,7 @@ test('stav po přihlášení: go2rtc, kamery a zda odpovídají', async () => {
     assert.equal(b.go2rtc.ok, true);
     assert.equal(b.go2rtc.version, '1.9.14');
     assert.deepEqual(b.cameras, [{ id: 'tapoc2020', name: 'Pokoj 12', tenant: T, events: [], online: false, detail: 'dial tcp: i/o timeout',
-      eventsOk: null, eventsError: null, eventsLast: null, eventsRejected: null, clbError: null, eventsOther: [] }]);
+      eventsOk: null, eventsError: null, eventsLast: null, clbError: null, eventsOther: [] }]);
     // s modulem světla přibude u kamery řádek pro Diagnostiku (svítí / zhasnuté / nemá / chyba)
     const svetlo = { async stav() { return { podporuje: true, zapnuto: true, chyba: null, model: 'C560WS', ucet: 'kamera' }; } };
     const { h: hs } = handler({ go2rtc: fakeGo2rtc({ online: false }), svetlo });
@@ -296,28 +296,6 @@ test('stream: chyba go2rtc se vrátí čitelně, i s tím, zda má smysl zkouše
 });
 
 /* ---------- plány a sledované události ---------- */
-
-test('plán se uloží, přečte a prázdný smaže', async () => {
-  const { h, store } = handler();
-  const put = (intervals) => h(req('PUT', '/api/schedules', { cookies: cookie(), body: { deviceId: 'tapoc2020', intervals } }));
-  assert.equal((await put([{ from: '22:00', to: '06:00' }])).status, 200);
-  const b = await (await h(req('GET', '/api/schedules', { cookies: cookie() }))).json();
-  assert.deepEqual(b.schedules, { tapoc2020: [{ from: '22:00', to: '06:00', enabled: true }] });
-  assert.equal(b.max, 5);
-  assert.equal((await put([{ from: '08:00', to: '' }])).status, 400);
-  await put([]);
-  assert.deepEqual(store.data.schedules, {});
-});
-
-test('sledované události: uloží se, výchozí nastavení se nedrží', async () => {
-  const { h, store } = handler();
-  const put = (watch) => h(req('PUT', '/api/watch', { cookies: cookie(), body: { deviceId: 'tapoc2020', watch } }));
-  assert.equal((await put({ state: { enabled: false }, longlie: { after: 300 } })).status, 200);
-  assert.equal(store.data.watch.tapoc2020.longlie.after, 300);
-  assert.equal((await put({ longlie: { after: 7 } })).status, 400);
-  await put(null);
-  assert.deepEqual(store.data.watch, {});
-});
 
 test('příprava ořízne délky a řídicí znaky', () => {
   const p = pripravit({ typ: 'udalost', cas: new Date(), popis: 'a\u0000b'.padEnd(3000, 'x'), kameraNazev: 'y'.repeat(500) });
@@ -375,16 +353,6 @@ test('události kamery: od daného času, jen po přihlášení', async () => {
   const none = await (await h(req('GET', '/api/events', { cookies: cookie() }))).json;
   assert.ok(none);
 });
-
-test('nastavení událostí kamery se ukládá spolu s analýzou', async () => {
-  const { h, store } = handler();
-  const put = (watch) => h(req('PUT', '/api/watch', { cookies: cookie(), body: { deviceId: 'tapoc2020', watch } }));
-  assert.equal((await put({ 'cam-motion': { enabled: false }, fall: { enabled: true } })).status, 200);
-  assert.deepEqual(store.data.watch.tapoc2020['cam-motion'], { enabled: false, from: '', to: '', record: false });
-  assert.equal((await put({ 'cam-motion': { from: '22:00', to: '' } })).status, 400);
-});
-
-/* ---------- obraz přes HTTPS ---------- */
 
 test('obraz přes HTTPS: jen známá kamera, jen obraz, díly HLS jen podle id', async () => {
   const proxied = [];
@@ -474,7 +442,7 @@ test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení 
   assert.equal((await h(req('POST', '/api/stream', { cookies: c, body: { deviceId: 'druha', sdpOffer: 'v=0' } }))).status, 404, 'cizí kamera jako by nebyla');
   assert.equal(go2rtc.calls.length, 1);
   // nastavení je poskytovatele
-  for (const [m, p] of [['GET', '/api/schedules'], ['GET', '/api/watch'], ['GET', '/api/diag'], ['GET', '/api/rodina/uzivatele'], ['POST', '/api/clb']]) {
+  for (const [m, p] of [['GET', '/api/diag'], ['GET', '/api/rodina/uzivatele'], ['POST', '/api/clb']]) {
     assert.equal((await h(req(m, p, { cookies: c, body: m === 'POST' ? {} : undefined }))).status, 403, `${m} ${p}`);
   }
   const st = await (await h(req('GET', '/api/status', { cookies: c }))).json();
@@ -546,7 +514,7 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
     assert.equal(r.status, 403, akce); assert.match((await r.json()).error, /jen sleduje/);
   }
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c, body: { akce: 'setWatching', args: ['tapoc2020', 'Jana', true] } }))).status, 200);
-  for (const [m, p] of [['GET', '/api/rodina/uzivatele'], ['GET', '/api/watch'], ['GET', '/api/udalosti']]) assert.equal((await h(req(m, p, { cookies: c }))).status, 403, `${m} ${p}`);
+  for (const [m, p] of [['GET', '/api/rodina/uzivatele'], ['GET', '/api/udalosti']]) assert.equal((await h(req(m, p, { cookies: c }))).status, 403, `${m} ${p}`);
   // deaktivace účtu: přihlášený je odhlášen, přihlášení heslem odmítne srozumitelně; aktivace vrátí přístup
   const dz = await (await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/deaktivace`, { cookies: cookie(), body: { on: true } }))).json();
   assert.ok(dz.uzivatel.deaktivovan);

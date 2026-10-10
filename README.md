@@ -1,12 +1,14 @@
 # Famicura Tapo
 
 Kamera TP-Link Tapo → Famicura: živý obraz v prohlížeči, nahrávání, živá
-analýza pádů, plán nahrávání, sledované události (z analýzy i to, co kamera
-rozpozná sama) a zápis do CLB1.
+analýza pádů, události, které kamera rozpozná sama, a zápis do CLB1.
+Hlavní aplikace slouží k monitoringu a správě kamer; sledování událostí,
+nahrávání a upozornění nastavuje dispečink poskytovatele.
 
 Vzniklo jako klon [Famicura-Ring](https://github.com/jindrichhegmon/famicura-ring).
-Přehrávač, analýza, nahrávání, plány, sledované události, hlídání spořiče
-obrazovky a zápis do CLB1 jsou stejné. Vyměnil se zdroj obrazu, a protože
+Přehrávač, analýza, nahrávání, hlídání spořiče
+obrazovky a zápis do CLB1 jsou stejné (plán nahrávání a sledované události
+v hlavní aplikaci od 3.43 nejsou, nastavují se v dispečinku). Vyměnil se zdroj obrazu, a protože
 Tapo nemá cloudové API jako Ring, běží všechno na VPS.
 
 ## Jak to funguje
@@ -33,7 +35,7 @@ kamera Tapo ──RTSP──▶ Windows server ══ WireGuard ══▶ VPS: g
   poslouchá jen na `127.0.0.1`. Veřejný je jen port 8555 pro šifrovaná
   média.
 * **server.mjs** na VPS obsluhuje stránku, přihlášení heslem Famicura,
-  WebRTC (předává nabídku go2rtc), plány, sledované události a zápis do CLB1.
+  WebRTC (předává nabídku go2rtc), správu kamer a zápis do CLB1.
   Zároveň odebírá z kamery události, které rozpozná sama (níže).
 
 ### Události, které hlásí kamera sama
@@ -340,7 +342,7 @@ hodnota v `.env` obou aplikací; `vps-env.sh` ji vygeneruje a opíše
   neodemkne (`POST /api/nahravky/:id/odemknout`, jen rodina kamery; zapíše
   `OdemklKdo`, `OdemklCas` a řádek souhlasu do historie). Při „žádný obraz“
   se nenahrává nic a u události je důvod.
-- **Hlavní aplikace** pošle každou hotovou nahrávku (ruční, plán,
+- **Hlavní aplikace** pošle každou hotovou nahrávku (ruční,
   událost z analýzy) na `POST /api/nahravky?kamera=…` (tělo video/webm
   nebo mp4, až 64 MB) a server ji uloží na Disk poskytovatele kamery;
   odkaz je u nahrávky v seznamu. Složka v prohlížeči a CLB1 fungují dál.
@@ -531,7 +533,7 @@ serveru v UTC. Panel **Simulace** vlevo dole vyvolá pád, překročení
 čáry, SOS z náramku, výpadek kamery, žádost dispečera o plný obraz nebo
 noc (události jdou do dat tenanta jako skutečné, jen bez příznaku
 „skutečná“); tlačítko Vynulovat je jen v ukázce bez přihlášení, data
-poskytovatele se nenulují. Nastavení aplikace (plány, sledování, kamery)
+poskytovatele se nenulují. Nastavení serveru (kamery)
 to nemění.
 
 ### Poskytovatelé (tenanti) a databáze Péče doma plus
@@ -582,7 +584,7 @@ např. `22202480FAMICURA` = FamiCura s.r.o.). Do Softru se nepíše nic.
   (`GET /api/tenant?id=`), uloží do prohlížeče a z adresy ho odstraní.
   Každé API s daty (`/api/proto/*`, `/api/rodina/*`, `/api/devices`,
   `/api/stream*`, `/api/events`) pracuje jen s tenantem z cookie;
-  nastavení serveru (plány, sledování, diagnostika) má jen správce.
+  nastavení serveru (správa kamer, diagnostika) má jen správce.
 
 ### Přihlášení rodiny, účty a pozvánka SMS
 
@@ -955,7 +957,7 @@ Diagnostika uvidíte go2rtc, jestli kamera posílá obraz a připojení k CLB1.
 | složka | `/opt/famicura-tapo` (uživatel `jhnapps`) |
 | pm2 | `famicura-tapo` (server), `famicura-go2rtc` |
 | porty | 3112 (jen localhost, za Caddy), 8555 TCP+UDP (WebRTC), 51821 UDP (WireGuard), 1984 jen localhost (API go2rtc) |
-| stav | `.env`, `cameras.json`, `go2rtc.yaml`, `data/` (plány, sledované události). Nasazení je nepřepisuje. Data poskytovatelů (kamery, události, souhlasy, účty rodiny) jsou v databázi PeceDomaPlus. |
+| stav | `.env`, `cameras.json`, `go2rtc.yaml`, `data/` (starší plány a sledované události, od 3.43 se nepoužívají). Nasazení je nepřepisuje. Data poskytovatelů (kamery, události, souhlasy, účty rodiny) jsou v databázi PeceDomaPlus. |
 | go2rtc | verze 1.9.14, stažená z GitHubu a ověřená SHA-256 |
 
 Logy:
@@ -1021,7 +1023,7 @@ založil `node scripts/init-db.mjs`.
 ## Vývoj a testy
 
 ```
-npm test          # server, přihlášení, go2rtc klient, kamery, plány, analýza, ONVIF, obraz přes HTTPS
+npm test          # server, přihlášení, go2rtc klient, kamery, správa kamer, analýza, ONVIF, obraz přes HTTPS
 ```
 
 `test/server.test.mjs` spouští skutečný `server.mjs` proti falešnému go2rtc
@@ -1037,9 +1039,8 @@ Celou cestu obrazu jsme ověřili naostro: falešná kamera (ffmpeg, RTSP
 s heslem, H.264 Main + G.711), dál go2rtc 1.9.14 s konfigurací z
 `scripts/set-camera.mjs`, pak `server.mjs` a nakonec prohlížeč s H.264
 (Electron/Chrome 152). Test zahrnoval přihlášení, diagnostiku, živý obraz
-1280×720 se zvukem, nahrávání, analýzu, plán, sledované události, události
-z falešné kamery ONVIF (v editoru je přesně to, co kamera umí; vypnutý
-pohyb se nezapíše, osoba ano, bez otevřené analýzy), výpadek obrazu
+1280×720 se zvukem, nahrávání, analýzu, události
+z falešné kamery ONVIF (bez otevřené analýzy), výpadek obrazu
 (kamera zabitá za běhu: do 10 s „Obraz se zastavil“ s údaji o přijatých
 datech, po návratu kamery „Spojení obnoveno“) a prohlížeč bez H.264 a
 bez WebGL. Pravidla brány na Linuxu i předávání
