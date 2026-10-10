@@ -106,13 +106,17 @@
      rule, so it carries the flag. */
   .hide{display:none !important}
   /* Správa kamer */
-  .sprava table{width:100%;min-width:760px;border-collapse:collapse;font-size:.9rem}
-  .sprava td code{white-space:nowrap}
-  .sprava th,.sprava td{text-align:left;padding:8px 6px;border-bottom:1px solid #eef2f6;vertical-align:top;overflow-wrap:anywhere}
-  .sprava th{color:#5a6b7d;font-weight:600;font-size:.8rem}
-  .sprava td.akce{white-space:nowrap}
-  .sprava td.akce button{min-height:36px;padding:6px 10px;font-size:.85rem;margin:2px 4px 2px 0}
-  .sprava .wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* každá kamera jako karta: název a ID, pak údaje v řádcích popisek–hodnota, dole tlačítka */
+  .sprava .kam{border:1px solid #dde4ea;border-radius:12px;padding:12px 14px;margin:0 0 10px;background:#fbfcfd}
+  .sprava .kam .hl{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;margin-bottom:8px}
+  .sprava .kam .hl .nazev{font-size:1.1rem;font-weight:700;color:#17212b}
+  .sprava .kam .hl code{font-size:.85rem;color:#5a6b7d;background:#eef2f6;padding:2px 7px;border-radius:6px}
+  .sprava .kam .udaje{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:.92rem;margin-bottom:10px}
+  .sprava .kam .udaje > span:nth-child(odd){color:#5a6b7d}
+  .sprava .kam .udaje > span:nth-child(even){overflow-wrap:anywhere}
+  .sprava .kam .akce{display:flex;flex-wrap:wrap;gap:8px}
+  .sprava .kam .akce button{min-height:38px;padding:6px 12px;font-size:.9rem}
+  @media (max-width:600px){.sprava .kam .udaje{grid-template-columns:1fr;gap:2px}.sprava .kam .udaje > span:nth-child(odd){font-size:.78rem;margin-top:4px}}
   .spravaForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px 14px;margin-top:12px;
     padding:14px;border:1px solid #dde4ea;border-radius:12px;background:#f7f9fb}
   .spravaForm label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:#5a6b7d}
@@ -170,18 +174,6 @@
   .view .skel input{width:22px;height:22px;min-height:22px;margin:0}
   .view .skel:has(input:disabled){opacity:.6;cursor:default}
 
-  #folderBox{border-bottom:1px solid #eef2f6;padding-bottom:12px}
-  #recordings{list-style:none;margin:0;padding:0}
-  #recordings .saved{color:#0b5c2e;font-size:.8rem;font-weight:700}
-  #recordings li{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
-                 justify-content:space-between;padding:12px 0;border-bottom:1px solid #eef2f6}
-  #recordings li:last-child{border-bottom:0}
-  #recordings .what{min-width:0;overflow-wrap:anywhere;flex:1 1 180px}
-  #recordings .what strong{display:block}
-  #recordings a{display:inline-block;background:#106fd5;color:#fff;font-weight:700;
-                border-radius:12px;padding:12px 18px;min-height:44px;line-height:20px;
-                text-decoration:none}
-
   #export{margin-top:14px;border-top:1px solid #eef2f6;padding-top:12px}
   #export summary{font-weight:700;cursor:pointer;padding:10px 0;min-height:44px;line-height:24px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -223,26 +215,6 @@
       <div id="devices" class="muted list" style="margin-top:12px">Zatím nenačteno.</div>
       <p id="viewsMsg" class="muted" style="margin:12px 0 0"></p>
       <p id="wakeMsg" class="muted" style="margin:8px 0 0"></p>
-    </div>
-
-    <div class="c" id="recCard">
-      <h2>Nahrávky</h2>
-
-      <div id="folderBox">
-        <p class="muted" style="margin:0 0 10px" id="folderMsg"></p>
-        <div class="row">
-          <button id="pickFolder" class="sec">Vybrat složku pro videa</button>
-          <button id="forgetFolder" class="sec hide">Zapomenout složku</button>
-        </div>
-        <label class="muted hide" id="autoDlBox" style="display:flex;align-items:center;gap:8px;margin-top:8px;min-height:44px">
-          <input type="checkbox" id="autoDl" style="width:22px;height:22px;min-height:22px;margin:0">
-          Každou hotovou nahrávku rovnou stáhnout (do složky Stažené soubory)
-        </label>
-      </div>
-
-      <p id="clbMsg" class="muted" style="margin:10px 0 0"></p>
-      <ul id="recordings" style="margin-top:14px"></ul>
-      <p id="recEmpty" class="muted" style="margin:12px 0 0">Zatím žádná nahrávka.</p>
     </div>
 
     <div id="streams"></div>
@@ -321,14 +293,16 @@
 
     <div class="c sprava" id="spravaCard">
       <h2>Správa kamer</h2>
-      <p class="muted" style="margin:0 0 10px">
+      <p class="muted" style="margin:0 0 12px">
         Zavedení kamery, přiřazení poskytovateli (tenantovi z Péče doma plus), heslo účtu TP-Link pro světlo
-        a odebrání kamery – totéž, co dělá <code>./deploy/vps-kamera.sh</code>, bez Terminálu a bez restartu serveru.
-        Hesla se nikdy nezobrazují; prázdné heslo u existující kamery znamená „ponechat“.
-        Adresa kamery: s bránou Mango nebo Raspberry přímo IP kamery v její síti (tunel WireGuard),
-        s Windows serverem v tunelu 10.77.0.2 (další místo 10.77.0.3…), s tunelem SSH 127.0.0.1 a porty 10554 / 12020.
+        a odebrání kamery – bez Terminálu a bez restartu serveru. Hesla se nikdy nezobrazují.
       </p>
-      <div class="wrap"><div id="spravaSeznam" class="muted">načítám…</div></div>
+      <details class="muted" style="margin:0 0 12px"><summary style="cursor:pointer">Jakou adresu kamery zadat</summary>
+        <p style="margin:6px 0 0">S bránou Mango nebo Raspberry přímo IP kamery v její síti (tunel WireGuard).
+        S Windows serverem v tunelu 10.77.0.2 (další místo 10.77.0.3…). S tunelem SSH 127.0.0.1 a porty 10554 / 12020.
+        Prázdné heslo u existující kamery znamená „ponechat“. Totéž umí z Terminálu <code>./deploy/vps-kamera.sh</code>.</p>
+      </details>
+      <div id="spravaSeznam" class="muted">načítám…</div>
       <div class="row" style="margin-top:12px">
         <button id="spravaNova">Nová kamera</button>
         <button id="spravaObnov" class="sec">Obnovit seznam</button>
@@ -373,12 +347,10 @@
 </div>
 
 <script type="module">
-import { fmtClock, createLogEntry, boundFrom, filterLog, logToCsv, csvFilename, fmtSize } from '/analyzer.js';
+import { fmtClock, createLogEntry, boundFrom, filterLog, logToCsv, csvFilename } from '/analyzer.js';
 import { CameraView } from '/camera-view.js';
 import { cameraEventLabel } from '/watch.js';
 import { WakeKeeper } from '/wake.js';
-import { isSupported as folderSupported, pickFolder, loadHandle, saveHandle,
-         forgetHandle, ensurePermission, writeFile } from '/folder.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -500,18 +472,16 @@ function renderSprava(b) {
   pole('tenantText').classList.toggle('hide', !rucne);
 
   if (!spravaKamery.length) { $('spravaSeznam').innerHTML = '<span class="muted">Na serveru zatím není žádná kamera.</span>'; return; }
-  $('spravaSeznam').innerHTML = `<table>
-    <tr><th>ID</th><th>Název</th><th>Adresa</th><th>Účet kamery</th><th>Poskytovatel</th><th>Místo</th><th>Světlo</th><th></th></tr>
-    ${spravaKamery.map((k) => `<tr data-id="${esc(k.id)}">
-      <td><code>${esc(k.id)}</code></td><td>${esc(k.name)}</td>
-      <td>${esc(k.ip)}${k.rtspPort !== 554 ? ':' + esc(k.rtspPort) : ''} <span class="muted">${k.stream === 'stream2' ? 'kvalita 2' : 'kvalita 1'}</span></td>
-      <td>${esc(k.user)}</td>
-      <td>${k.tenant ? tenantNazev(k.tenant) : '<span class="bad">bez poskytovatele</span>'}</td>
-      <td>${esc(k.place)}</td>
-      <td>${k.svetloUcet ? `<span class="muted">účet TP-Link „${esc(k.svetloUcet)}“</span>` : '<span class="muted">účet kamery</span>'}</td>
-      <td class="akce"><button type="button" class="sec" data-akce="upravit">Upravit</button><button type="button" class="sec" data-akce="tenant">Poskytovatel</button><button type="button" class="sec" data-akce="zkouska">Zkouška obrazu</button><button type="button" class="danger" data-akce="smazat">Smazat</button></td>
-    </tr>`).join('')}
-  </table>`;
+  $('spravaSeznam').innerHTML = spravaKamery.map((k) => `<div class="kam" data-id="${esc(k.id)}">
+      <div class="hl"><span class="nazev">${esc(k.name)}</span><code>${esc(k.id)}</code></div>
+      <div class="udaje">
+        <span>Adresa</span><span>${esc(k.ip)}${k.rtspPort && k.rtspPort !== 554 ? ':' + esc(k.rtspPort) : ''}${k.onvifPort && k.onvifPort !== 2020 ? ` <span class="muted">(ONVIF ${esc(k.onvifPort)})</span>` : ''} · ${k.stream === 'stream2' ? 'kvalita 2 (nízké rozlišení)' : 'kvalita 1 (plné rozlišení)'}</span>
+        <span>Účet kamery</span><span>${esc(k.user)}</span>
+        <span>Poskytovatel</span><span>${k.tenant ? tenantNazev(k.tenant) : '<span class="bad">bez poskytovatele</span>'}${k.place ? ` · ${esc(k.place)}` : ''}</span>
+        <span>Světlo</span><span>${k.svetloUcet ? `účet TP-Link „${esc(k.svetloUcet)}“` : 'účet kamery'}</span>
+      </div>
+      <div class="akce"><button type="button" class="sec" data-akce="upravit">Upravit</button><button type="button" class="sec" data-akce="tenant">Poskytovatel</button><button type="button" class="sec" data-akce="zkouska">Zkouška obrazu</button><button type="button" class="danger" data-akce="smazat">Smazat</button></div>
+    </div>`).join('');
 }
 
 async function loadSprava() {
@@ -617,7 +587,7 @@ spravaF.onsubmit = async (e) => {
 $('spravaSeznam').onclick = async (e) => {
   const btn = e.target.closest('button[data-akce]');
   if (!btn) return;
-  const id = btn.closest('tr').dataset.id;
+  const id = btn.closest('.kam').dataset.id;
   const k = spravaKamery.find((x) => x.id === id);
   if (!k) return;
   if (btn.dataset.akce === 'upravit') return spravaOtevri(k);
@@ -664,7 +634,6 @@ async function refreshStatus() {
   renderDiag(body);
   loadSprava();
   startEventPolling();
-  initFolder().catch(() => {});
 }
 
 $('loginForm').onsubmit = async (e) => {
@@ -846,14 +815,6 @@ document.addEventListener('visibilitychange', () => {
   else for (const v of views.values()) v.onPageHidden();
 });
 
-/* ---------- recordings ---------- */
-
-/*
- * Unattended runs produce several files, so each one gets its own row instead
- * of overwriting a single save link. The blobs live in this page only.
- */
-const recordings = [];
-
 /* ---------- CLB1 ---------- */
 
 /*
@@ -935,179 +896,29 @@ async function clbFlush() {
 }
 
 function showClb(text, bad) {
-  const el = $('clbMsg');
-  if (!el) return;
-  el.innerHTML = text ? (bad ? `<span class="bad">${esc(text)}</span>` : esc(text)) : '';
+  if (text) showPlan(text, bad);
 }
 
 setInterval(() => { clbFlush().catch(() => {}); }, CLB_FLUSH_MS);
 
-/* ---------- writing into the Google Drive folder ---------- */
-
-let folderHandle = null;
-
-function folderName() {
-  return folderHandle?.name || null;
-}
-
-function showFolder(text, bad) {
-  $('folderMsg').innerHTML = bad ? `<span class="bad">${esc(text)}</span>` : esc(text);
-}
-
 /*
- * Safari (Mac and iPhone) cannot write into a folder; the nearest thing is to
- * download every finished recording at once, into the browser's downloads
- * folder. A per-browser preference, off until the person turns it on.
+ * Hotová nahrávka (ruční z živého obrazu, nebo po události z analýzy) jde na
+ * server poskytovatele kamery (src/nahravky.mjs: úložiště na serveru / Google
+ * Disk) a řádek o ní do CLB1. V prohlížeči se nic nedrží; dispečink ji má
+ * v seznamu Nahrávky v detailu kamery. zdroj ('plan' | 'rucne') určuje kamera.
  */
-const AUTO_DL_KEY = 'famicura.autoStahovat';
-function autoDownloadOn() {
-  try { return localStorage.getItem(AUTO_DL_KEY) === '1'; } catch { return false; }
-}
-$('autoDl').onchange = () => {
-  try { localStorage.setItem(AUTO_DL_KEY, $('autoDl').checked ? '1' : '0'); } catch { /* private mode */ }
-  if ($('autoDl').checked) for (const rec of recordings) if (!rec.saved) downloadRecording(rec);
-};
-function downloadRecording(rec) {
-  rec.link.click();
-  rec.saved = 'stažené soubory';
-  rec.savedEl.textContent = 'staženo';
-}
-
-async function initFolder() {
-  if (!folderSupported()) {
-    $('pickFolder').classList.add('hide');
-    $('autoDlBox').classList.remove('hide');
-    $('autoDl').checked = autoDownloadOn();
-    showFolder('Tento prohlížeč neumí zapisovat do složky. Videa zůstanou ke stažení '
-             + 'v seznamu níže, nebo se stáhnou samy (zatržítko). Přímý zápis do složky na Disku umí Chrome nebo Edge na počítači.');
-    return;
-  }
-
-  folderHandle = await loadHandle();
-  if (!folderHandle) {
-    showFolder('Videa se zatím jen nabízejí ke stažení. Vyberte složku a budou se do ní ukládat sama.');
-    return;
-  }
-
-  $('forgetFolder').classList.remove('hide');
-  // A new session needs a gesture before the browser re-grants access.
-  const granted = await ensurePermission(folderHandle, false);
-  showFolder(granted
-    ? `Videa se ukládají do složky ${folderHandle.name}.`
-    : `Složka ${folderHandle.name} čeká na potvrzení – klepněte na Vybrat složku.`, !granted);
-  if (granted) saveUnsaved();
-}
-
-/*
- * Whatever finished while the folder was not available - before it was picked,
- * or before the browser re-granted access after a reload - is written as soon
- * as it is. Checked again every minute, so a failed write gets another go.
- */
-async function saveUnsaved() {
-  if (!folderHandle || !await ensurePermission(folderHandle, false)) return;
-  for (const rec of recordings) {
-    if (rec.saved) continue;
-    const folder = await writeToFolder(rec);
-    if (folder) { rec.saved = folder; rec.savedEl.textContent = `uloženo do ${folder}`; }
-  }
-}
-setInterval(() => { saveUnsaved().catch(() => {}); }, 60000);
-
-$('pickFolder').onclick = async () => {
-  try {
-    // An existing handle only needs the permission renewing, not re-picking.
-    if (folderHandle && await ensurePermission(folderHandle, true)) {
-      showFolder(`Videa se ukládají do složky ${folderHandle.name}.`);
-      saveUnsaved();
-      return;
-    }
-    folderHandle = await pickFolder();
-    $('forgetFolder').classList.remove('hide');
-    showFolder(`Videa se ukládají do složky ${folderHandle.name}.`);
-    saveUnsaved();
-  } catch (e) {
-    if (e.name !== 'AbortError') showFolder(`Složku se nepodařilo použít: ${e.message}`, true);
-  }
-};
-
-$('forgetFolder').onclick = async () => {
-  await forgetHandle();
-  folderHandle = null;
-  $('forgetFolder').classList.add('hide');
-  showFolder('Složka zapomenuta. Videa zůstanou jen ke stažení.');
-};
-
-async function writeToFolder(rec) {
-  if (!folderHandle) return null;
-  if (!await ensurePermission(folderHandle, false)) return null;
-  try {
-    await writeFile(folderHandle, rec.name, rec.blob);
-    return folderHandle.name;
-  } catch (e) {
-    showFolder(`Zápis do složky selhal: ${e.message}`, true);
-    return null;
-  }
-}
-
-// zdroj ('plan' | 'rucne') is fixed by the camera when the recording starts.
 function addRecording({ blob, device, from, to, ext, zdroj, udalost }) {
-  const url = URL.createObjectURL(blob);
   const stamp = from.toISOString().replace(/[:.]/g, '-');
   const safe = (device?.name || 'kamera').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
-  const rec = { url, blob, device, from, to, saved: null,
-                name: `famicura-${safe}-${stamp}.${ext}` };
-  recordings.unshift(rec);
-
-  const li = document.createElement('li');
-  const what = document.createElement('div');
-  what.className = 'what';
-  const title = document.createElement('strong');
-  title.textContent = device?.name || 'Kamera';
-  const when = document.createElement('span');
-  when.className = 'muted';
-  when.textContent = `${fmtClock(from)}–${fmtClock(to)} · ${fmtSize(blob.size)}`
-    + (zdroj === 'plan' ? ' · plán' : udalost ? ` · událost: ${udalost.text || udalost.kind}${udalost.predS ? ` (${udalost.predS} s před ní)` : ''}` : '');
-  what.append(title, when);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = rec.name;
-  a.textContent = 'Uložit';
-  rec.link = a;
-
-  const share = document.createElement('button');
-  share.className = 'sec';
-  share.textContent = 'Sdílet';
-  share.onclick = () => shareRecording(rec);
-
-  const saved = document.createElement('span');
-  saved.className = 'saved';
-  rec.savedEl = saved;
-
-  const actions = document.createElement('div');
-  actions.className = 'row';
-  actions.append(a, share);
-  what.append(saved);
-  li.append(what, actions);
-
-  $('recordings').prepend(li);
-  $('recEmpty').classList.add('hide');
-
-  // Put it in the folder, then tell CLB1 where it went.
-  if (!folderSupported() && autoDownloadOn()) downloadRecording(rec);
-  writeToFolder(rec).then((folder) => {
-    if (folder) { rec.saved = folder; saved.textContent = `uloženo do ${folder}`; }
-    clbSend({
-      typ: 'nahravka',
-      od: from.toISOString(), do: to.toISOString(),
-      kameraId: device?.id || null, kameraNazev: device?.name || null,
-      velikostB: blob.size, soubor: rec.name, slozka: folder, zdroj
-    });
+  const rec = { blob, device, from, to, name: `famicura-${safe}-${stamp}.${ext}` };
+  clbSend({
+    typ: 'nahravka',
+    od: from.toISOString(), do: to.toISOString(),
+    kameraId: device?.id || null, kameraNazev: device?.name || null,
+    velikostB: blob.size, soubor: rec.name, slozka: null, zdroj
   });
-  // Poskytovatel kamery s adresářem na Google Disku: server tam nahrávku uloží taky (src/nahravky.mjs).
   uploadToDisk(rec, { zdroj, udalost }).catch(() => {});
 }
-
 /* ---------- nahrávky na Google Disk poskytovatele (účet z Péče doma plus) ---------- */
 const diskStavCache = new Map();   // kameraId → { cas, b }
 async function diskStav(kameraId) {
@@ -1125,24 +936,17 @@ async function uploadToDisk(rec, { zdroj, udalost }) {
   const q = new URLSearchParams({ kamera: id, cas: String(rec.from.getTime()), delkaS: String(Math.round((rec.to - rec.from) / 1000)), zdroj: zdroj === 'plan' ? 'plan' : udalost ? 'udalost' : 'rucni',
     text: udalost ? `Událost: ${udalost.text || udalost.kind}` : zdroj === 'plan' ? 'Nahrávka podle plánu.' : 'Ruční nahrávka z hlavní aplikace.' });
   const mime = /webm/.test(rec.blob.type) ? 'video/webm' : 'video/mp4';
-  rec.savedEl.textContent = (rec.saved ? `uloženo do ${rec.saved} · ` : '') + 'nahrávám na Google Disk…';
+  const kdy = `${rec.device?.name || 'Kamera'} ${fmtClock(rec.from)}–${fmtClock(rec.to)}`;
+  showPlan(`Nahrávka ${kdy}: ukládám na server…`);
   try {
     const r = await fetch('/api/nahravky?' + q, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': mime }, body: rec.blob });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
     rec.disk = j.nahravka;
-    rec.savedEl.innerHTML = (rec.saved ? `uloženo do ${esc(rec.saved)} · ` : '') + `<a href="${esc(j.nahravka.url)}" target="_blank" rel="noopener">na Google Disku poskytovatele</a>`;
+    showPlan(`Nahrávka ${kdy} je uložená na serveru (dispečink → detail kamery → Nahrávky).`);
   } catch (e) {
-    rec.savedEl.textContent = (rec.saved ? `uloženo do ${rec.saved} · ` : '') + `Google Disk: ${e.message}`;
+    showPlan(`Nahrávka ${kdy} se na server neuložila: ${e.message}`, true);
   }
-}
-
-async function shareRecording(rec) {
-  const file = new File([rec.blob], rec.name, { type: rec.blob.type });
-  try {
-    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'Famicura Tapo' });
-    else rec.link.click();                  // this recording, not the newest one
-  } catch (e) { /* the user dismissed the sheet */ }
 }
 
 /* ---------- what the camera reports itself ---------- */

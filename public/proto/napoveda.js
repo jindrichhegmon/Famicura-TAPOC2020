@@ -330,6 +330,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.47 (10. 10. 2026)**: hlavní aplikace má správu kamer jako přehledné karty (název, ID, adresa, účet, poskytovatel, světlo, tlačítka) a nemá už kartu Nahrávky – nahrávka z ní jde rovnou na server a je tady v dispečinku v detailu kamery.
 - **Verze 3.46 (10. 10. 2026)**: v ⚙ Nastavení dispečinku je dole tlačítko Otevřít hlavní aplikaci (nová karta, heslo Famicura) – správa kamer, diagnostika a živý obraz pro správce serveru.
 - **Verze 3.45 (10. 10. 2026)**: nápověda dispečinku je přehledně členěná – každé téma má nadpisy, odrážky, číslované kroky a zvýrazněná upozornění (v panelu Nápověda, v odpovědích asistenta i v tisku do PDF); obsah je stejný, jen čitelnější.
 - **Verze 3.44 (10. 10. 2026)**: nad dlaždicemi kamer je přepínač Malé okno / Velké okno / Seznam – hodně kamer najednou, velké dlaždice jako dosud, nebo řádky s malým náhledem; volba se pamatuje v prohlížeči.

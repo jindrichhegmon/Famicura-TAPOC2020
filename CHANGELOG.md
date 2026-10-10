@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.47 · 10. 10. 2026 · hlavní aplikace: čitelná správa kamer, bez karty Nahrávky
+
+- Správa kamer: místo stísněné tabulky je každá kamera na vlastní kartě –
+  název a ID, pod tím řádky Adresa (s kvalitou), Účet kamery, Poskytovatel
+  (s místem) a Světlo, dole tlačítka Upravit / Poskytovatel / Zkouška obrazu
+  / Smazat. Úvodní text je kratší, rada k adrese kamery je rozbalovací.
+- Karta **Nahrávky** (složka pro videa, stahování, seznam v prohlížeči) je
+  z hlavní aplikace pryč: nahrávka z živého obrazu nebo po události jde
+  rovnou na server poskytovatele kamery (a řádek do CLB1) a pod seznamem
+  kamer je jen hláška, že je uložená; nahrávky jsou v dispečinku v detailu
+  kamery. `public/folder.js` smazán.
+
 ## 3.46 · 10. 10. 2026 · hlavní aplikace z dispečinku
 
 - V ⚙ Nastavení dispečinku je dole část **Hlavní aplikace (správce

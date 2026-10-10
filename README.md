@@ -140,20 +140,18 @@ běží i ve chvíli, kdy okno prohlížeče není vidět – zakryté jiným ok
 minimalizované, zamčená obrazovka. Režimy soukromí a drátěný model
 existují jen na kresleném plátně, takže ty se nahrávají z plátna; plátno
 se ve skrytém okně nekreslí a nahrávka by byla prázdná. Prázdná nahrávka
-se do seznamu ani do složky nedává, místo ní je v logu řádek „Nahrávka …
+se neukládá, místo ní je v logu řádek „Nahrávka …
 je prázdná – okno prohlížeče nebylo vidět“. Obnova spojení ukončí
 nahrávku běžící z přenosu (další událost začne novou).
 
 ### Ukládání nahrávek
 
-V Chromu a Edgi na počítači se každá hotová nahrávka zapíše hned do složky
-zvolené tlačítkem **Vybrat složku pro videa** (typicky složka Disku Google,
-která ji sama nahraje). Co se nestihlo – nahrávky z doby, než byla složka
-vybraná, nebo než prohlížeč po obnovení stránky znovu potvrdil přístup – se
-dopíše, jakmile je složka k dispozici, a každou minutu se to zkouší znovu.
-Safari (Mac i iPhone) do složky zapisovat neumí; místo toho je tam
-zatržítko **Každou hotovou nahrávku rovnou stáhnout**, po němž jde každá
-nahrávka sama do složky Stažené soubory prohlížeče.
+Nahrávka pořízená v hlavní aplikaci (tlačítko Nahrávat u živého obrazu,
+nebo po události z analýzy) jde na server poskytovatele kamery
+(`POST /api/nahravky`, úložiště na serveru nebo Google Disk podle nastavení
+dispečinku) a řádek o ní do CLB1; hlavní aplikace jen oznámí, že je uložená.
+V prohlížeči se nic nedrží – karta Nahrávky se složkou pro videa a seznamem
+ke stažení je od 3.47 zrušená, nahrávky jsou v dispečinku v detailu kamery.
 
 Ruční nahrávku pořídí dispečink (Nahrát teď) i rodina u své kamery (Nahrát
 15 s v aplikaci rodiny, `POST /api/nahravky/rucni`); obojí zapíše řádek
