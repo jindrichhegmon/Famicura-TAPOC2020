@@ -11,7 +11,9 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   řádek **Výchozí** se stejnými políčky (hlídat, hodiny, nahrávat, SMS komu,
   e-mail komu). **Vše** dosadí tyhle hodnoty do všech událostí najednou,
   **Bez** u všech událostí zruší hlídání, hodiny, nahrávání i příjemce.
-  Jednotlivé řádky jdou pak doladit jako dřív.
+  Totéž je u každého sloupce zvlášť (Vše / Bez jen pro hlídání, jen pro
+  hodiny, nahrávání, příjemce SMS nebo e-mailů). Jednotlivé řádky jdou pak
+  doladit jako dřív.
 - Světlo kamery podle skutečné Tapo C560WS: kamera počítá pokusy o přihlášení
   (`time`/`max_time`) a po vyčerpání blokuje (`sec_left`), proto přihlášení
   jde jedním dotazem, blokace se pozná a server se kamery po neúspěchu na čas

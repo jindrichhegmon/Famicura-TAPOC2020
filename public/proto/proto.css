@@ -305,7 +305,7 @@ table.watch input[type=checkbox]{width:18px;height:18px}
 table.watch td.hod{white-space:nowrap}
 table.watch .okno{display:flex;gap:4px;align-items:center;margin:2px 0}
 table.watch .okno-dalsi{min-height:26px;padding:0 8px;font-size:.9rem;line-height:1}
-table.watch tr.vychozi td{background:#eef3f8;border-bottom:2px solid #c9d6e2}table.watch tr.vychozi.busy{opacity:.6}table.watch .vychozi-akce{display:flex;gap:6px;margin-top:4px}table.watch .vychozi-akce button{min-height:26px;padding:0 10px;font-size:.8rem}
+table.watch tr.vychozi td{background:#eef3f8;border-bottom:2px solid #c9d6e2;vertical-align:top}table.watch tr.vychozi.busy{opacity:.6}table.watch .vychozi-akce{display:flex;gap:4px;margin-top:4px}table.watch .vychozi-akce button{min-height:24px;padding:0 8px;font-size:.75rem;line-height:1}
 .demo{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#e7f1fb;border:1px solid #c7ddf3;border-radius:14px;padding:12px 14px;margin-top:14px}
 .demo b{display:block;font-size:1rem}
 .demo span{font-size:.9rem;color:var(--muted)}
