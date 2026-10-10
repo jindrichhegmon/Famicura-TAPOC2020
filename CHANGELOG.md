@@ -5,6 +5,20 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.41 · 10. 10. 2026 · dva dispečinky dvou poskytovatelů vedle sebe
+
+- Přihlášení má každý tenant ve vlastní cookie (`fam_tapo_<TENANT>`, správce
+  serveru bez tenanta základní `fam_tapo`). V jednom prohlížeči tak jdou
+  otevřít dispečinky dvou poskytovatelů v různých kartách a každá zůstane u
+  svého; dřív se obě přehodily na poslední přihlášení. Odhlášení v jedné kartě
+  nechá druhou přihlášenou. Kterého poskytovatele karta míní, server pozná
+  z `?tenant=` v adrese stránky (Referer), z hlavičky `x-famicura-tenant`
+  (posílá ji aplikace) nebo z `?tenant=` v adrese požadavku
+  (`tenantHint` v `src/session.mjs`). Přihlašovací stránka i dispečink proto
+  `?tenant=` v adrese nechávají, případně ho doplní. Starší cookie platí dál.
+- Odkaz na dispečink poskytovatele: `…/proto/dispecink.html?tenant=ID`.
+  Dva poskytovatelé = dvě karty se dvěma odkazy, stačí si je uložit do záložek.
+
 ## 3.40 · 10. 10. 2026 · výchozí řádek v Nastavení alertů (Vše / Bez), světlo kamery doladěné
 
 - Nastavení alertů (Sledování, nahrávání a upozornění): nad událostmi je

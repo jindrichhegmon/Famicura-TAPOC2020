@@ -137,7 +137,9 @@ const server = http.createServer(async (req, res) => {
       res.on('close', () => ctrl.abort());
       const r = await handle(new Request(url, { method: req.method, headers: req.headers, signal: ctrl.signal,
         body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }));
-      res.writeHead(r.status, Object.fromEntries(r.headers));
+      // Set-Cookie může být víc (odhlášení maže cookie tenanta i základní): jako pole, ne spojené čárkou
+      const hl = Object.fromEntries(r.headers); const sc = r.headers.getSetCookie?.() || []; if (sc.length > 1) hl['set-cookie'] = sc;
+      res.writeHead(r.status, hl);
       if (!r.body) { res.end(); return; }
       await pipeline(Readable.fromWeb(r.body), res).catch(() => res.destroy());
       return;
@@ -153,8 +155,8 @@ const server = http.createServer(async (req, res) => {
     // Dispečink a provoz jen pro dispečera tenanta (účet Péče doma plus) nebo správce se zvoleným tenantem.
     // Odkaz s jiným tenantem (?tenant=…) než má přihlášení má přednost: místo dispečinku jde přihlášení k tomu tenantovi (od 3.6).
     if (/^proto[/\\](dispecink|provoz)\.html$/.test(rel)) {
-      const prihlasen = dispecinkTenanta(req.headers);
       const chce = normTenant(url.searchParams.get('tenant') || '');
+      const prihlasen = dispecinkTenanta(req.headers, chce);
       if (!prihlasen || (chce && prihlasen.tenant !== chce)) file = path.join(PUBLIC, 'proto', 'prihlaseni.html');
     }
     // A folder (/proto/) serves its index.html, like any web server.

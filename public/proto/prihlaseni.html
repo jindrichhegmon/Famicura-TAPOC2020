@@ -69,7 +69,8 @@ async function start() {
   try {
     tenantInfo = await overTenanta(tenant);
     localStorage.setItem(TENANT_KEY, tenantInfo.id);
-    if (params.has('tenant')) { params.delete('tenant'); history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '')); }
+    // ?tenant= v adrese zůstává: podle něj server pozná, kterého poskytovatele karta míní (každý tenant má vlastní cookie, od 3.41)
+    if (!params.has('tenant')) { params.set('tenant', tenantInfo.id); history.replaceState(null, '', location.pathname + '?' + params); }
     $('gKdo').textContent = `Poskytovatel: ${tenantInfo.nazev || tenantInfo.id} (${tenantInfo.id})`;
     $('gKdoAdmin').textContent = $('gKdo').textContent;
     // Přihlášení u jiného poskytovatele v tomhle prohlížeči: odkaz s tenantem má přednost, ale ať je jasné, proč se hlásí znovu.

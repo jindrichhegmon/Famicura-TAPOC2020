@@ -16,6 +16,8 @@ function renderHlavicka() {
   const h = sim.poskytovatel;
   $('hlavicka').textContent = [h.nazev, h.telefon, h.dispecer, h.smena, h.zaloha ? `záloha: ${h.zaloha}` : ''].filter(Boolean).join(' · ');
   if (JA) $('jaInfo').textContent = `${JA.tenant ? `${JA.tenant.nazev || JA.tenant.id} (${JA.tenant.id})` : 'bez poskytovatele'} · přihlášen(a): ${JA.jmeno}${JA.role === 'admin' ? ' (správce serveru)' : ''}`;
+  // ?tenant= v adrese: podle něj server vybere přihlášení tohoto poskytovatele, i když je v prohlížeči přihlášených víc (každý tenant má vlastní cookie)
+  if (JA?.tenant?.id) { const q = new URLSearchParams(location.search); if (q.get('tenant') !== JA.tenant.id) { q.set('tenant', JA.tenant.id); history.replaceState(null, '', location.pathname + '?' + q); } }
   renderSmena();
 }
 /** Karta Směna: text z nastavení a čísla spočítaná z dnešních alertů (ne vymyšlená). */

@@ -11,6 +11,13 @@
  * je jen v .env na VPS. Cookie je HttpOnly a Secure, stránka i API běží na
  * jedné adrese, takže nikam jinam neputuje. Správce a dispečer platí 12 hodin,
  * rodina na telefonu 30 dní.
+ *
+ * Od 3.41 má každý tenant vlastní cookie (fam_tapo_<TENANT>), správce serveru
+ * bez tenanta základní fam_tapo. V jednom prohlížeči tak jedou vedle sebe
+ * dispečinky dvou poskytovatelů: který tenant požadavek míní, se pozná z
+ * hlavičky x-famicura-tenant, z ?tenant= v adrese požadavku, nebo z Referer
+ * stránky (?tenant= v adrese dispečinku / aplikace rodiny) – tenantHint().
+ * Starší cookie fam_tapo s tenantem v subjektu platí dál.
  */
 import crypto from 'node:crypto';
 import { normTenant } from './tabulky.mjs';
@@ -37,14 +44,17 @@ export function shodne(a, b) {
   return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
 }
 
-function setCookie(expiresAt, subjekt, maxAgeS) {
-  return `${COOKIE}=${expiresAt}.${subjekt}.${podpis(expiresAt, subjekt)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeS}`;
+/** Jméno cookie: základní pro správce bez tenanta, jinak s tenantem (každý tenant zvlášť, ať jdou dispečinky vedle sebe). */
+export const jmenoCookie = (tenant = '') => { const t = normTenant(tenant); return t ? `${COOKIE}_${t}` : COOKIE; };
+
+function setCookie(expiresAt, subjekt, maxAgeS, tenant = '') {
+  return `${jmenoCookie(tenant)}=${expiresAt}.${subjekt}.${podpis(expiresAt, subjekt)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeS}`;
 }
 
 /** Správce serveru heslem Famicura; s tenantem, když si ho zvolil (dispečink toho tenanta). */
 export function cookie(now = Date.now(), tenant = '') {
   const t = normTenant(tenant);
-  return setCookie(now + TTL_MS, t ? `a:${t}` : 'admin', TTL_MS / 1000);
+  return setCookie(now + TTL_MS, t ? `a:${t}` : 'admin', TTL_MS / 1000, t);
 }
 
 /** Dispečer tenanta (uživatel Péče doma plus). Jméno jde do cookie (base64url), aby se zapisovalo k alertům a poznámkám. */
@@ -52,31 +62,58 @@ export function cookieDispecer(tenant, uid, jmeno, now = Date.now()) {
   const t = normTenant(tenant); if (!t) throw new Error('Neplatný tenant.');
   const u = String(uid ?? '0'); if (!/^[0-9a-z]{1,20}$/i.test(u)) throw new Error('Neplatné id uživatele.');
   const j = Buffer.from(String(jmeno || '').slice(0, 80), 'utf8').toString('base64url');
-  return setCookie(now + TTL_MS, `d:${t}:${u}:${j}`, TTL_MS / 1000);
+  return setCookie(now + TTL_MS, `d:${t}:${u}:${j}`, TTL_MS / 1000, t);
 }
 
 /** Uživatel rodiny (id z uzivatele.mjs) u svého tenanta. */
 export function cookieRodina(tenant, id, now = Date.now()) {
   const t = normTenant(tenant); if (!t) throw new Error('Neplatný tenant.');
   if (!ID_RE.test(id)) throw new Error('Neplatné id uživatele.');
-  return setCookie(now + TTL_RODINA_MS, `r:${t}:${id}`, TTL_RODINA_MS / 1000);
+  return setCookie(now + TTL_RODINA_MS, `r:${t}:${id}`, TTL_RODINA_MS / 1000, t);
 }
 
-/** Odhlášení: cookie se smaže. */
-export function odhlaseni() {
-  return `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+/** Odhlášení: smaže cookie tenanta (když je známý) i základní – obě hodnoty Set-Cookie. */
+export function odhlaseni(tenant = '') {
+  const smaz = (n) => `${n}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+  const t = normTenant(tenant);
+  return t ? [smaz(jmenoCookie(t)), smaz(COOKIE)] : smaz(COOKIE);
 }
+
+/** Tenant, který požadavek míní: hlavička x-famicura-tenant, ?tenant= v adrese, nebo ?tenant= v Referer stránky. */
+export function tenantHint(headers, url = null) {
+  const h = (n) => (headers?.get ? headers.get(n) : headers?.[n]) || '';
+  const z = normTenant(h('x-famicura-tenant')); if (z) return z;
+  try { if (url) { const t = normTenant(new URL(url, 'http://x').searchParams.get('tenant') || ''); if (t) return t; } } catch { /* bez adresy */ }
+  try { const ref = h('referer'); if (ref) { const t = normTenant(new URL(ref).searchParams.get('tenant') || ''); if (t) return t; } } catch { /* bez referer */ }
+  return '';
+}
+
+const vsechnyCookies = (raw) => { const out = []; for (const m of raw.matchAll(new RegExp(`(?:^|;\\s*)(${COOKIE}(?:_[A-Z0-9]{4,16})?)=([^;]+)`, 'g'))) out.push([m[1], m[2]]); return out; };
 
 /**
  * Kdo je přihlášen: { role: 'admin', tenant: '' | ID } | { role: 'dispecer', tenant, id, jmeno }
  * | { role: 'rodina', tenant, id } | null.
+ * hint = tenant, který stránka míní (tenantHint): vezme se jeho cookie; bez něj základní cookie správce,
+ * jinak jediná (první) cookie tenanta. Přihlášení k jinému tenantovi se pro stránku s hintem nepoužije.
  */
-export function kdo(headers) {
+export function kdo(headers, hint = '') {
   const raw = headers.get ? (headers.get('cookie') || '') : (headers.cookie || '');
-  const m = raw.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`));
-  if (!m) return null;
+  const cookies = vsechnyCookies(raw);
+  if (!cookies.length) return null;
+  const t = normTenant(hint);
+  const podle = (jmeno) => { const c = cookies.find((x) => x[0] === jmeno); return c ? precti(c[1]) : null; };
+  if (t) {
+    const vlastni = podle(jmenoCookie(t)); if (vlastni) return vlastni;
+    const zakladni = podle(COOKIE); if (zakladni && (zakladni.tenant === t || !zakladni.tenant)) return zakladni;   // starší cookie, nebo správce bez tenanta
+    return null;
+  }
+  const zakladni = podle(COOKIE); if (zakladni) return zakladni;
+  for (const c of cookies) { const k = precti(c[1]); if (k) return k; }
+  return null;
+}
 
-  const hodnota = decodeURIComponent(m[1]);
+function precti(hodnotaRaw) {
+  const hodnota = decodeURIComponent(hodnotaRaw);
   const prvni = hodnota.indexOf('.'), posledni = hodnota.lastIndexOf('.');
   if (prvni < 0 || posledni <= prvni) {
     // starší dvoudílná cookie ("<expiresAt>.<podpis>") platí jako správce
@@ -98,13 +135,13 @@ export function kdo(headers) {
 }
 
 /** Přihlášen heslem Famicura (hlavní aplikace: nastavení serveru). */
-export function prihlasen(headers) {
-  return kdo(headers)?.role === 'admin';
+export function prihlasen(headers, hint = '') {
+  return kdo(headers, hint)?.role === 'admin';
 }
 
 /** Smí do dispečinku tenanta: dispečer tenanta, nebo správce serveru se zvoleným tenantem. */
-export function dispecinkTenanta(headers) {
-  const k = kdo(headers);
+export function dispecinkTenanta(headers, hint = '') {
+  const k = kdo(headers, hint);
   if (!k) return null;
   if (k.role === 'dispecer') return k;
   if (k.role === 'admin' && k.tenant) return { ...k, jmeno: 'Správce' };

@@ -233,6 +233,20 @@ smí každý, kdo kameru smí vidět (rodina jen svou); jeden pohyb na kameru
 najednou (409), kamera bez PTZ nebo bez odpovědi 502. Kříž šipek je na
 obraze v detailu dispečinku a v aplikaci rodiny (`.ptz` v `proto.css`).
 
+### Dva poskytovatelé vedle sebe (od 3.41)
+
+Každý tenant má vlastní cookie (`fam_tapo_<TENANT>`; správce bez tenanta
+základní `fam_tapo`), takže v jednom prohlížeči běží dispečinky dvou
+poskytovatelů v různých kartách. Kterou cookie požadavek míní, určuje
+`tenantHint(headers, url)` v `src/session.mjs`: hlavička
+`x-famicura-tenant` (posílá `api()` v `sim.js` z `?tenant=` stránky),
+`?tenant=` v adrese požadavku, nebo `?tenant=` v `Referer` (stránky
+`?tenant=` v adrese nechávají; `Referrer-Policy: same-origin` ho k API
+pouští). Bez hintu platí základní cookie, jinak první cookie tenanta;
+cookie jiného tenanta se pro stránku s hintem nepoužije. Odhlášení maže
+cookie tenanta i základní (dvě `Set-Cookie`, `server.mjs` je posílá jako
+pole). Starší `fam_tapo` s tenantem v subjektu platí dál.
+
 ### Světlo kamery (od 3.39)
 
 Kamery Tapo s bílým reflektorem (C320WS, C520WS, C560WS…) rozsvítí

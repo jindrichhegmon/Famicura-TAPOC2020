@@ -34,7 +34,10 @@ async function api(path, body) {
   // server, který neodpoví do půl minuty, je chyba, ne zamrzlá stránka
   const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined;
   let r;
-  try { r = await fetch(path, body === undefined ? { cache: 'no-store', signal } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal }); }
+  // tenant z adresy stránky jde i hlavičkou: server podle něj vybere přihlášení tohoto poskytovatele (víc dispečinků vedle sebe)
+  const t = new URLSearchParams(location.search).get('tenant') || '';
+  const th = t ? { 'x-famicura-tenant': t } : {};
+  try { r = await fetch(path, body === undefined ? { cache: 'no-store', signal, headers: th } : { method: 'POST', headers: { 'content-type': 'application/json', ...th }, body: JSON.stringify(body), signal }); }
   catch (e) { const err = new Error(e && e.name === 'TimeoutError' ? 'Server neodpověděl do 30 s.' : `Server je nedostupný (${e && e.message || 'síť'}).`); err.status = 0; throw err; }
   let data = {}; try { data = await r.json(); } catch { /* bez těla */ }
   if (!r.ok) { const e = new Error(data.error || `Chyba serveru (${r.status})`); e.status = r.status; throw e; }

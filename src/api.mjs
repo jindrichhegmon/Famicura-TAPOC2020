@@ -55,7 +55,7 @@
  * Všechno kromě health, login, aktivace a odhlášení chce přihlášení. Uživatel
  * rodiny smí jen obraz a události svých kamer; nastavení je poskytovatele.
  */
-import { kdo, cookie, cookieRodina, cookieDispecer, odhlaseni, hesloSedi } from './session.mjs';
+import { kdo as kdoSession, cookie, cookieRodina, cookieDispecer, odhlaseni, hesloSedi, tenantHint } from './session.mjs';
 import { createUzivatele, textPozvanky, textZadosti, formatTelefon, normalizeTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
 import { createAsistent } from './asistent.mjs';
@@ -77,9 +77,12 @@ const APLIKACE = 'famicura-tapo';
 
 const POVINNE = ['FAMICURA_PASSWORD', 'SESSION_KEY'];
 
-const json = (body, status = 200, headers = {}) =>
-  new Response(JSON.stringify(body), { status, headers: {
-    'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers } });
+const json = (body, status = 200, headers = {}) => {
+  // víc hodnot jedné hlavičky (dvě Set-Cookie při odhlášení) = pole
+  const h = new Headers({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  for (const [k, v] of Object.entries(headers)) { if (Array.isArray(v)) for (const x of v) h.append(k, x); else h.set(k, v); }
+  return new Response(JSON.stringify(body), { status, headers: h });
+};
 
 /** "tapoc2020=Pokoj 12; druha=Chodba" → { tapoc2020: 'Pokoj 12', druha: 'Chodba' } */
 export function cameraNames(raw = process.env.CAMERA_NAMES || '') {
@@ -186,7 +189,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
 
       if (m === 'GET' && path === '/api/status') {
         const missing = POVINNE.filter((k) => !process.env[k]);
-        if (kdo(req.headers)?.role !== 'admin') return json({ ok: true, authenticated: false, missing });
+        if (kdoSession(req.headers, tenantHint(req.headers, req.url))?.role !== 'admin') return json({ ok: true, authenticated: false, missing });
 
         const out = { ok: true, authenticated: true, missing, go2rtc: { ok: false }, cameras: [] };
         try {
@@ -227,7 +230,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (u.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 403);
         return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.tenant, u.id) });
       }
-      if (m === 'POST' && path === '/api/rodina/odhlaseni') return json({ ok: true }, 200, { 'Set-Cookie': odhlaseni() });
+      if (m === 'POST' && path === '/api/rodina/odhlaseni') { const hint = tenantHint(req.headers, req.url); return json({ ok: true }, 200, { 'Set-Cookie': odhlaseni(hint || kdoSession(req.headers)?.tenant || '') }); }
       // Odkaz z SMS klepnutý podruhé: stránka se zeptá, zda pozvánka ještě platí, a jinak rovnou nabídne přihlášení.
       if (m === 'GET' && path === '/api/rodina/pozvanka') {
         const token = url.searchParams.get('token') || '';
@@ -235,13 +238,14 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         return json({ ok: true, ...(await uzivatele.pozvanka(token)) });
       }
 
-      const ja = kdo(req.headers);
+      // tenant, který stránka míní (?tenant= v adrese dispečinku / aplikace rodiny, přes Referer nebo hlavičku): vybere se jeho cookie
+      const ja = kdoSession(req.headers, tenantHint(req.headers, req.url));
       if (!ja) return json({ ok: false, error: 'Přihlaste se.' }, 401);
       const tenant = ja.tenant || '';
       // A family login outlives the account: a deleted user is logged out at once.
       const rodina = ja.role === 'rodina' ? await uzivatele.pro(tenant).podleId(ja.id) : null;
-      if (ja.role === 'rodina' && !rodina) return json({ ok: false, error: 'Účet už neexistuje. Požádejte poskytovatele o novou pozvánku.' }, 401, { 'Set-Cookie': odhlaseni() });
-      if (rodina?.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 401, { 'Set-Cookie': odhlaseni() });
+      if (ja.role === 'rodina' && !rodina) return json({ ok: false, error: 'Účet už neexistuje. Požádejte poskytovatele o novou pozvánku.' }, 401, { 'Set-Cookie': odhlaseni(tenant) });
+      if (rodina?.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 401, { 'Set-Cookie': odhlaseni(tenant) });
       // Mobilní dispečer: účet rodiny s rolí dispecer – vidí všechny kamery tenanta, ale nic nenastavuje (jen sleduje).
       const mobilniDispecer = !!rodina && rodina.role === 'dispecer';
       const jenSleduje = () => json({ ok: false, error: 'Dispečer v mobilní aplikaci jen sleduje, nic nenastavuje.' }, 403);

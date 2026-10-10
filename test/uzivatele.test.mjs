@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createUzivatele, normalizeTelefon, formatTelefon, hashHesla, hesloOdpovida, overHeslo, textPozvanky, POZVANKA_TTL_MS } from '../src/uzivatele.mjs';
-import { cookieRodina, cookieDispecer, cookie, kdo, prihlasen, odhlaseni, dispecinkTenanta } from '../src/session.mjs';
+import { cookieRodina, cookieDispecer, cookie, kdo, prihlasen, odhlaseni, dispecinkTenanta, tenantHint, jmenoCookie } from '../src/session.mjs';
 
 process.env.SESSION_KEY = 'testovaci-klic';
 
@@ -162,4 +162,31 @@ test('jeden telefon = jeden účet: rodině jde přidat roli dispečera (nastavR
   const r2 = await u.vytvor({ jmeno: 'Bez kamer', telefon: '602000000', role: 'dispecer' });
   await assert.rejects(u.nastavRoli(r2.uzivatel.id, 'rodina'), /aspoň jednu kameru/);
   await assert.rejects(u.nastavRoli(r2.uzivatel.id, 'x'), /Typ účtu/);
+});
+
+test('cookie zvlášť pro každého tenanta: dva dispečinky vedle sebe, tenant se pozná z hintu (hlavička, adresa, Referer); odhlášení maže obě', () => {
+  const T2 = '02570459DSIDEQAJ';
+  const c1 = cookie(Date.now(), T), c2 = cookieDispecer(T2, 7, 'Petr'), cz = cookie();
+  assert.ok(c1.startsWith(`fam_tapo_${T}=`)); assert.ok(c2.startsWith(`fam_tapo_${T2}=`)); assert.ok(cz.startsWith('fam_tapo='), 'správce bez tenanta má základní cookie');
+  const hodnota = (c) => c.split(';')[0];
+  const oba = { get: (n) => n === 'cookie' ? `${hodnota(c1)}; ${hodnota(c2)}` : '' };
+  assert.deepEqual(kdo(oba, T), { role: 'admin', tenant: T });
+  assert.equal(kdo(oba, T2).jmeno, 'Petr');
+  assert.equal(kdo(oba, '99999999XXXXXXXX'), null, 'cizí tenant: přihlášení jiného tenanta se nepoužije');
+  assert.equal(dispecinkTenanta(oba, T2).tenant, T2);
+  // bez hintu: základní cookie správce má přednost, jinak první platná tenanta
+  const se = { get: (n) => n === 'cookie' ? `${hodnota(c1)}; ${hodnota(cz)}` : '' };
+  assert.deepEqual(kdo(se), { role: 'admin', tenant: '' }); assert.deepEqual(kdo(oba), { role: 'admin', tenant: T });
+  // starší cookie fam_tapo s tenantem v subjektu platí dál i s hintem
+  const exp = Date.now() + 60000; const stara = `fam_tapo=${hodnota(c1).split('=')[1]}`;
+  assert.deepEqual(kdo({ get: () => stara }, T), { role: 'admin', tenant: T }); assert.equal(kdo({ get: () => stara }, T2), null);
+  void exp;
+  // hint
+  assert.equal(tenantHint({ get: (n) => n === 'x-famicura-tenant' ? T2.toLowerCase() : '' }), T2);
+  assert.equal(tenantHint({ get: () => '' }, `http://localhost/api/stream.mp4?deviceId=a&tenant=${T}`), T);
+  assert.equal(tenantHint({ get: (n) => n === 'referer' ? `https://famicura.example/proto/dispecink.html?tenant=${T2}#x` : '' }, 'http://localhost/api/proto/stav'), T2);
+  assert.equal(tenantHint({ get: () => '' }, 'http://localhost/api/status'), '');
+  // odhlášení: cookie tenanta i základní
+  const o = odhlaseni(T); assert.ok(Array.isArray(o) && o[0].startsWith(`fam_tapo_${T}=;`) && o[1].startsWith('fam_tapo=;'));
+  assert.ok(odhlaseni().startsWith('fam_tapo=;')); assert.equal(jmenoCookie(''), 'fam_tapo');
 });

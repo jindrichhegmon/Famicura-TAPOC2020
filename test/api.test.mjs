@@ -459,7 +459,7 @@ test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení 
   const a = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }));
   assert.equal(a.status, 200);
   const c = setCookie(a);
-  assert.match(c, new RegExp(`^fam_tapo=\\d+\\.r:${T}:[a-f0-9]+\\.`), 'cookie rodiny nese tenanta');
+  assert.match(c, new RegExp(`^fam_tapo_${T}=\\d+\\.r:${T}:[a-f0-9]+\\.`), 'cookie rodiny nese tenanta (vlastní cookie tenanta)');
   assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }))).status, 410, 'odkaz je na jedno použití');
   assert.equal((await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json()).platna, false, 'stránka pozná použitý odkaz');
 
@@ -490,7 +490,7 @@ test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení 
   assert.equal((await h(req('POST', '/api/rodina/heslo', { cookies: c2, body: { stare: 'Famicura2026', nove: 'NoveHeslo99' } }))).status, 200);
   assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777123456', heslo: 'NoveHeslo99' } }))).status, 200);
   // odhlášení
-  assert.match(setCookie(await h(req('POST', '/api/rodina/odhlaseni'))), /^fam_tapo=$/);
+  assert.match(setCookie(await h(req('POST', '/api/rodina/odhlaseni', { cookies: `fam_tapo_${T}=x` }))), new RegExp(`^fam_tapo(_${T})?=$`), 'odhlášení maže cookie tenanta');
 });
 
 test('rodina: události jen vlastní kamery; smazaný uživatel je hned odhlášen; nová pozvánka zruší heslo', async () => {
@@ -512,7 +512,7 @@ test('rodina: události jen vlastní kamery; smazaný uživatel je hned odhláš
   assert.equal((await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}`, { cookies: cookie() }))).status, 200);
   const po = await h(req('GET', '/api/rodina/ja', { cookies: c }));
   assert.equal(po.status, 401);
-  assert.match(setCookie(po), /^fam_tapo=$/);
+  assert.match(setCookie(po), new RegExp(`^fam_tapo(_${T})?=$`));
 });
 
 test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery tenanta, nic nenastavuje; deaktivace účtu odhlásí a zablokuje přihlášení', async () => {
@@ -550,7 +550,7 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   // deaktivace účtu: přihlášený je odhlášen, přihlášení heslem odmítne srozumitelně; aktivace vrátí přístup
   const dz = await (await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/deaktivace`, { cookies: cookie(), body: { on: true } }))).json();
   assert.ok(dz.uzivatel.deaktivovan);
-  const po = await h(req('GET', '/api/rodina/ja', { cookies: c })); assert.equal(po.status, 401); assert.match((await po.json()).error, /deaktivovaný/); assert.match(setCookie(po), /^fam_tapo=$/);
+  const po = await h(req('GET', '/api/rodina/ja', { cookies: c })); assert.equal(po.status, 401); assert.match((await po.json()).error, /deaktivovaný/); assert.match(setCookie(po), new RegExp(`^fam_tapo(_${T})?=$`));
   const lg = await h(req('POST', '/api/rodina/login', { body: { telefon: '777000111', heslo: 'Dispecer2026' } })); assert.equal(lg.status, 403); assert.match((await lg.json()).error, /deaktivovaný/);
   assert.equal((await h(req('POST', '/api/rodina/login', { body: { telefon: '777000111', heslo: 'spatne' } }))).status, 401, 'špatné heslo je dál 401');
   await h(req('POST', `/api/rodina/uzivatele/${b.uzivatel.id}/deaktivace`, { cookies: cookie(), body: { on: false } }));
