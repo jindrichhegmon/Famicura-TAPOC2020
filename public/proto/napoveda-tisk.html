@@ -23,6 +23,10 @@
   section{border-top:1px solid var(--line);padding:18px 0 8px;break-inside:avoid-page}
   section h2{font-size:1.25rem;margin:0 0 8px;color:#0d4a75}
   section p{margin:0 0 10px;font-size:.98rem}
+  section h4{font-size:1.02rem;margin:14px 0 6px;color:#0d4a75}
+  section ul,section ol{margin:0 0 10px;padding-left:24px;font-size:.98rem}
+  section li{margin:3px 0}
+  section .tip{background:#fff7e6;border-left:4px solid #e0a03a;padding:8px 12px;border-radius:6px}
   figure{margin:10px 0 14px}
   figure img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;display:block}
   figcaption{font-size:.82rem;color:var(--muted);margin-top:4px}
@@ -53,15 +57,14 @@
   <footer>Famicura Kamera · dispečink poskytovatele, aplikace rodiny a mobilní dispečer · stejná nápověda je v dispečinku pod tlačítkem ? Nápověda, kde na otázky odpovídá i asistent.</footer>
 </main>
 <script type="module">
-  import { TEMATA } from '/proto/napoveda.js';
+  import { TEMATA, napovedaHtml } from '/proto/napoveda.js';
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   document.getElementById('verze').textContent = window.FAMICURA_VERZE || '';
   document.getElementById('datum').textContent = new Date().toLocaleDateString('cs-CZ');
   // obsah + témata; „Co je nové“ je dlouhé, jde až na konec a na novou stránku
   const poradi = [...TEMATA.filter((t) => t.id !== 'novinky'), ...TEMATA.filter((t) => t.id === 'novinky')];
   document.getElementById('obsah').innerHTML = poradi.map((t) => `<li><a href="#t-${esc(t.id)}">${esc(t.nazev)}</a></li>`).join('');
-  // Co je nové: každá verze na vlastní řádek, ať se to dá číst
-  const text = (t) => t.id === 'novinky' ? t.text.split(/(?= Verze \d)/).map((v) => `<p>${esc(v.trim())}</p>`).join('') : `<p>${esc(t.text)}</p>`;
+  const text = (t) => `<div class="tx">${napovedaHtml(t.obsah)}</div>`;
   document.getElementById('temata').innerHTML = poradi.map((t) => `<section id="t-${esc(t.id)}"><h2>${esc(t.nazev)}</h2>${text(t)}${(t.obrazky || []).map((o) => `<figure><img src="${esc(o.src)}" alt="${esc(o.popis)}" loading="eager" onerror="this.parentElement.remove()"><figcaption>${esc(o.popis)}</figcaption></figure>`).join('')}</section>`).join('');
   document.getElementById('tisk').onclick = () => window.print();
   document.getElementById('zavrit').onclick = () => { if (history.length > 1) history.back(); else window.close(); };

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAsistent } from '../src/asistent.mjs';
-import { odpovez, TEMATA, napovedaText } from '../public/proto/napoveda.js';
+import { odpovez, TEMATA, napovedaText, napovedaHtml, napovedaProsty } from '../public/proto/napoveda.js';
 
 test('nápověda: asistent najde téma podle klíčových slov, i bez diakritiky', () => {
   assert.equal(odpovez('Jak požádat rodinu o plný obraz?').tema, 'zadost');
@@ -17,6 +17,19 @@ test('nápověda: asistent najde téma podle klíčových slov, i bez diakritiky
   assert.match(odpovez('xyzzy').text, /Témata:/);
   assert.ok(TEMATA.length >= 10);
   assert.match(napovedaText(), /## Žádost o plný obraz/);
+  assert.ok(odpovez('jak pozadat o plny obraz').html.includes('<ol><li>'), 'odpověď má i HTML s kroky');
+});
+
+test('nápověda: strukturovaný obsah → HTML (nadpisy, odrážky, kroky, upozornění, tučně) s escapováním; každé téma má strukturu', () => {
+  const html = napovedaHtml('Úvod <b>.\n\n### Část\n- **Tučně** odrážka\n- druhá\n1. krok a\n2. krok b\n! Pozor & na to\n\nZávěr');
+  assert.equal(html, '<p>Úvod &lt;b&gt;.</p><h4>Část</h4><ul><li><strong>Tučně</strong> odrážka</li><li>druhá</li></ul><ol><li>krok a</li><li>krok b</li></ol><p class="tip">Pozor &amp; na to</p><p>Závěr</p>');
+  assert.equal(napovedaProsty('### Část\n- **Tučně** odrážka\n1. krok\n! pozor'), 'Část Tučně odrážka krok pozor');
+  for (const t of TEMATA) {
+    assert.ok(t.obsah && t.text, t.id);
+    assert.ok(/^(###|-|\d+\.|!)\s/m.test(t.obsah), `${t.id}: má nadpis, odrážky nebo kroky`);
+    assert.ok(!/<|&lt;script/.test(napovedaHtml(t.obsah).replace(/<\/?(p|h4|ul|ol|li|strong)( class="tip")?>/g, '')), `${t.id}: jen povolené značky`);
+  }
+  assert.ok(TEMATA.find((t) => t.id === 'novinky').obsah.split('\n').filter(Boolean).every((l) => /^- \*\*Verze /.test(l)), 'Co je nové: každá verze jako odrážka');
 });
 
 test('asistent: bez webhooku není nastavený; s webhookem pošle otázku a podklad a vrátí odpověď', async () => {

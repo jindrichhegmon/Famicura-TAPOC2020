@@ -236,16 +236,17 @@ $('hlForm').onsubmit = async (e) => {
 renderHlavicka();
 
 /* ---------- nápověda a asistent (grafika Case manageru) ---------- */
-import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
+import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText, napovedaHtml }) => {
   const nap = $('napoveda');
-  $('napTemata').innerHTML = TEMATA.map((t) => `<details class="naptema" id="nap-${t.id}"><summary>${esc(t.nazev)}</summary><p class="tx">${esc(t.text)}</p>${(t.obrazky || []).map((o) => `<figure><img src="${esc(o.src)}" alt="${esc(o.popis)}" loading="lazy" onerror="this.parentElement.remove()"><figcaption>${esc(o.popis)}</figcaption></figure>`).join('')}</details>`).join('');
+  $('napTemata').innerHTML = TEMATA.map((t) => `<details class="naptema" id="nap-${t.id}"><summary>${esc(t.nazev)}</summary><div class="tx">${napovedaHtml(t.obsah)}</div>${(t.obrazky || []).map((o) => `<figure><img src="${esc(o.src)}" alt="${esc(o.popis)}" loading="lazy" onerror="this.parentElement.remove()"><figcaption>${esc(o.popis)}</figcaption></figure>`).join('')}</details>`).join('');
   const tab = (name) => { nap.querySelectorAll('.naptabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === name))); $('napTemata').classList.toggle('hide', name !== 'temata'); $('napChat').classList.toggle('hide', name !== 'chat'); if (name === 'chat') $('chatIn').focus(); };
   nap.querySelectorAll('.naptabs button').forEach((b) => { b.onclick = () => tab(b.dataset.tab); });
   $('napovedaBtn').onclick = () => { nap.classList.remove('hide'); tab('temata'); };
   $('napZavrit').onclick = () => nap.classList.add('hide');
   nap.addEventListener('click', (e) => { if (e.target === nap) nap.classList.add('hide'); });
   const log = $('chatLog');
-  const zprava = (text, kdo, tema) => { const d = document.createElement('div'); d.className = 'msg ' + kdo; d.innerHTML = (tema ? `<span class="tema">${esc(tema)}</span>` : '') + esc(text); log.append(d); log.scrollTop = log.scrollHeight; return d; };
+  // html = už hotové (escapované) HTML z napovedaHtml; jinak prostý text
+  const zprava = (text, kdo, tema, html = '') => { const d = document.createElement('div'); d.className = 'msg ' + kdo; d.innerHTML = (tema ? `<span class="tema">${esc(tema)}</span>` : '') + (html ? `<div class="tx">${html}</div>` : esc(text)); log.append(d); log.scrollTop = log.scrollHeight; return d; };
   zprava('Dobrý den, jsem asistent dispečinku. Zeptejte se, nebo klepněte na jednu z otázek níže.', 'bot');
   const PRIKLADY = ['Jak požádat rodinu o plný obraz?', 'Kdy můžu použít nouzový přístup?', 'Jak založit účet rodině?', 'Jak založit mobilního dispečera?', 'Jak nastavit čísla SOS náramku?', 'Komu jde SMS a e-mail při události?', 'Proč nevidím obraz z kamery?', 'Co dělá tlačítko Převzít?'];
   $('chatOtazky').innerHTML = PRIKLADY.map((q) => `<button type="button">${esc(q)}</button>`).join('');
@@ -256,17 +257,17 @@ import('/proto/napoveda.js').then(({ TEMATA, odpovez, napovedaText }) => {
     const q = $('chatIn').value.trim(); if (!q) return;
     $('chatIn').value = ''; zprava(q, 'ja');
     const lokalni = odpovez(q);
-    if (aiNaServeru === false) { zprava(lokalni.text, 'bot', lokalni.nazev); return; }
+    if (aiNaServeru === false) { zprava(lokalni.text, 'bot', lokalni.nazev, lokalni.html); return; }
     const cekam = zprava('…', 'bot');
     try {
       const r = await fetch('/api/proto/asistent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dotaz: q, kontext: napovedaText() }) });
       const b = await r.json().catch(() => ({}));
-      if (b.nastaveno === false) { aiNaServeru = false; cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev); return; }
+      if (b.nastaveno === false) { aiNaServeru = false; cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev, lokalni.html); return; }
       aiNaServeru = true; $('chatPozn').textContent = 'Asistent odpovídá přes AI (webhook Make) s nápovědou dispečinku jako podkladem.';
       cekam.remove();
       if (r.ok && b.odpoved) zprava(b.odpoved, 'bot', 'AI');
-      else { zprava(lokalni.text, 'bot', lokalni.nazev); zprava(`AI teď neodpovídá (${b.error || r.status}), odpověděl jsem z nápovědy.`, 'bot'); }
-    } catch { cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev); }
+      else { zprava(lokalni.text, 'bot', lokalni.nazev, lokalni.html); zprava(`AI teď neodpovídá (${b.error || r.status}), odpověděl jsem z nápovědy.`, 'bot'); }
+    } catch { cekam.remove(); zprava(lokalni.text, 'bot', lokalni.nazev, lokalni.html); }
   };
   // klepnutí na název tématu v odpovědi otevře téma v záložce Témata
   log.addEventListener('click', (e) => { const t = e.target.closest('.msg.bot .tema'); if (!t || t.textContent === 'AI') return; const d = [...document.querySelectorAll('.naptema')].find((x) => x.querySelector('summary').textContent === t.textContent); if (d) { tab('temata'); d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } });

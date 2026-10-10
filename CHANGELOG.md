@@ -5,6 +5,20 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.45 · 10. 10. 2026 · přehledná nápověda dispečinku
+
+- Témata nápovědy mají strukturu: nadpisy částí, odrážky, číslované kroky a
+  zvýrazněná upozornění místo jednoho dlouhého odstavce. Stejně se ukazují v
+  panelu Nápověda, v odpovědi asistenta z nápovědy (bez AI) i v tisku do PDF;
+  „Co je nové“ má každou verzi jako odrážku. Obsah je stejný, jen několik
+  zastaralých vět je opravených (text SMS bez telefonu dispečinku, heslo
+  TP-Link i ve Správě kamer, kvalita 2 u H.265).
+- `public/proto/napoveda.js`: téma má `obsah` (řádky `### Nadpis`, `- odrážka`,
+  `1. krok`, `! upozornění`, `**tučně**`), `napovedaHtml()` z něj dělá
+  escapované HTML, `napovedaProsty()` prostý text pro vyhledávání (`t.text`
+  se doplní při načtení); `odpovez()` vrací i `html`, `napovedaText()` pro AI
+  posílá strukturovaný text.
+
 ## 3.44 · 10. 10. 2026 · dispečink: malé okno, velké okno, nebo seznam kamer
 
 - Nad dlaždicemi kamer v dispečinku je přepínač **Malé okno / Velké okno /
