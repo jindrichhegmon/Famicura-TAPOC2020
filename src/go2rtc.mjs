@@ -82,6 +82,25 @@ export function createGo2rtc({ url = process.env.GO2RTC_URL || 'http://127.0.0.1
         'Content-Type': res.headers.get('content-type') || 'application/octet-stream', 'Cache-Control': 'no-store' } });
     },
 
+    /**
+     * Stream přidat nebo přepsat bez restartu go2rtc: PUT /api/streams?name=ID&src=…&src=…
+     * (go2rtc si změnu zapíše i do go2rtc.yaml). Hláška chyby nikdy nenese adresu s heslem.
+     */
+    async nastavStream(name, sources) {
+      const q = new URLSearchParams(); q.set('name', name);
+      for (const s of [].concat(sources || [])) q.append('src', s);
+      const res = await call('/api/streams?' + q.toString(), { method: 'PUT' }, 5000);
+      if (!res.ok) throw new Go2rtcError(`go2rtc stream ${name} nepřevzal (${res.status}).`, 502, (await res.text().catch(() => '')).replace(/rtsp:\/\/[^@\s]*@/g, 'rtsp://***@').slice(0, 200));
+      return true;
+    },
+
+    /** Stream odebrat: DELETE /api/streams?src=ID. Neexistující stream není chyba. */
+    async smazStream(name) {
+      const res = await call('/api/streams?src=' + encodeURIComponent(name), { method: 'DELETE' }, 5000);
+      if (!res.ok && res.status !== 404) throw new Go2rtcError(`go2rtc stream ${name} neodebral (${res.status}).`, 502, (await res.text().catch(() => '')).slice(0, 200));
+      return true;
+    },
+
     /** Posílá kamera obraz? Stačí hlavička odpovědi; spojení se hned zavře. */
     async probe(src, timeoutMs = 8000) {
       const ctrl = new AbortController();

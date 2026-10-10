@@ -60,7 +60,7 @@ export function createPdp({ db = null, log = console, cacheMs = 60000, now = Dat
   if (!db && fakeTenanti) {
     const tenanti = Object.fromEntries(fakeTenanti.split(';').map((x) => x.trim()).filter(Boolean).map((x) => { const [id, ...n] = x.split('='); const t = normTenant(id); return [t, { id: t, nazev: n.join('=').trim() || t, ico: '', famicuraProviderId: '' }]; }).filter(([t]) => t));
     log.error('[pdp] POZOR: tenanti a tabulky jen v paměti (PDP_FAKE_TENANTS) – jen pro vývoj a ukázku, data po restartu zmizí.');
-    return { nastaveno: true, pamet: true, db: null, tabulky: createTabulkyPamet(), async tenant(id) { return tenanti[normTenant(id)] || null; }, async zajistiTabulky() { return true; } };
+    return { nastaveno: true, pamet: true, db: null, tabulky: createTabulkyPamet(), async tenant(id) { return tenanti[normTenant(id)] || null; }, async seznamTenantu() { return Object.values(tenanti); }, async zajistiTabulky() { return true; } };
   }
   const spojeni = db || (pdpNastaveno() ? createPdpDb() : null);
   const tabulky = spojeni ? createTabulky(spojeni) : null;
@@ -81,6 +81,16 @@ export function createPdp({ db = null, log = console, cacheMs = 60000, now = Dat
       const tenant = rows[0] ? { id: String(rows[0].id).trim(), nazev: String(rows[0].JmenoPoskytovatele || '').trim(), ico: String(rows[0].ICO || '').trim(), famicuraProviderId: rows[0].FamicuraProviderID ? String(rows[0].FamicuraProviderID).toLowerCase() : '' } : null;
       cache.set(t, { cas: now(), tenant });
       return tenant;
+    },
+    /** Všichni aktivní poskytovatelé (pro správu kamer: výběr tenanta) → [{ id, nazev, ico }], s krátkou cache. */
+    async seznamTenantu() {
+      if (!spojeni) return [];
+      const c = cache.get('*');
+      if (c && c.cas > now() - cacheMs) return c.seznam;
+      const rows = await spojeni.query('SELECT RTRIM(IDTENANT) AS id, ICO, JmenoPoskytovatele FROM dbo.Tenants WHERE Aktivni = 1 ORDER BY JmenoPoskytovatele');
+      const seznam = rows.map((r) => ({ id: String(r.id).trim(), nazev: String(r.JmenoPoskytovatele || '').trim(), ico: String(r.ICO || '').trim() })).filter((t) => t.id);
+      cache.set('*', { cas: now(), seznam });
+      return seznam;
     },
     /** Tabulky A_KAM_* a jejich zařazení do RLS; jednou po startu, další volání jen vrátí. */
     async zajistiTabulky() {

@@ -69,7 +69,7 @@ function handler(over = {}) {
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
   const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, uzivatele, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null, svetlo: over.svetlo || null, naramky: over.naramky || null, sluzba: over.sluzba || null }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null, svetlo: over.svetlo || null, naramky: over.naramky || null, sluzba: over.sluzba || null, sprava: over.sprava || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -1121,4 +1121,55 @@ test('telefony poskytovatele z jhn-apps: GET /api/naramek/sluzba-telefon (Péče
   await h4(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setNaramek', args: ['tapoc2020', '9705357211', 'Dispečer'] } }));
   j = await (await h4(req('POST', '/api/naramek/sos', { cookies: cookie(), body: { kamera: 'tapoc2020', cisla: ['sluzba', '', ''] } }))).json();
   assert.equal(j.odeslano, false); assert.equal(j.chyba, undefined, 'nepřipojený náramek není chyba, jen se pošle později');
+});
+
+test('správa kamer: jen správce serveru; seznam s tenanty a počty kamer; zavedení, poskytovatel (jen aktivní tenant), světlo, ověření, zkouška, smazání; bez modulu 503', async () => {
+  const volani = [];
+  const kamery = [{ id: 'tapoc2020', name: 'TAPO Test', ip: '10.0.0.1', stream: 'stream1', user: 'u', rtspPort: 554, onvifPort: 2020, tenant: T, place: 'Kancelář', svetloUcet: '' }];
+  const sprava = {
+    async seznam() { return kamery; },
+    async uloz(raw) { volani.push(['uloz', raw]); return { kamera: { ...kamery[0], id: raw.id, tenant: raw.tenant || '' }, nova: raw.id !== 'tapoc2020', varovani: '' }; },
+    async smaz(id) { volani.push(['smaz', id]); if (id === 'neni') { const e = new Error('Kamera není na serveru.'); e.status = 404; throw e; } return { ok: true, varovani: '' }; },
+    async tenant(id, tenant, place) { volani.push(['tenant', id, tenant, place]); return { kamera: { ...kamery[0], tenant, place } }; },
+    async svetlo(id, tapoPass, tapoUser) { volani.push(['svetlo', id, tapoPass, tapoUser]); return { kamera: { ...kamery[0], svetloUcet: tapoPass ? 'admin' : '' } }; },
+    async over(ip) { volani.push(['over', ip]); return { ip, rtsp: { port: 554, ok: true, ms: 2 }, onvif: { port: 2020, ok: true, ms: 3 } }; },
+    async zkouska(id) { volani.push(['zkouska', id]); return { ok: true, detail: null, h265: false }; },
+  };
+  const pdp = { nastaveno: true, tabulky: createMockTabulky(), async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; }, async seznamTenantu() { return Object.values(TENANTI); } };
+  const { h } = handler({ sprava, pdp });
+  // dispečer poskytovatele sem nesmí, rodina také ne
+  assert.equal((await h(req('GET', '/api/sprava/kamery', { cookies: cookie() }))).status, 403, 'správce s tenantem v odkazu ne');
+  assert.equal((await h(req('GET', '/api/sprava/kamery', { cookies: cookieDispecer(T, 'd1', 'D').split(';')[0] }))).status, 403, 'dispečer ne');
+  assert.equal((await h(req('GET', '/api/sprava/kamery'))).status, 401);
+  let b = await (await h(req('GET', '/api/sprava/kamery', { cookies: cookieServer() }))).json();
+  assert.equal(b.ok, true); assert.equal(b.pdp, true);
+  assert.deepEqual(b.kamery, kamery);
+  assert.deepEqual(b.tenanti.map((t) => [t.id, t.kamer]), [[T, 1], [T2, 0]]);
+  // zavedení: tenant musí být aktivní v PDP
+  let r = await h(req('POST', '/api/sprava/kamery', { cookies: cookieServer(), body: { id: 'nova', ip: '10.0.0.9', user: 'u', pass: 'p', tenant: 'NEZNAMY1' } }));
+  assert.equal(r.status, 400); assert.match((await r.json()).error, /NEZNAMY1 není v Péče doma plus/);
+  r = await h(req('POST', '/api/sprava/kamery', { cookies: cookieServer(), body: { id: 'nova', ip: '10.0.0.9', user: 'u', pass: 'p', tenant: T2 } }));
+  b = await r.json(); assert.equal(r.status, 200); assert.equal(b.nova, true); assert.equal(b.kamera.tenant, T2);
+  assert.equal(volani.at(-1)[0], 'uloz'); assert.equal(volani.at(-1)[1].pass, 'p');
+  // poskytovatel
+  r = await h(req('POST', '/api/sprava/tenant', { cookies: cookieServer(), body: { id: 'tapoc2020', tenant: T2, place: 'Chodba' } }));
+  assert.equal(r.status, 200); assert.deepEqual(volani.at(-1), ['tenant', 'tapoc2020', T2, 'Chodba']);
+  r = await h(req('POST', '/api/sprava/tenant', { cookies: cookieServer(), body: { id: 'tapoc2020', tenant: '' } }));
+  assert.equal(r.status, 200); assert.deepEqual(volani.at(-1), ['tenant', 'tapoc2020', '', undefined]);
+  assert.equal((await h(req('POST', '/api/sprava/tenant', { cookies: cookieServer(), body: { id: 'Špatné', tenant: T } }))).status, 400);
+  // světlo, ověření, zkouška, smazání
+  r = await h(req('POST', '/api/sprava/svetlo', { cookies: cookieServer(), body: { id: 'tapoc2020', tapoPass: 'cloud' } }));
+  assert.equal(r.status, 200); assert.deepEqual(volani.at(-1), ['svetlo', 'tapoc2020', 'cloud', undefined]);
+  r = await h(req('POST', '/api/sprava/over', { cookies: cookieServer(), body: { ip: '10.0.0.1' } }));
+  b = await r.json(); assert.equal(b.rtsp.ok, true);
+  b = await (await h(req('GET', '/api/sprava/zkouska?id=tapoc2020', { cookies: cookieServer() }))).json();
+  assert.equal(b.ok, true);
+  assert.equal((await h(req('GET', '/api/sprava/zkouska?id=', { cookies: cookieServer() }))).status, 400);
+  r = await h(req('DELETE', '/api/sprava/kamery?id=tapoc2020', { cookies: cookieServer() }));
+  assert.equal(r.status, 200); assert.deepEqual(volani.at(-1), ['smaz', 'tapoc2020']);
+  assert.equal((await h(req('DELETE', '/api/sprava/kamery?id=neni', { cookies: cookieServer() }))).status, 404);
+  assert.equal((await h(req('GET', '/api/sprava/neco', { cookies: cookieServer() }))).status, 404);
+  // server bez modulu
+  const { h: h2 } = handler({});
+  assert.equal((await h2(req('GET', '/api/sprava/kamery', { cookies: cookieServer() }))).status, 503);
 });

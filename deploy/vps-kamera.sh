@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Přidá nebo změní kameru Tapo na VPS. Spouštět z Macu ve složce projektu:
+# Přidá nebo změní kameru Tapo na VPS. Spouštět z Macu ve složce projektu
+# (totéž umí od 3.42 hlavní aplikace, karta Správa kamer – bez Terminálu a bez restartu):
 #   ./deploy/vps-kamera.sh            (zeptá se na údaje)
 #   ./deploy/vps-kamera.sh seznam     (kamery bez hesel)
 #   ./deploy/vps-kamera.sh smaz ID

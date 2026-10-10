@@ -105,6 +105,22 @@
   /* A utility class has to beat later rules of equal weight (.seg) and any id
      rule, so it carries the flag. */
   .hide{display:none !important}
+  /* Správa kamer */
+  .sprava table{width:100%;min-width:760px;border-collapse:collapse;font-size:.9rem}
+  .sprava td code{white-space:nowrap}
+  .sprava th,.sprava td{text-align:left;padding:8px 6px;border-bottom:1px solid #eef2f6;vertical-align:top;overflow-wrap:anywhere}
+  .sprava th{color:#5a6b7d;font-weight:600;font-size:.8rem}
+  .sprava td.akce{white-space:nowrap}
+  .sprava td.akce button{min-height:36px;padding:6px 10px;font-size:.85rem;margin:2px 4px 2px 0}
+  .sprava .wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .spravaForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px 14px;margin-top:12px;
+    padding:14px;border:1px solid #dde4ea;border-radius:12px;background:#f7f9fb}
+  .spravaForm label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:#5a6b7d}
+  .spravaForm input,.spravaForm select{font:inherit;font-size:16px;min-height:44px;padding:8px 10px;border:1px solid #bcc8d1;border-radius:10px;background:#fff;color:#17212b;width:100%;box-sizing:border-box}
+  .spravaForm .full{grid-column:1 / -1}
+  .spravaForm .chk{flex-direction:row;align-items:center;min-height:44px}
+  .spravaForm .chk input{width:22px;height:22px;min-height:22px;margin:0}
+  .spravaForm.jenTenant label:not(.tenantPole){display:none}
 
   .stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
   .stage > video, .stage > canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
@@ -366,6 +382,51 @@
       </details>
     </div>
 
+    <div class="c sprava" id="spravaCard">
+      <h2>Správa kamer</h2>
+      <p class="muted" style="margin:0 0 10px">
+        Zavedení kamery, přiřazení poskytovateli (tenantovi z Péče doma plus), heslo účtu TP-Link pro světlo
+        a odebrání kamery – totéž, co dělá <code>./deploy/vps-kamera.sh</code>, bez Terminálu a bez restartu serveru.
+        Hesla se nikdy nezobrazují; prázdné heslo u existující kamery znamená „ponechat“.
+        Adresa kamery: s bránou Mango nebo Raspberry přímo IP kamery v její síti (tunel WireGuard),
+        s Windows serverem v tunelu 10.77.0.2 (další místo 10.77.0.3…), s tunelem SSH 127.0.0.1 a porty 10554 / 12020.
+      </p>
+      <div class="wrap"><div id="spravaSeznam" class="muted">načítám…</div></div>
+      <div class="row" style="margin-top:12px">
+        <button id="spravaNova">Nová kamera</button>
+        <button id="spravaObnov" class="sec">Obnovit seznam</button>
+      </div>
+      <form id="spravaForm" class="spravaForm hide" autocomplete="off">
+        <label>ID kamery <input name="id" placeholder="např. sbhmijas" pattern="[a-z0-9_-]{1,40}" required></label>
+        <label>Název (pro lidi) <input name="name" placeholder="např. SBH Mijas"></label>
+        <label>Adresa IP kamery v tunelu <input name="ip" placeholder="192.168.8.211" inputmode="decimal" required></label>
+        <label>Kvalita obrazu
+          <select name="stream">
+            <option value="stream1">1 – plné rozlišení (H.264)</option>
+            <option value="stream2">2 – nízké rozlišení (pro H.265 kamery)</option>
+          </select>
+        </label>
+        <label>Uživatel účtu kamery (Tapo → Účet kamery) <input name="user" autocomplete="off"></label>
+        <label>Heslo účtu kamery <input name="pass" type="password" autocomplete="new-password" placeholder="prázdné = ponechat"></label>
+        <label>Port RTSP <input name="rtspPort" inputmode="numeric" value="554"></label>
+        <label>Port ONVIF <input name="onvifPort" inputmode="numeric" value="2020"></label>
+        <label class="tenantPole">Poskytovatel (tenant Péče doma plus)
+          <select name="tenant"><option value="">— bez poskytovatele —</option></select>
+          <input name="tenantText" class="hide" placeholder="ID tenanta, např. 22202480FAMICURA">
+        </label>
+        <label class="tenantPole">Místo kamery (u poskytovatele) <input name="place" placeholder="např. Chodba 2. NP"></label>
+        <label>Heslo účtu TP-Link (světlo kamery) <input name="tapoPass" type="password" autocomplete="new-password" placeholder="prázdné = ponechat"></label>
+        <label class="chk"><input name="tapoSmazat" type="checkbox"> Heslo TP-Link odebrat (světlo přes účet kamery)</label>
+        <div class="full row">
+          <button type="button" id="spravaOverit" class="sec">Ověřit spojení</button>
+          <button type="submit" id="spravaUlozit">Uložit</button>
+          <button type="button" id="spravaZrusit" class="sec">Zrušit</button>
+        </div>
+        <p id="spravaMsg" class="muted full" style="margin:0"></p>
+      </form>
+      <p id="spravaVysledek" class="muted" style="margin:10px 0 0"></p>
+    </div>
+
     <div class="c">
       <h2>Diagnostika</h2>
       <div id="diag"></div>
@@ -480,6 +541,174 @@ function renderDiag(s) {
   }).catch(() => { $('diagClb').innerHTML = '<span class="bad">nedostupné</span>'; });
 }
 
+/* ---------- správa kamer ---------- */
+
+let spravaTenanti = [];
+let spravaKamery = [];
+const spravaF = $('spravaForm');
+const pole = (n) => spravaF.elements[n];
+
+function tenantNazev(id) {
+  const t = spravaTenanti.find((x) => x.id === id);
+  return t ? `${t.nazev} <span class="muted">(${esc(id)})</span>` : esc(id);
+}
+
+function renderSprava(b) {
+  spravaTenanti = b.tenanti || [];
+  spravaKamery = b.kamery || [];
+  const sel = pole('tenant');
+  const drz = sel.value;
+  sel.innerHTML = '<option value="">— bez poskytovatele —</option>' + spravaTenanti.map((t) =>
+    `<option value="${esc(t.id)}">${esc(t.nazev)} (${esc(t.id)}${t.kamer ? `, kamer: ${t.kamer}` : ''})</option>`).join('');
+  sel.value = drz;
+  // Bez spojení na Péče doma plus (vývoj) se tenant píše ručně.
+  const rucne = !b.pdp || !spravaTenanti.length;
+  sel.classList.toggle('hide', rucne);
+  pole('tenantText').classList.toggle('hide', !rucne);
+
+  if (!spravaKamery.length) { $('spravaSeznam').innerHTML = '<span class="muted">Na serveru zatím není žádná kamera.</span>'; return; }
+  $('spravaSeznam').innerHTML = `<table>
+    <tr><th>ID</th><th>Název</th><th>Adresa</th><th>Účet kamery</th><th>Poskytovatel</th><th>Místo</th><th>Světlo</th><th></th></tr>
+    ${spravaKamery.map((k) => `<tr data-id="${esc(k.id)}">
+      <td><code>${esc(k.id)}</code></td><td>${esc(k.name)}</td>
+      <td>${esc(k.ip)}${k.rtspPort !== 554 ? ':' + esc(k.rtspPort) : ''} <span class="muted">${k.stream === 'stream2' ? 'kvalita 2' : 'kvalita 1'}</span></td>
+      <td>${esc(k.user)}</td>
+      <td>${k.tenant ? tenantNazev(k.tenant) : '<span class="bad">bez poskytovatele</span>'}</td>
+      <td>${esc(k.place)}</td>
+      <td>${k.svetloUcet ? `<span class="muted">účet TP-Link „${esc(k.svetloUcet)}“</span>` : '<span class="muted">účet kamery</span>'}</td>
+      <td class="akce"><button type="button" class="sec" data-akce="upravit">Upravit</button><button type="button" class="sec" data-akce="tenant">Poskytovatel</button><button type="button" class="sec" data-akce="zkouska">Zkouška obrazu</button><button type="button" class="danger" data-akce="smazat">Smazat</button></td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+async function loadSprava() {
+  const { res, body } = await api('/api/sprava/kamery');
+  if (!res.ok) {
+    $('spravaSeznam').innerHTML = `<span class="bad">${esc(body.error || res.status)}</span>`;
+    $('spravaNova').disabled = true;
+    return;
+  }
+  $('spravaNova').disabled = false;
+  renderSprava(body);
+}
+
+function spravaOtevri(k, jenTenant = false) {
+  spravaF.reset();
+  spravaF.classList.remove('hide');
+  spravaF.classList.toggle('jenTenant', jenTenant);
+  spravaF.dataset.id = k ? k.id : '';
+  spravaF.dataset.rezim = jenTenant ? 'tenant' : 'uloz';
+  pole('id').value = k ? k.id : '';
+  pole('id').readOnly = !!k;
+  pole('name').value = k ? k.name : '';
+  pole('ip').value = k ? k.ip : '';
+  pole('stream').value = k ? k.stream : 'stream1';
+  pole('user').value = k ? k.user : '';
+  pole('rtspPort').value = k ? k.rtspPort : 554;
+  pole('onvifPort').value = k ? k.onvifPort : 2020;
+  pole('tenant').value = k ? k.tenant : '';
+  pole('tenantText').value = k ? k.tenant : '';
+  pole('place').value = k ? k.place : '';
+  pole('pass').placeholder = k ? 'prázdné = ponechat' : '';
+  pole('pass').required = !k;
+  pole('user').required = !k;
+  $('spravaMsg').textContent = jenTenant ? `Kamera ${k.name}: vyberte poskytovatele a místo.` : (k ? `Úprava kamery ${k.name}.` : 'Nová kamera: údaje z aplikace Tapo (Účet kamery) a adresa v tunelu WireGuard.');
+  spravaF.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  (jenTenant ? pole('tenant').classList.contains('hide') ? pole('tenantText') : pole('tenant') : k ? pole('name') : pole('id')).focus();
+}
+
+const spravaTenantHodnota = () => (pole('tenant').classList.contains('hide') ? pole('tenantText').value : pole('tenant').value).trim().toUpperCase();
+
+// Zkouška obrazu přes go2rtc; `pridat` nechá předchozí hlášku (např. „zavedena“) a výsledek připojí za ni.
+async function spravaZkouska(id, kam, pridat = false) {
+  const cil = $('spravaVysledek');
+  const pred = pridat ? cil.innerHTML + ' ' : '';
+  cil.innerHTML = pred + `<span class="muted">Zkouším obraz kamery ${esc(kam)}…</span>`;
+  const { res, body } = await api(`/api/sprava/zkouska?id=${encodeURIComponent(id)}`);
+  if (!res.ok) { cil.innerHTML = pred + `<span class="bad">${esc(body.error || res.status)}</span>`; return; }
+  cil.innerHTML = pred + (body.ok
+    ? `<span class="ok">Kamera ${esc(kam)} posílá obraz.</span>`
+    : `<span class="bad">Kamera ${esc(kam)} obraz neposílá.</span> <span class="muted">${esc(body.detail || '')}${body.h265 ? ' – zkuste kvalitu 2.' : ''}</span>`);
+}
+
+$('spravaNova').onclick = () => spravaOtevri(null);
+$('spravaObnov').onclick = () => { $('spravaVysledek').textContent = ''; loadSprava(); };
+$('spravaZrusit').onclick = () => { spravaF.classList.add('hide'); $('spravaMsg').textContent = ''; };
+
+$('spravaOverit').onclick = async () => {
+  $('spravaMsg').textContent = 'Zkouším spojení tunelem…';
+  const { res, body } = await api('/api/sprava/over', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ip: pole('ip').value, rtspPort: pole('rtspPort').value, onvifPort: pole('onvifPort').value }) });
+  if (!res.ok) { $('spravaMsg').innerHTML = `<span class="bad">${esc(body.error || res.status)}</span>`; return; }
+  const radek = (n, r) => `${n} ${r.port}: ${r.ok ? `<span class="ok">odpovídá</span> <span class="muted">(${r.ms} ms)</span>` : `<span class="bad">${esc(r.chyba)}</span>`}`;
+  $('spravaMsg').innerHTML = `${radek('RTSP', body.rtsp)} · ${radek('ONVIF', body.onvif)}`
+    + (body.rtsp.ok ? '' : '<br><span class="muted">Kamera na adrese neodpovídá: zkontrolujte adresu v aplikaci Tapo, tunel WireGuard (./deploy/wireguard-vps.sh) a že kamera běží.</span>');
+};
+
+spravaF.onsubmit = async (e) => {
+  e.preventDefault();
+  const id = spravaF.dataset.id || pole('id').value.trim();
+  const tenant = spravaTenantHodnota();
+  $('spravaUlozit').disabled = true;
+  $('spravaMsg').textContent = 'Ukládám…';
+  try {
+    let r;
+    if (spravaF.dataset.rezim === 'tenant') {
+      r = await api('/api/sprava/tenant', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, tenant, place: pole('place').value }) });
+    } else {
+      const data = { id, name: pole('name').value, ip: pole('ip').value, stream: pole('stream').value, user: pole('user').value,
+        rtspPort: pole('rtspPort').value, onvifPort: pole('onvifPort').value, tenant, place: pole('place').value };
+      if (pole('pass').value) data.pass = pole('pass').value;
+      if (pole('tapoPass').value) data.tapoPass = pole('tapoPass').value;
+      r = await api('/api/sprava/kamery', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+      if (r.res.ok && pole('tapoSmazat').checked) {
+        await api('/api/sprava/svetlo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, tapoPass: '' }) });
+      }
+    }
+    const { res, body } = r;
+    if (!res.ok) { $('spravaMsg').innerHTML = `<span class="bad">${esc(body.error || res.status)}</span>`; return; }
+    pole('pass').value = ''; pole('tapoPass').value = '';
+    spravaF.classList.add('hide');
+    const k = body.kamera || {};
+    $('spravaVysledek').innerHTML = `<span class="ok">${spravaF.dataset.rezim === 'tenant' ? `Kamera ${esc(k.name)} je ${k.tenant ? 'u poskytovatele ' + tenantNazev(k.tenant) : 'bez poskytovatele'}.` : body.nova ? `Kamera ${esc(k.name)} zavedena.` : `Kamera ${esc(k.name)} upravena.`}</span>`
+      + (body.varovani ? ` <span class="bad">${esc(body.varovani)}</span>` : '');
+    await loadSprava();
+    if (spravaF.dataset.rezim !== 'tenant') await spravaZkouska(k.id, k.name, true);
+    obnovDiag();
+  } finally {
+    $('spravaUlozit').disabled = false;
+  }
+};
+
+$('spravaSeznam').onclick = async (e) => {
+  const btn = e.target.closest('button[data-akce]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  const k = spravaKamery.find((x) => x.id === id);
+  if (!k) return;
+  if (btn.dataset.akce === 'upravit') return spravaOtevri(k);
+  if (btn.dataset.akce === 'tenant') return spravaOtevri(k, true);
+  if (btn.dataset.akce === 'zkouska') return spravaZkouska(id, k.name);
+  if (btn.dataset.akce === 'smazat') {
+    if (!confirm(`Odebrat kameru ${k.name} (${id}) ze serveru? Nahrávky a události v databázi zůstanou.`)) return;
+    btn.disabled = true;
+    const { res, body } = await api(`/api/sprava/kamery?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    $('spravaVysledek').innerHTML = res.ok
+      ? `<span class="ok">Kamera ${esc(k.name)} odebrána.</span>${body.varovani ? ` <span class="bad">${esc(body.varovani)}</span>` : ''}`
+      : `<span class="bad">${esc(body.error || res.status)}</span>`;
+    await loadSprava();
+    obnovDiag();
+  }
+};
+
+// Po změně kamer jen Diagnostika a seznam zařízení, ne celé přihlášení znovu.
+async function obnovDiag() {
+  const { body } = await api('/api/status');
+  if (body.authenticated) renderDiag(body);
+  if (knownDevices.length) $('loadDevices').click();
+}
+
 async function refreshStatus() {
   const { body } = await api('/api/status');
 
@@ -500,6 +729,7 @@ async function refreshStatus() {
   $('loginCard').classList.add('hide');
   $('app').classList.remove('hide');
   renderDiag(body);
+  loadSprava();
   loadSchedules();
   loadWatches();
   startEventPolling();

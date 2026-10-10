@@ -79,3 +79,18 @@ test('úložiště: soubor s právy 600, zápis bez rozbitého mezistavu', async
   assert.equal((await stat(path.join(dir, 'data', 'schedules.json'))).mode & 0o777, 0o600);
   assert.ok(JSON.parse(await readFile(path.join(dir, 'data', 'schedules.json'), 'utf8')));
 });
+
+test('streams: PUT přidá stream s více zdroji, DELETE odebere; chyba bez hesla v adrese', async () => {
+  const f = fakeFetch([
+    [/\/api\/streams\?name=k1&src=/, (url, init) => (init.method === 'PUT' ? text('', 200) : text('', 405))],
+    [/\/api\/streams\?src=k1$/, (url, init) => (init.method === 'DELETE' ? text('', 200) : text('', 405))],
+    [/\/api\/streams\?src=neni$/, () => text('', 404)],
+    [/\/api\/streams\?name=spatne/, () => text('rtsp://u:tajne@1.1.1.1 bad', 400)],
+  ]);
+  const g = createGo2rtc({ fetchImpl: f });
+  assert.equal(await g.nastavStream('k1', ['rtsp://u:p@1.1.1.1/stream1', 'ffmpeg:rtsp://u:p@1.1.1.1/stream1#video=copy']), true);
+  assert.match(f.seen[0].url, /src=rtsp%3A%2F%2Fu%3Ap%401\.1\.1\.1%2Fstream1&src=ffmpeg%3A/);
+  assert.equal(await g.smazStream('k1'), true);
+  assert.equal(await g.smazStream('neni'), true, '404 není chyba');
+  await assert.rejects(g.nastavStream('spatne', ['rtsp://u:tajne@1.1.1.1']), (e) => e instanceof Go2rtcError && /tajne/.test(e.detail) === false && /\*\*\*@/.test(e.detail));
+});

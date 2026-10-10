@@ -109,7 +109,10 @@ const NARAMKY_PORT = process.env.NARAMKY_PORT === undefined ? 5093 : Number(proc
 const naramky = pdp.nastaveno && NARAMKY_PORT > 0 ? createNaramky({ najemci, kamery: kameryTenanty, port: NARAMKY_PORT, sluzba }) : null;
 if (naramky) naramky.start().then((p) => console.log(`[famicura-tapo] náramky a přívěsky: poslouchám na TCP ${p}`)).catch((e) => console.error('[famicura-tapo] náramky:', e.message));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { naramky?.stop().catch(() => {}); });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, svetlo, zasobnik, naramky, sluzba });
+// Správa kamer z hlavní aplikace (zavedení, poskytovatel, světlo, smazání) – zapisuje cameras.json, go2rtc.yaml a CAMERA_NAMES bez restartu.
+const { createSpravaKamer } = await import('./src/sprava-kamer.mjs');
+const sprava = createSpravaKamer({ root: ROOT, soubor: KAMERY, go2rtc, udalosti, svetlo });
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, svetlo, zasobnik, naramky, sluzba, sprava });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

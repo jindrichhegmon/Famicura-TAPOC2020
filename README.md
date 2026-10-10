@@ -233,6 +233,31 @@ smí každý, kdo kameru smí vidět (rodina jen svou); jeden pohyb na kameru
 najednou (409), kamera bez PTZ nebo bez odpovědi 502. Kříž šipek je na
 obraze v detailu dispečinku a v aplikaci rodiny (`.ptz` v `proto.css`).
 
+### Správa kamer v aplikaci (od 3.42)
+
+Hlavní aplikace (přihlášení heslem Famicura, bez `?tenant=` v odkazu) má
+kartu **Správa kamer**: seznam kamer na serveru bez hesel a tlačítka
+Upravit, Poskytovatel, Zkouška obrazu a Smazat; Nová kamera otevře formulář
+se stejnými údaji, na které se ptá `./deploy/vps-kamera.sh` (ID, název, IP
+v tunelu, kvalita 1/2, účet kamery, porty, poskytovatel výběrem z aktivních
+tenantů Péče doma plus, místo, heslo účtu TP-Link pro světlo). „Ověřit
+spojení“ zkusí z VPS TCP na RTSP a ONVIF port kamery (tunel), po uložení se
+hned zkouší obraz přes go2rtc.
+
+Server (`src/sprava-kamer.mjs`) zapíše `cameras.json`, `go2rtc.yaml` a
+`CAMERA_NAMES` v `.env` (atomicky, práva 600, i do běžícího procesu) a
+go2rtc dostane změnu hned přes `PUT /api/streams?name=ID&src=…` nebo
+`DELETE /api/streams?src=ID` (go2rtc si ji zapíše i do `go2rtc.yaml`, práva
+se vrátí na 600); odběr událostí kamer se obnoví (`udalosti.start()`) a
+paměť světla kamery se zapomene. Nic se nerestartuje. Když go2rtc změnu
+nepřevezme, kamera je uložená a karta ukáže varování; projeví se po
+restartu go2rtc. API: `GET/POST/DELETE /api/sprava/kamery`,
+`POST /api/sprava/tenant`, `POST /api/sprava/svetlo`,
+`POST /api/sprava/over`, `GET /api/sprava/zkouska?id=` – jen správce serveru
+(cookie bez tenanta), 503 bez modulu. Hesla se ven nevracejí, u existující
+kamery prázdné heslo znamená ponechat, hlášky go2rtc jsou bez hesla v adrese.
+`./deploy/vps-kamera.sh` dělá totéž z Terminálu a dál funguje.
+
 ### Dva poskytovatelé vedle sebe (od 3.41)
 
 Každý tenant má vlastní cookie (`fam_tapo_<TENANT>`; správce bez tenanta
@@ -891,6 +916,9 @@ může zůstat nainstalovaný; nepřekáží.
 ./deploy/vps-env.sh         # heslo správce; hesla k SQL (CLB1, PeceDomaPlus) a token jhn-apps převezme, klíč vygeneruje; SMS a asistent
 ./deploy/vps-kamera.sh      # IP kamery, účet kamery (heslo skrytě), název, ID tenanta a místo
 ```
+
+Kamery jdou od 3.42 zavést, převést k poskytovateli i smazat také v hlavní
+aplikaci, karta Správa kamer (část „Správa kamer v aplikaci“ výše).
 
 `vps-kamera.sh` na konci ověří, že kamera posílá obraz. S Windows
 serverem se na IP kamery neptá: go2rtc chodí na server v tunelu

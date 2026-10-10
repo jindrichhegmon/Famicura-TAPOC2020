@@ -116,7 +116,7 @@ function verejnaAdresa(req) {
 }
 
 export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null, svetlo = null, sluzba = null,
-                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null }) {
+                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null, sprava = null }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
   pdp = pdp || createPdp();
@@ -737,6 +737,51 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (isDefaultWatch(r.watch)) delete all[deviceId]; else all[deviceId] = r.watch;
         await store.uloz('watch', all);
         return json({ ok: true, watch: r.watch });
+      }
+
+      // Správa kamer (zavedení, úprava, poskytovatel, světlo, smazání) – totéž co ./deploy/vps-kamera.sh, bez Terminálu.
+      if (path === '/api/sprava/kamery' || path.startsWith('/api/sprava/')) {
+        if (ja.tenant) return json({ ok: false, error: 'Správa kamer je jen pro správce serveru (přihlášení heslem Famicura bez poskytovatele v odkazu).' }, 403);
+        if (!sprava) return json({ ok: false, error: 'Správa kamer není na tomto serveru zapnutá.' }, 503);
+        if (m === 'GET' && path === '/api/sprava/kamery') {
+          const kam = await sprava.seznam();
+          let tenanti = [];
+          try { tenanti = pdp.seznamTenantu ? await pdp.seznamTenantu() : []; } catch (e) { console.error('[famicura-tapo] seznam tenantů:', e.message); }
+          const pocty = {}; for (const k of kam) if (k.tenant) pocty[k.tenant] = (pocty[k.tenant] || 0) + 1;
+          return json({ ok: true, kamery: kam, tenanti: tenanti.map((t) => ({ ...t, kamer: pocty[t.id] || 0 })), pdp: !!pdp.nastaveno });
+        }
+        if (m === 'POST' && path === '/api/sprava/kamery') {
+          const t = await telo(req);
+          if (t.tenant) { const ten = await pdp.tenant(t.tenant); if (!ten && pdp.nastaveno) return json({ ok: false, error: `Poskytovatel ${normTenant(t.tenant)} není v Péče doma plus (aktivní tenant).` }, 400); }
+          const r = await sprava.uloz(t);
+          return json({ ok: true, ...r });
+        }
+        if (m === 'DELETE' && path === '/api/sprava/kamery') {
+          const id = url.searchParams.get('id') || '';
+          if (!isDeviceId(id)) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
+          return json({ ok: true, ...(await sprava.smaz(id)) });
+        }
+        if (m === 'POST' && path === '/api/sprava/tenant') {
+          const t = await telo(req);
+          if (!isDeviceId(t.id || '')) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
+          if (t.tenant) { const ten = await pdp.tenant(t.tenant); if (!ten && pdp.nastaveno) return json({ ok: false, error: `Poskytovatel ${normTenant(t.tenant)} není v Péče doma plus (aktivní tenant).` }, 400); }
+          return json({ ok: true, ...(await sprava.tenant(t.id, t.tenant || '', t.place)) });
+        }
+        if (m === 'POST' && path === '/api/sprava/svetlo') {
+          const t = await telo(req);
+          if (!isDeviceId(t.id || '')) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
+          return json({ ok: true, ...(await sprava.svetlo(t.id, String(t.tapoPass || ''), t.tapoUser)) });
+        }
+        if (m === 'POST' && path === '/api/sprava/over') {
+          const t = await telo(req);
+          return json({ ok: true, ...(await sprava.over(String(t.ip || ''), t.rtspPort, t.onvifPort)) });
+        }
+        if (m === 'GET' && path === '/api/sprava/zkouska') {
+          const id = url.searchParams.get('id') || '';
+          if (!isDeviceId(id)) return json({ ok: false, error: 'Neplatné ID kamery.' }, 400);
+          return json({ ok: true, ...(await sprava.zkouska(id)) });
+        }
+        return json({ ok: false, error: 'Neznámá adresa.' }, 404);
       }
 
       if (m === 'GET' && path === '/api/diag') {

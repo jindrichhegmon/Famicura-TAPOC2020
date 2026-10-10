@@ -5,6 +5,27 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.42 · 10. 10. 2026 · správa kamer v aplikaci (zavedení, poskytovatel, smazání bez Terminálu)
+
+- Hlavní aplikace (heslo Famicura, bez poskytovatele v odkazu) má kartu
+  **Správa kamer**: seznam kamer na serveru (ID, název, adresa, kvalita, účet,
+  poskytovatel, místo, účet pro světlo) a tlačítka Upravit, Poskytovatel,
+  Zkouška obrazu, Smazat; tlačítko Nová kamera otevře formulář (ID, název,
+  IP v tunelu, kvalita 1/2, účet kamery, porty, poskytovatel z Péče doma
+  plus výběrem, místo, heslo účtu TP-Link pro světlo). „Ověřit spojení“ zkusí
+  z VPS TCP na porty RTSP a ONVIF kamery, po uložení se hned zkouší obraz
+  přes go2rtc. Totéž, co `./deploy/vps-kamera.sh`, ale bez Terminálu.
+- Server změnu zapíše do `cameras.json`, `go2rtc.yaml` a `CAMERA_NAMES`
+  (`src/sprava-kamer.mjs`, soubory atomicky s právy 600) a go2rtc ji předá
+  hned přes jeho API (`PUT`/`DELETE /api/streams`), takže se nic
+  nerestartuje; odběr událostí kamer se obnoví sám. Hesla se nevracejí ani
+  nelogují, hlášky go2rtc mají adresu bez hesla. Poskytovatel musí být
+  aktivní tenant v Péče doma plus (`pdp.seznamTenantu()`), prázdné heslo u
+  existující kamery znamená ponechat. API `/api/sprava/*` jen pro správce
+  serveru (přihlášení bez tenanta), dispečer poskytovatele ho nemá.
+- `./deploy/vps-kamera.sh` funguje dál (stejné soubory; po něm se server
+  restartuje jako dřív).
+
 ## 3.41 · 10. 10. 2026 · dva dispečinky dvou poskytovatelů vedle sebe
 
 - Přihlášení má každý tenant ve vlastní cookie (`fam_tapo_<TENANT>`, správce
