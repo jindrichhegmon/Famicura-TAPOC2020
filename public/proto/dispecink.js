@@ -583,7 +583,7 @@ function renderDetail(rebuild = false) {
       </div></section>
       <section class="dsec hide" data-sec="nastaveni">
         <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; ve sloupcích SMS komu a E-mail komu zatrhněte příjemce z Kontaktů (Komunikace) a telefony poskytovatele (⚙ Nastavení)</p>
-        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS komu</th><th>E-mail komu</th></tr></thead><tbody id="dwatch">${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno"><input type="time" class="from"> – <input type="time" class="to"> <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide"><input type="time" class="from2"> – <input type="time" class="to2"></div><div class="okno hide"><input type="time" class="from3"> – <input type="time" class="to3"></div></td><td><input type="checkbox" class="rec"></td><td class="prij" data-t="sms"></td><td class="prij" data-t="mail"></td></tr>`).join('')}</tbody></table>
+        <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS komu</th><th>E-mail komu</th></tr></thead><tbody id="dwatch"><tr class="vychozi" id="dwatchVychozi" title="Výchozí hodnoty: vyplňte je tady a tlačítkem Vše je dosadíte do všech událostí; Bez všechno vymaže"><td><b>Výchozí</b> <span class="small muted">pro všechny události</span><div class="akce vychozi-akce"><button type="button" class="sm" id="dwatchVse" title="dosadí výchozí hodnoty (hlídat, hodiny, nahrávat, SMS komu, e-mail komu) do všech událostí">Vše</button><button type="button" class="sm sec" id="dwatchBez" title="u všech událostí zruší hlídání, hodiny, nahrávání i příjemce">Bez</button></div></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno"><input type="time" class="from"> – <input type="time" class="to"> <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide"><input type="time" class="from2"> – <input type="time" class="to2"></div><div class="okno hide"><input type="time" class="from3"> – <input type="time" class="to3"></div></td><td><input type="checkbox" class="rec"></td><td class="prij" data-t="sms"></td><td class="prij" data-t="mail"></td></tr>${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno"><input type="time" class="from"> – <input type="time" class="to"> <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide"><input type="time" class="from2"> – <input type="time" class="to2"></div><div class="okno hide"><input type="time" class="from3"> – <input type="time" class="to3"></div></td><td><input type="checkbox" class="rec"></td><td class="prij" data-t="sms"></td><td class="prij" data-t="mail"></td></tr>`).join('')}</tbody></table>
         <p class="small muted" id="dwatchPozn"></p>
       </div></section>`;
     detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
@@ -605,7 +605,9 @@ function renderDetail(rebuild = false) {
     const naplnWatch = () => {
       const pp = sim.patient(p.id) || p, volby = volbyPrijemcu(pp);
       const chips = (seznam, ids, t) => seznam.length ? seznam.map((v) => `<label class="chip pr" title="${esc(v.title)}"><input type="checkbox" data-t="${t}" data-id="${v.id}"${ids.includes(v.id) ? ' checked' : ''}> ${esc(v.text)}</label>`).join('') : '<span class="muted small">–</span>';
-      d.querySelectorAll('#dwatch tr').forEach((tr) => {
+      const vych = d.querySelector('#dwatchVychozi');
+      for (const t of ['sms', 'mail']) { const cell = vych.querySelector(`.prij[data-t="${t}"]`); const drz = [...cell.querySelectorAll('input:checked')].map((i) => i.dataset.id); setHtml(cell, chips(volby[t], drz, t)); }
+      d.querySelectorAll('#dwatch tr[data-k]').forEach((tr) => {
         const k = tr.dataset.k, w = pp.watch?.[k] || { on: true, from: '', to: '', rec: false };
         if (document.activeElement && tr.contains(document.activeElement)) return;
         tr.querySelector('.on').checked = w.on; tr.querySelector('.from').value = w.from; tr.querySelector('.to').value = w.to; tr.querySelector('.rec').checked = w.rec;
@@ -618,7 +620,28 @@ function renderDetail(rebuild = false) {
         : 'Nejsou zadané žádné kontakty: vyplňte rodinu, telefony poskytovatele a e-maily v Komunikaci → Kontakty, nebo založte účty rodiny (Uživatelé rodiny).';
     };
     naplnWatch();
-    d.querySelectorAll('#dwatch tr').forEach((tr) => {
+    // Výchozí řádek: Vše = tytéž hodnoty do všech událostí, Bez = všude vymazat (hlídat vypnout, hodiny, nahrávání a příjemce pryč)
+    {
+      const vych = d.querySelector('#dwatchVychozi');
+      const hodnoty = () => {
+        const volby = volbyPrijemcu(sim.patient(p.id) || p);
+        const ids = (t) => [...vych.querySelectorAll(`.prij input[data-t="${t}"]:checked`)].map((i) => i.dataset.id);
+        const patch = { on: vych.querySelector('.on').checked, from: vych.querySelector('.from').value, to: vych.querySelector('.to').value, from2: vych.querySelector('.from2').value, to2: vych.querySelector('.to2').value, from3: vych.querySelector('.from3').value, to3: vych.querySelector('.to3').value, rec: vych.querySelector('.rec').checked };
+        if (volby.sms.length) patch.sms = ids('sms');
+        if (volby.mail.length) patch.mail = ids('mail');
+        return patch;
+      };
+      const dosad = async (patch, text) => {
+        vych.classList.add('busy');
+        try { for (const k of WATCH_KINDS) await sim.setWatch(p.id, k, { ...patch }); naplnWatch(); toast(text); }   // setWatch nevrací výsledek; chyba serveru přijde jako výjimka / červený proužek
+        catch (e) { toast(`Nastavení alertů: ${e.message}`, 'crit'); }
+        vych.classList.remove('busy');
+      };
+      vych.querySelector('#dwatchVse').onclick = () => dosad(hodnoty(), 'Výchozí hodnoty dosazeny do všech událostí.');
+      vych.querySelector('#dwatchBez').onclick = () => dosad({ on: false, from: '', to: '', from2: '', to2: '', from3: '', to3: '', rec: false, sms: [], mail: [] }, 'U všech událostí zrušeno hlídání, hodiny, nahrávání i příjemci.');
+      vych.querySelector('.okno-dalsi').onclick = () => { const skryta = [...vych.querySelectorAll('.okno.hide')]; if (skryta.length) { skryta[0].classList.remove('hide'); skryta[0].querySelector('input').focus(); } if (skryta.length <= 1) vych.querySelector('.okno-dalsi').disabled = true; };
+    }
+    d.querySelectorAll('#dwatch tr[data-k]').forEach((tr) => {
       const k = tr.dataset.k;
       const push = () => {
         const volby = volbyPrijemcu(sim.patient(p.id) || p);

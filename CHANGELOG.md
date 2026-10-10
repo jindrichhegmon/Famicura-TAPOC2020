@@ -5,6 +5,22 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.40 · 10. 10. 2026 · výchozí řádek v Nastavení alertů (Vše / Bez), světlo kamery doladěné
+
+- Nastavení alertů (Sledování, nahrávání a upozornění): nad událostmi je
+  řádek **Výchozí** se stejnými políčky (hlídat, hodiny, nahrávat, SMS komu,
+  e-mail komu). **Vše** dosadí tyhle hodnoty do všech událostí najednou,
+  **Bez** u všech událostí zruší hlídání, hodiny, nahrávání i příjemce.
+  Jednotlivé řádky jdou pak doladit jako dřív.
+- Světlo kamery podle skutečné Tapo C560WS: kamera počítá pokusy o přihlášení
+  (`time`/`max_time`) a po vyčerpání blokuje (`sec_left`), proto přihlášení
+  jde jedním dotazem, blokace se pozná a server se kamery po neúspěchu na čas
+  nedotýká (blokace podle kamery, špatné heslo 10 min, málo zbývajících pokusů
+  20 min). `device_confirm` se ověřuje proti několika variantám hashe hesla
+  a do logu jde, která sedla; účet, který kamera odmítla, se už nezkouší.
+  Pořadové číslo Seq se přizpůsobí kameře (start_seq+1, nebo start_seq).
+  Kód −40211 (účet bez práv) = přechod na účet TP-Link.
+
 ## 3.39 · 10. 10. 2026 · světlo kamery z dispečinku, záložka Náramek na první pohled
 
 - Světlo kamery: kamery Tapo s bílým reflektorem (C320WS, C520WS, C560WS…)
