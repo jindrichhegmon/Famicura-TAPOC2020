@@ -52,7 +52,7 @@ export function createSvetlo({ kamery, tapo = createTapo, now = Date.now, log = 
 
   const zapamatuj = (kameraId, v) => { const z = { ...(pamet.get(kameraId) || {}), ...v, cas: now() }; pamet.set(kameraId, z); return z; };
   // Po neúspěchu se kamery na čas nedotýkat: blokace podle sec_left kamery, špatné heslo klidMs, výpadek sítě klidSitMs.
-  const klid = (kameraId, e, v) => zapamatuj(kameraId, { ...v, klidDo: now() + (e instanceof TapoError && e.secLeft ? (e.secLeft + 30) * 1000 : e instanceof TapoError && e.auth ? klidMs : klidSitMs) });
+  const klid = (kameraId, e, v) => zapamatuj(kameraId, { ...v, klidDo: now() + (e instanceof TapoError && e.secLeft ? (e.secLeft + 30) * 1000 : e instanceof TapoError && e.auth ? (e.zbyva != null && e.zbyva <= 3 ? 2 * klidMs : klidMs) : klidSitMs) });
   const vKlidu = (z) => z && z.klidDo && z.klidDo > now();
 
   return {

@@ -39,10 +39,9 @@ export function fakeTapo({ password = 'tajne', secure = true, svetlo = true, mod
       if (p.username !== user) { st.spatne++; return odp(401, { error_code: -40401, result: { data: { code: -40411 } } }); }
       if (secure) {
         if (p.encrypt_type !== '3') return odp(200, { error_code: -40413, result: { data: { encrypt_type: ['3'] } } });
-        if (!p.cnonce) return odp(200, { error_code: -40413, result: { data: { encrypt_type: ['3'] } } });
         if (!p.digest_passwd) {
-          st.cnonce = String(p.cnonce); st.nonce = randomBytes(8).toString('hex').toUpperCase();
-          return odp(200, { error_code: -40413, result: { data: { nonce: st.nonce, device_confirm: sha(st.cnonce + H + st.nonce) + st.nonce + st.cnonce, encrypt_type: ['3'] } } });
+          st.cnonce = String(p.cnonce || ''); st.nonce = randomBytes(8).toString('hex').toUpperCase();
+          return odp(200, { error_code: -40401, result: { data: { code: -40401, time: Math.max(0, 10 - st.spatne), max_time: 10, nonce: st.nonce, device_confirm: sha(st.cnonce + H + st.nonce) + st.nonce + st.cnonce, encrypt_type: ['3'], key: 'MFww…' } } });
         }
         if (p.cnonce !== st.cnonce || p.digest_passwd !== sha(H + st.cnonce + st.nonce) + st.cnonce + st.nonce) { st.spatne++; return odp(401, { error_code: -40401, result: { data: { code: -40411 } } }); }
         const key = sha(st.cnonce + H + st.nonce);
