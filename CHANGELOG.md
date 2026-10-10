@@ -9,11 +9,12 @@ dispečinku. Postup nové verze je v README, část „Verze“.
 
 - Nastavení alertů (Sledování, nahrávání a upozornění): nad událostmi je
   řádek **Výchozí** se stejnými políčky (hlídat, hodiny, nahrávat, SMS komu,
-  e-mail komu). **Vše** dosadí tyhle hodnoty do všech událostí najednou,
-  **Bez** u všech událostí zruší hlídání, hodiny, nahrávání i příjemce.
-  Totéž je u každého sloupce zvlášť (Vše / Bez jen pro hlídání, jen pro
-  hodiny, nahrávání, příjemce SMS nebo e-mailů). Jednotlivé řádky jdou pak
-  doladit jako dřív.
+  e-mail komu) a nad každým z nich rolovací výběr **Vše / Bez**: Vše dosadí
+  výchozí hodnotu toho sloupce do všech událostí, Bez ji u všech zruší.
+  Jednotlivé řádky jdou pak doladit jako dřív.
+- Hodiny (jen v hodinách) se vybírají z rolovací nabídky po půlhodině
+  (00:00–23:30) místo psaní času; uložený čas mimo mřížku se v nabídce ukáže
+  také. Platí pro řádek Výchozí i všechny události.
 - Světlo kamery podle skutečné Tapo C560WS: kamera počítá pokusy o přihlášení
   (`time`/`max_time`) a po vyčerpání blokuje (`sec_left`), proto přihlášení
   jde jedním dotazem, blokace se pozná a server se kamery po neúspěchu na čas
