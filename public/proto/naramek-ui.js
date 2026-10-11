@@ -73,32 +73,35 @@ export function slucMereni(radky, oknoMs = 120_000) {
 export function pametMereni(na = 10) { return { radky: null, cas: null, kamera: null, strana: 0, na, nacitam: false }; }
 /** Načte měření ze serveru, když přibylo (čas posledního měření ve stavu se změnil), kamera se změnila, nebo ještě nebylo načteno;
  * bez serveru vezme n.mereni ze stavu. Zavolá `hotovo()` po každém načtení (i náhradním). */
-export function nactiMereni(m, kameraId, n, { naServeru, apiJson, hotovo }) {
+export function nactiMereni(m, kameraId, n, { naServeru, apiJson, hotovo, zdroj = '' }) {
   if (!m) return;
-  const cas = n?.zdravi?.cas || null;
+  // u prstenu je „kdy se načítalo“ čas posledního ozvání (p.prsten.posledni), u náramku čas posledního měření zdraví
+  const cas = n?.zdravi?.cas || n?.posledni || null;
   if (m.radky && m.cas === cas && m.kamera === kameraId) return;
   if (m.kamera !== kameraId) m.strana = 0;
   m.kamera = kameraId; m.cas = cas;
   if (!naServeru) { m.radky = slucMereni(Array.isArray(n?.mereni) ? n.mereni : []); m.strana = 0; hotovo(); return; }
   if (m.nacitam) return; m.nacitam = true;
-  apiJson(`/api/naramek/mereni?kamera=${encodeURIComponent(kameraId)}`).then((r) => { m.radky = r.mereni || []; if (m.strana * m.na >= m.radky.length) m.strana = 0; hotovo(); })
+  apiJson(`/api/naramek/mereni?kamera=${encodeURIComponent(kameraId)}${zdroj ? '&zdroj=' + zdroj : ''}`).then((r) => { m.radky = r.mereni || []; if (m.strana * m.na >= m.radky.length) m.strana = 0; hotovo(); })
     .catch(() => { m.radky = slucMereni(Array.isArray(n?.mereni) ? n.mereni : []); hotovo(); })
     .finally(() => { m.nacitam = false; });
 }
 /** Tabulka měření (HTML): hodnota mimo běžné rozmezí oranžově (warn), mimo varovné rozmezí červeně (bad); meze v sim-core MEZE_ZDRAVI. */
-export function tabulkaMereni(radky) {
+export function tabulkaMereni(radky, sloupce = ['tep', 'tlak', 'spo2', 'teplota']) {
   if (!radky.length) return '<p class="small muted">Zatím žádné měření.</p>';
   const bunka = (k, v, text) => { const u = urovenHodnoty(k, v); const m = MEZE_ZDRAVI[k]; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ` title="mimo běžné rozmezí ${m.ok[0]}–${m.ok[1]} ${m.jednotka}"` : ''}>${text}</td>`; };
   const bunkaTlak = (z) => { if (!(z.tlakS && z.tlakD)) return '<td></td>'; const u = ['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || ''; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ' title="mimo běžné rozmezí 90–139 / 60–89 mmHg"' : ''}>${z.tlakS}/${z.tlakD}</td>`; };
-  return `<table class="mereni"><thead><tr><th>Čas</th><th>Tep</th><th>Tlak</th><th>Kyslík</th><th>Teplota</th></tr></thead><tbody>${radky.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td>${bunka('tep', z.tep, z.tep ?? '')}${bunkaTlak(z)}${bunka('spo2', z.spo2, z.spo2 ? z.spo2 + ' %' : '')}${bunka('teplota', z.teplota, z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : '')}</tr>`).join('')}</tbody></table>`;
+  const HLAVICKA = { tep: 'Tep', tlak: 'Tlak', spo2: 'Kyslík', teplota: 'Teplota' };
+  const BUNKA = { tep: (z) => bunka('tep', z.tep, z.tep ?? ''), tlak: bunkaTlak, spo2: (z) => bunka('spo2', z.spo2, z.spo2 ? z.spo2 + ' %' : ''), teplota: (z) => bunka('teplota', z.teplota, z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : '') };
+  return `<table class="mereni"><thead><tr><th>Čas</th>${sloupce.map((k) => `<th>${HLAVICKA[k]}</th>`).join('')}</tr></thead><tbody>${radky.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td>${sloupce.map((k) => BUNKA[k](z)).join('')}</tr>`).join('')}</tbody></table>`;
 }
 /** Stránka měření do `el` a text stránkování (vrátí ho); tlačítka novější/starší zapne či vypne podle stránky. */
-export function kresliStranuMereni(m, { el, strana, prev, next }) {
+export function kresliStranuMereni(m, { el, strana, prev, next, sloupce }) {
   const radky = m.radky || []; const stran = Math.max(1, Math.ceil(radky.length / m.na)); if (m.strana >= stran) m.strana = stran - 1;
   const vyrez = radky.slice(m.strana * m.na, (m.strana + 1) * m.na);
   if (strana) strana.textContent = radky.length ? `${m.strana + 1} / ${stran} · ${radky.length}${radky.length >= 2000 ? '+' : ''} měření` : '';
   if (prev) prev.disabled = m.strana === 0; if (next) next.disabled = m.strana >= stran - 1;
-  setHtml(el, tabulkaMereni(vyrez));
+  setHtml(el, tabulkaMereni(vyrez, sloupce));
   return radky;
 }
 
@@ -112,13 +115,14 @@ const GRAFY = [
   { k: 'spo2', nazev: 'Kyslík v krvi', jednotka: '%', serie: [['spo2', 'kyslík', 's1']] },
   { k: 'teplota', nazev: 'Teplota', jednotka: '°C', serie: [['teplota', 'teplota', 's1']] },
 ];
-export function kresliGrafy(el, radky, pocet = GRAF_MERENI) {
+export function kresliGrafy(el, radky, pocet = GRAF_MERENI, jen = null) {
   if (!el) return;
+  const grafy = jen ? GRAFY.filter((g) => jen.includes(g.k)) : GRAFY;
   const W = 320, H = 150, L = 36, R = 10, T = 10, B = 24, OKRAJ = 16;   // OKRAJ: body odsazené od krajů, ať se popisky časů vejdou pod ně
   const fmtCas = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
   const fmtDen = (t) => new Date(t).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
   const fmtV = (v) => String(v).replace('.', ',');
-  setHtml(el, GRAFY.map((g) => {
+  setHtml(el, grafy.map((g) => {
     // posledních N měření, ve kterých je některá veličina grafu (sada jen s teplotou se v grafu tepu nepočítá)
     const vsechna = (radky || []).filter((r) => g.serie.some(([k]) => r[k] != null)).sort((a, b) => b.cas - a.cas).slice(0, pocet).sort((a, b) => a.cas - b.cas);
     const serie = g.serie.filter(([k]) => vsechna.some((r) => r[k] != null));

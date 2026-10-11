@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho } from '/proto/naramek-ui.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -536,7 +536,7 @@ function renderDetail(rebuild = false) {
     const kon = kontaktyPro(p);
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
       <div class="dtabsSk" id="dtabs" role="tablist">
-        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="seg dtabs"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></button></div></div>
+        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="seg dtabs"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></button><button type="button" data-t="prsten" role="tab">💍 Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">nepřipojen</span></button></div></div>
         <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="seg dtabs"><button type="button" data-t="komunikace" role="tab">💬 Komunikace a kontakty</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení alertů</button></div></div>
       </div>
       <section class="dsec" data-sec="monitoring">
@@ -607,6 +607,22 @@ function renderDetail(rebuild = false) {
           <p class="small bad hide" id="dnaramekErr"></p>
         </form>
       </div></section>
+      <section class="dsec hide" data-sec="prsten">
+        <div class="naramekBanner" id="dprstenBanner"></div>
+        <div id="dprstenAgenda">
+        <div class="blok"><h3>Stav prstenu</h3><p class="small muted">– poslední ozvání telefonu u klienta, baterie prstenu a poslední hodnoty; grafy posledních 10 měření</p>
+        <p id="dprstenInfo"></p>
+        <div class="mapagraf"><div class="grafy prsten" id="dprstenGraf"></div></div>
+        </div><div class="blok"><h3>Měření z prstenu</h3><p class="small muted">– tep si prsten měří sám každých 5 minut, kyslík v krvi měří telefon jednou za hodinu; stejná tabulka a export jako u náramku, jen s hodnotami, které prsten umí</p>
+        <div class="akce"><label class="small">na stránku <select id="dprstenNa">${[10, 20, 50, 100].map((v) => `<option value="${v}">${v}</option>`).join('')}</select></label><button type="button" class="sm sec" id="dprstenPrev">‹ novější</button><span class="small muted" id="dprstenStrana"></span><button type="button" class="sm sec" id="dprstenNext">starší ›</button><button type="button" class="sm sec" id="dprstenExcel">Stáhnout do Excelu</button></div>
+        <div id="dprstenMereni"></div>
+        </div></div><div class="blok"><h3>Připojení prstenu</h3><p class="small muted">– prsten (QRing / Colmi) nemá SIM ani GPS; s naší aplikací ho spojuje telefon s Androidem u klienta</p>
+        <ol class="small" style="margin:4px 0 0;padding-left:20px;line-height:1.6">
+          <li>Na telefonu s Androidem otevřete v Chrome <a href="/proto/rodina.html${JA?.tenant?.id ? '?tenant=' + encodeURIComponent(JA.tenant.id) : ''}" target="_blank" rel="noopener">aplikaci rodiny</a> a přihlaste se účtem rodiny tohoto klienta.</li>
+          <li>Otevřete <a href="/proto/prsten.html${JA?.tenant?.id ? '?tenant=' + encodeURIComponent(JA.tenant.id) : ''}" target="_blank" rel="noopener">stránku Prsten</a>, vyberte klienta a stiskněte <b>Připojit prsten</b> (prsten nesmí být zároveň spojený s aplikací QRing).</li>
+          <li>Telefon nechte u klienta na nabíječce s otevřenou stránkou: každých 15 minut pošle historii tepu, jednou za hodinu změří kyslík. Měření se objeví tady.</li>
+        </ol>
+      </section>
       <section class="dsec hide" data-sec="nastaveni">
         <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; ve sloupcích SMS komu a E-mail komu zatrhněte příjemce z Kontaktů (Komunikace) a telefony poskytovatele (⚙ Nastavení)</p>
         <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS komu</th><th>E-mail komu</th></tr></thead><tbody id="dwatch"><tr class="vychozi" id="dwatchVychozi" title="Výchozí hodnoty: nastavte je tady a výběrem Vše je dosadíte do všech událostí (každý sloupec zvlášť); Bez u všech událostí zruší"><td><b>Výchozí</b><br><span class="small muted">šablona pro Vše / Bez</span></td><td><select class="vychozi-sel" data-col="on" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><input type="checkbox" class="on"></td><td class="hod"><select class="vychozi-sel" data-col="hod" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><div class="okno">${casSelect('from')} – ${casSelect('to')} <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide">${casSelect('from2')} – ${casSelect('to2')}</div><div class="okno hide">${casSelect('from3')} – ${casSelect('to3')}</div></td><td><select class="vychozi-sel" data-col="rec" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><input type="checkbox" class="rec"></td><td><select class="vychozi-sel" data-col="sms" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><div class="prij" data-t="sms"></div></td><td><select class="vychozi-sel" data-col="mail" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><div class="prij" data-t="mail"></div></td></tr>${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno">${casSelect('from')} – ${casSelect('to')} <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide">${casSelect('from2')} – ${casSelect('to2')}</div><div class="okno hide">${casSelect('from3')} – ${casSelect('to3')}</div></td><td><input type="checkbox" class="rec"></td><td class="prij" data-t="sms"></td><td class="prij" data-t="mail"></td></tr>`).join('')}</tbody></table>
@@ -780,8 +796,19 @@ function renderDetail(rebuild = false) {
     d.querySelector('#dnaramekNext').onclick = () => { if ((mer.strana + 1) * mer.na < (mer.radky?.length || 0)) { mer.strana++; kresliMereni(d); } };
     d.querySelector('#dnaramekExcel').onclick = () => {
       if (!sim.naServeru) { toast('Export jde jen se stavem na serveru.', 'crit'); return; }
-      const a = document.createElement('a'); a.href = `/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}&format=xlsx`; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+      const a = document.createElement('a'); a.href = `/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}&zdroj=naramek&format=xlsx`; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
       toast('Stahuji sešit Excelu s měřením…');
+    };
+    // měření prstenu (záložka Prsten): stejná paměť a stránkování, zdroj=prsten, grafy jen tep a kyslík
+    const merP = d.__mereniPrsten = pametMereni(mer.na);
+    const selNaP = d.querySelector('#dprstenNa'); selNaP.value = String(merP.na);
+    selNaP.onchange = () => { merP.na = Number(selNaP.value) || 10; merP.strana = 0; kresliMereniPrstenu(d); };
+    d.querySelector('#dprstenPrev').onclick = () => { if (merP.strana > 0) { merP.strana--; kresliMereniPrstenu(d); } };
+    d.querySelector('#dprstenNext').onclick = () => { if ((merP.strana + 1) * merP.na < (merP.radky?.length || 0)) { merP.strana++; kresliMereniPrstenu(d); } };
+    d.querySelector('#dprstenExcel').onclick = () => {
+      if (!sim.naServeru) { toast('Export jde jen se stavem na serveru.', 'crit'); return; }
+      const a = document.createElement('a'); a.href = `/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}&zdroj=prsten&format=xlsx`; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+      toast('Stahuji sešit Excelu s měřením z prstenu…');
     };
     // rozpracovaná volba SOS se při obnově detailu (každé 2 s) nepřepisuje uloženými čísly, dokud se neuloží
     d.querySelectorAll('.nsos').forEach((sel) => { sel.onchange = () => { d.querySelector('#dksos').dataset.zmena = '1'; kresliVola(d, p); }; });
@@ -904,6 +931,7 @@ function renderDetail(rebuild = false) {
     const as = d.querySelector('#dnaramekAutoStav');
     if (as && !d.querySelector('#dnaramekAuto').contains(document.activeElement)) as.textContent = n?.auto?.min > 0 ? `uloženo: každých ${n.auto.min} min` : 'vypnuto';
     nactiMereni(d, p, n);
+    kresliPrsten(d, p);
     const popl = poplachyNaramku(sim.state.events, p.id);
     setHtml(d.querySelector('#dnaramekPoplachy'), popl.length
       ? popl.map((e) => `<li><span class="badge ${esc(urovenUdalosti(e) || 'info')}">${esc(KINDS[e.kind]?.source || 'náramek')}</span><span class="when">${esc(fmtDT(e.at))}</span><span class="grow">${escOdkazy(eventText(e))}${e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''}</span></li>`).join('')
@@ -1102,7 +1130,26 @@ function kresliVolaUlozene(d, p) {
 }
 const MERENI_NA_KEY = 'famicura.mereniNa';
 /** Měření zdraví: načte ze serveru, když přibylo (naramek-ui.nactiMereni), a překreslí tabulku, grafy a mapu. */
-function nactiMereni(d, p, n) { nactiMereniNaramku(d.__mereni, p.id, n, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereni(d) }); }
+function nactiMereni(d, p, n) { nactiMereniNaramku(d.__mereni, p.id, n, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereni(d), zdroj: 'naramek' }); }
+function kresliMereniPrstenu(d) {
+  const m = d.__mereniPrsten; const el = d.querySelector('#dprstenMereni'); if (!m || !el) return;
+  const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dprstenStrana'), prev: d.querySelector('#dprstenPrev'), next: d.querySelector('#dprstenNext'), sloupce: ['tep', 'spo2'] });
+  kresliGrafy(d.querySelector('#dprstenGraf'), radky, undefined, ['tep', 'spo2']);
+}
+/** Záložka Prsten: stav (poslední ozvání, baterie, poslední hodnoty), měření jen z prstenu (zdroj=prsten). */
+function kresliPrsten(d, p) {
+  const r = p.prsten; const je = !!r?.id;
+  d.querySelector('#dprstenAgenda').classList.toggle('hide', !je);
+  d.querySelector('#dtabPrstenNeni').classList.toggle('hide', je);
+  const ban = d.querySelector('#dprstenBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
+  const z = r?.zdravi || {};
+  const hodnoty = [z.tep != null ? `tep ${z.tep} /min (${fmtDT(z.tepCas)})` : '', z.spo2 != null ? `kyslík ${z.spo2} % (${fmtDT(z.spo2Cas)})` : ''].filter(Boolean).join(' · ');
+  setHtml(ban, je
+    ? `<span class="ic">💍</span><span><b>Prsten ${esc(r.nazev || r.id)} posílá měření</b><br><span class="small">${esc(r.posledni ? `naposledy se ozval ${fmtDT(r.posledni)}` : 'zatím se neozval')}${Number.isFinite(r.baterie) ? ` · baterie ${esc(String(r.baterie))} %` : ''}${jeTicho(r) ? ' · <b>přes 2 hodiny nic – je telefon u klienta zapnutý se stránkou Prsten?</b>' : ''}</span></span>`
+    : '<span class="ic">💍</span><span><b>Prsten zatím nic neposlal</b><br><span class="small">Připojte prsten přes telefon u klienta (postup níže). Stav a měření se ukážou, jakmile přijde první měření.</span></span>');
+  setHtml(d.querySelector('#dprstenInfo'), je ? (hodnoty ? `Poslední hodnoty: ${esc(hodnoty)}` : '<span class="muted">Zatím bez hodnot.</span>') : '');
+  if (je) nactiMereniNaramku(d.__mereniPrsten, p.id, r, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereniPrstenu(d), zdroj: 'prsten' });
+}
 function kresliMereni(d) {
   const m = d.__mereni; const el = d.querySelector('#dnaramekMereni'); if (!m || !el) return;
   const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dnaramekStrana'), prev: d.querySelector('#dnaramekPrev'), next: d.querySelector('#dnaramekNext') });

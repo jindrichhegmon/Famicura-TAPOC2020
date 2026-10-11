@@ -134,6 +134,11 @@ Stav příjmu je v `/api/health` (`naramky`: port, spojení, přijato, poplachy)
 
 ### Chytrý prsten QRing (od 3.48)
 
+Od 3.49 má prsten v detailu kamery v dispečinku vlastní záložku **Prsten**:
+stav (poslední ozvání, baterie, poslední hodnoty), grafy tepu a kyslíku,
+tabulka měření a export do Excelu (`GET /api/naramek/mereni?zdroj=prsten`,
+záložka Náramek bere `zdroj=naramek`; bez `zdroj` vše) a postup připojení.
+
 Prsten Yawell / Colmi (aplikace QRing: R02, R03, R06, R09, R10 …) nemá SIM
 ani GPS, jen Bluetooth. Most dělá stránka **`/proto/prsten.html`** na
 telefonu s Androidem (Chrome; iPhone Web Bluetooth neumí), který leží

@@ -1157,6 +1157,14 @@ test('prsten přes API: měření z historie do A_KAM_Mereni bez zdvojení, posl
   const radky = await tabulky.vyber(T, 'A_KAM_Mereni', { kde: { KameraID: 'tapoc2020' } });
   assert.equal(radky.length, 3, 'opakované nahrání historie řádky nezdvojí');
   assert.ok(radky.every((x) => x.NaramekId === 'prsten-AbCd1234xyZ9'), 'ID prstenu očištěné a zkrácené');
+  // záložky Náramek a Prsten se nemíchají: zdroj=prsten jen řádky prstenu, zdroj=naramek žádný z nich, bez zdroje vše
+  const jen = async (z) => (await (await h(req('GET', `/api/naramek/mereni?kamera=tapoc2020${z ? '&zdroj=' + z : ''}`, { cookies: cookie() }))).json()).mereni;
+  const vsechna = await jen(''), prsten = await jen('prsten'), naramek = await jen('naramek');
+  assert.ok(prsten.length > 0 && prsten.every((x) => /^prsten-/.test(x.naramek)), 'zdroj=prsten: jen prsten');
+  assert.ok(naramek.every((x) => !/^prsten-/.test(x.naramek)), 'zdroj=naramek: bez prstenu');
+  assert.equal(vsechna.length, prsten.length + naramek.length, 'bez zdroje vše');
+  const xl = await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020&zdroj=prsten&format=xlsx', { cookies: cookie() }));
+  assert.equal(xl.status, 200); assert.match(xl.headers.get('content-disposition'), /famicura-mereni-prsten_/);
   const p = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020');
   assert.equal(p.prsten.zdravi.tep, 66); assert.equal(p.prsten.zdravi.spo2, 97); assert.equal(p.prsten.baterie, 81); assert.equal(p.prsten.nazev, 'R02_1A2B');
   // starší historie poslední hodnotu nepřepíše

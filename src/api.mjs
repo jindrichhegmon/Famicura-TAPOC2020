@@ -508,12 +508,16 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!isDeviceId(kam) || !(await smiKameruId(kam))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         const st = await stavTenanta();
         const xl = url.searchParams.get('format') === 'xlsx';
-        const radky = slucMereni(await st.vypisMereni({ kameraId: kam, limit: xl ? 10000 : 2000 }));   // jedna sada měření = jeden řádek
+        // zdroj=prsten: jen měření prstenu (NaramekId prsten-…), zdroj=naramek: jen náramek; bez zdroje vše (aplikace rodiny)
+        const zdroj = url.searchParams.get('zdroj') || '';
+        const jePrsten = (r) => /^prsten-/.test(String(r.naramek || ''));
+        const vse = (await st.vypisMereni({ kameraId: kam, limit: xl ? 10000 : 2000 })).filter((r) => zdroj === 'prsten' ? jePrsten(r) : zdroj === 'naramek' ? !jePrsten(r) : true);
+        const radky = slucMereni(vse);   // jedna sada měření = jeden řádek
         if (xl) {
           const sv = (await st.stav()).state; const p = sv.patients.find((x) => x.id === kam);
           const kamNazev = p?.name || (await kamery()).find((c) => c.id === kam)?.name || kam;
-          const data = mereniXlsx(radky, { poskytovatel: sv.poskytovatel?.nazev || tenant, kamera: kamNazev, naramek: p?.naramek?.id || '' });
-          const nazev = `famicura-mereni_${kamNazev.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-')}.xlsx`;
+          const data = mereniXlsx(radky, { poskytovatel: sv.poskytovatel?.nazev || tenant, kamera: kamNazev, naramek: zdroj === 'prsten' ? (p?.prsten?.id ? 'prsten ' + p.prsten.id : '') : (p?.naramek?.id || '') });
+          const nazev = `famicura-mereni${zdroj === 'prsten' ? '-prsten' : ''}_${kamNazev.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-')}.xlsx`;
           return new Response(data, { status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="${nazev}"`, 'Cache-Control': 'private, no-store', 'Content-Length': String(data.length) } });
         }
         return json({ ok: true, kamera: kam, mereni: radky });

@@ -545,6 +545,8 @@ svg.g{width:100%;height:auto;display:block;flex:1}
 .g .cara{fill:none;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;opacity:.9}
 .g .bod{stroke:#fff;stroke-width:1.2}.g .bod.warn{fill:var(--oranz);stroke:var(--oranz)}.g .bod.bad{fill:var(--bad);stroke:var(--bad)}
 .g .pasmo{fill:#2a78d6;opacity:.06}.g .popis{font-size:8px;fill:var(--muted)}
+/* záložka Prsten: jen tep a kyslík, dva grafy vedle sebe přes celou šířku */
+.grafy.prsten{flex-basis:100%;grid-template-columns:1fr 1fr;max-width:760px}
 @media(max-width:1100px){.grafy{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.grafy{grid-template-columns:1fr}}
 .mereni td.hod.warn{color:var(--oranz);font-weight:700}.mereni td.hod.bad{color:var(--bad);font-weight:700}

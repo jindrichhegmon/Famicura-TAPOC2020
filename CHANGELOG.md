@@ -5,6 +5,25 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.49 · 11. 10. 2026 · záložka Prsten v detailu kamery
+
+- Detail kamery má vedle Náramku záložku **💍 Prsten** (štítek „nepřipojen“,
+  dokud nepřišlo první měření): pruh se stavem (prsten posílá měření,
+  naposledy se ozval, baterie; přes 2 hodiny bez ozvání zvýrazněně), poslední
+  hodnoty, grafy posledních 10 měření tepu a kyslíku, tabulka Měření
+  z prstenu (sloupce tep a kyslík) se stránkováním a Stáhnout do Excelu
+  a postup připojení přes telefon u klienta (odkazy na aplikaci rodiny a
+  stránku Prsten s tenantem).
+- Měření prstenu a náramku se nemíchají: `GET /api/naramek/mereni` má
+  `zdroj=prsten` (jen řádky `NaramekId` `prsten-…`) nebo `zdroj=naramek`
+  (ostatní); bez `zdroj` vše (aplikace rodiny). Záložka Náramek i její Excel
+  používají `zdroj=naramek`, Prsten `zdroj=prsten` (sešit
+  `famicura-mereni-prsten_…`, v Info „prsten ID“). `vypisMereni` vrací
+  i `naramek` (NaramekId).
+- `naramek-ui.js`: `nactiMereni` bere `zdroj`, `tabulkaMereni` /
+  `kresliStranuMereni` volitelné sloupce, `kresliGrafy` volitelný výběr
+  grafů. Nápověda: nové téma Prsten.
+
 ## 3.48 · 11. 10. 2026 · chytrý prsten (QRing) přes Web Bluetooth
 
 - Nová stránka **`/proto/prsten.html`** pro telefon s Androidem (Chrome) u

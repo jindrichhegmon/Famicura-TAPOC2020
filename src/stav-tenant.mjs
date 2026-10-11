@@ -365,7 +365,7 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     vypisMereni({ kameraId, limit = 2000 } = {}) {
       return serializovane(async () => {
         const r = await tabulky.vyber(tenant, 'A_KAM_Mereni', { kde: { KameraID: kameraId }, razeni: [['Cas', 'DESC']], limit: Math.min(10000, Math.max(1, limit)) });
-        return r.map((x) => ({ cas: x.Cas, tep: x.Tep ?? null, tlakS: x.TlakS ?? null, tlakD: x.TlakD ?? null, spo2: x.Spo2 ?? null, teplota: x.Teplota != null && x.Teplota !== '' ? Number(x.Teplota) : null, naramek: x.NaramekId || '' }));
+        return r.map((x) => ({ cas: x.Cas, naramek: x.NaramekId || '', tep: x.Tep ?? null, tlakS: x.TlakS ?? null, tlakD: x.TlakD ?? null, spo2: x.Spo2 ?? null, teplota: x.Teplota != null && x.Teplota !== '' ? Number(x.Teplota) : null, naramek: x.NaramekId || '' }));
       });
     },
     odemknutiNahravky({ id, kameraId, cas, delkaS, kdo }) {
