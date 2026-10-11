@@ -163,7 +163,7 @@ Nouzový přívěsek nebo hodinky (ReachFar V48 a podobné) posílají poplachy 
 - Rodina i mobilní dispečer mají kartu ⌚ Náramek SOS (za Nahrávkami, dole v liště záložka Náramek): stav a baterie, mapa polohy, grafy posledních 10 měření, tabulka měření po 10 a poplachy z náramku. Jen ke čtení, nic se tam neovládá.
 - Karta je vidět jen u kamery s přiřazeným náramkem; vypnutý náramek tam svítí stejným červeným hlášením jako v dispečinku.
 ` },
-  { id: 'prsten', obrazky: [], nazev: 'Prsten (QRing / Colmi) u klienta', klicova: ['prsten', 'prstýnek', 'qring', 'colmi', 'yawell', 'bluetooth', 'kyslik z prstenu', 'tep z prstenu', 'zalozka prsten', 'telefon u klienta', 'r02', 'r06', 'r10'],
+  { id: 'prsten', obrazky: [], nazev: 'Prsten (QRing / Colmi) u klienta', klicova: ['prsten', 'prstýnek', 'parovaci kod', 'parovani', 'aplikace klienta', 'pecedoma', 'qring', 'colmi', 'yawell', 'bluetooth', 'kyslik z prstenu', 'tep z prstenu', 'zalozka prsten', 'telefon u klienta', 'r02', 'r06', 'r10'],
     obsah: `
 Chytrý prsten (aplikace QRing, výrobci Colmi / Yawell: R02, R03, R06, R09, R10 …) měří tep a kyslík v krvi. Nemá SIM ani GPS, jen Bluetooth; s naší aplikací ho spojuje telefon s Androidem u klienta.
 
@@ -173,12 +173,16 @@ Chytrý prsten (aplikace QRing, výrobci Colmi / Yawell: R02, R03, R06, R09, R10
 - Tabulka Měření z prstenu se stránkováním a **Stáhnout do Excelu** – stejná jako u náramku, jen se sloupci tep a kyslík. Měření prstenu a náramku se nemíchají: každá záložka má svá.
 - Prsten nemá poplachy ani příkazy; SOS, pád a čísla volání zůstávají náramku.
 
-### Připojení prstenu
-1. Na telefonu s Androidem otevřete v Chrome aplikaci rodiny (/proto/rodina.html?tenant=…) a přihlaste se účtem rodiny klienta.
-2. Otevřete stránku /proto/prsten.html?tenant=…, vyberte klienta a stiskněte **Připojit prsten**. V nabídce Bluetooth vyberte prsten (R0…, R1… nebo COLMI).
-3. Telefon nechte u klienta na nabíječce s otevřenou stránkou: drží displej rozsvícený, každých 15 minut pošle historii tepu (prsten si ho měří sám každých 5 minut) a jednou za hodinu změří kyslík. Po výpadku se k prstenu připojí sám.
+### Připojení prstenu přes aplikaci klienta
+O prsten se stará aplikace klienta **PéčeDoma** na telefonu u klienta (Android, Chrome). Famicuře se prokazuje párovacím kódem kamery, nemusí se přihlašovat.
+1. V záložce Prsten klepněte na **Vytvořit párovací kód**. Kód má 12 znaků (bez 0/O a 1/I) a platí jen pro tuto kameru; umí jen posílat měření.
+2. **Poslat SMS** na mobil klienta: v SMS je odkaz, který aplikaci PéčeDoma kód předá. Nebo kód klient opíše v aplikaci na kartě Prsten, nebo mu odkaz otevřete tlačítkem Otevřít aplikaci klienta s kódem.
+3. Klient v aplikaci na kartě Prsten stiskne **Připojit prsten** a vybere prsten v nabídce Bluetooth (R0…, R1… nebo COLMI).
+4. Telefon nechá na nabíječce s otevřenou aplikací: drží displej rozsvícený, každých 15 minut pošle historii tepu (prsten si ho měří sám každých 5 minut) a jednou za hodinu změří kyslík. Po výpadku se k prstenu připojí sám.
 ! Prsten se umí spojit jen s jednou aplikací. Na telefonu u klienta aplikaci QRing neinstalujte, nebo v ní prsten nejdřív odpojte.
-- Na stránce Prsten jde měřit i ručně (Změřit tep, Změřit kyslík, Odeslat historii); prsten musí být na prstu a klient v klidu.
+- **Nový kód** starý zruší (aplikace klienta pak potřebuje nový odkaz); **Zrušit kód** posílání zastaví.
+- Aplikace klienta má i tlačítko do aplikace rodiny Famicura (kamera a náramek); obě aplikace zůstávají oddělené.
+- Náhradní cesta bez aplikace klienta: stránka /proto/prsten.html po přihlášení účtem rodiny (ručně Změřit tep, Změřit kyslík, Odeslat historii).
 ` },
   { id: 'deaktivace', obrazky: [], nazev: 'Deaktivace kamery rodinou', klicova: ['deaktiv', 'aktivov', 'vypnout kameru', 'zapnout kameru', 'strop', 'otocena', 'kamera vypnuta', 'deaktivovana rodinou', 'bez obrazu rodina'],
     obsah: `
@@ -347,6 +351,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.50 (11. 10. 2026)**: o prsten se stará aplikace klienta PéčeDoma na telefonu u klienta – v záložce Prsten vytvoříte párovací kód kamery a pošlete klientovi SMS s odkazem; aplikace pak měření posílá sama (bez přihlášení k Famicuře). Kód jde zrušit nebo nahradit novým.
 - **Verze 3.49 (11. 10. 2026)**: prsten má v detailu kamery vlastní záložku 💍 Prsten (vedle Náramku): stav prstenu (poslední ozvání, baterie, poslední hodnoty), grafy tepu a kyslíku, tabulka měření se stránkováním a export do Excelu; měření prstenu a náramku se už nemíchají. V záložce je i postup připojení přes telefon u klienta; nové téma nápovědy Prsten.
 - **Verze 3.48 (11. 10. 2026)**: chytrý prsten (aplikace QRing, Colmi / Yawell) přes stránku **/proto/prsten.html** na telefonu s Androidem u klienta: telefon se s prstenem spojí přes Bluetooth, každých 15 minut pošle historii tepu a jednou za hodinu změří kyslík. Měření jsou u kamery klienta (od 3.49 v záložce Prsten).
 - **Verze 3.47 (10. 10. 2026)**: hlavní aplikace má správu kamer jako přehledné karty (název, ID, adresa, účet, poskytovatel, světlo, tlačítka) a nemá už kartu Nahrávky – nahrávka z ní jde rovnou na server a je tady v dispečinku v detailu kamery.

@@ -1185,3 +1185,47 @@ test('prsten přes API: měření z historie do A_KAM_Mereni bez zdvojení, posl
   assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: rc, body: telo }))).status, 200, 'rodina u své kamery');
   assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: rc, body: { ...telo, kamera: 'jina' } }))).status, 404, 'rodina u cizí kamery');
 });
+
+test('prsten z aplikace klienta: párovací kód (dispečink vytvoří, pošle SMS, zruší) a měření podle kódu bez přihlášení, s CORS', async () => {
+  const tabulky = createMockTabulky();
+  const sms = { nastaveno: true, calls: [], async posli(x) { this.calls.push(x); return { ok: true }; } };
+  const { h, store, uzivatele, vsichni } = handler({ tabulky, sms });
+  const ted = Date.now();
+  const telo = { prsten: { id: 'R06AB12', nazev: 'R06_AB12', baterie: 70 }, zaznamy: [{ cas: ted - 300_000, tep: 71 }, { cas: ted - 60_000, spo2: 96 }] };
+  // bez kódu a bez přihlášení: 401 s CORS hlavičkou; neplatný kód 401
+  let r = await h(req('POST', '/api/prsten/mereni', { body: telo }));
+  assert.equal(r.status, 401); assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  r = await h(new Request('http://x/api/prsten/mereni', { method: 'POST', headers: { 'content-type': 'application/json', 'x-prsten-klic': 'ABCD-EFGH-JKL2' }, body: JSON.stringify(telo) }));
+  assert.equal(r.status, 401); assert.match((await r.json()).error, /neplatí/);
+  // OPTIONS (preflight z Netlify) projde bez přihlášení
+  r = await h(new Request('http://x/api/prsten/mereni', { method: 'OPTIONS' }));
+  assert.equal(r.status, 204); assert.match(r.headers.get('access-control-allow-headers'), /x-prsten-klic/);
+  // dispečink: kód zatím není, vytvoří ho, odkaz do aplikace klienta
+  let b = await (await h(req('GET', '/api/prsten/klic?kamera=tapoc2020', { cookies: cookie() }))).json();
+  assert.equal(b.klic, null); assert.match(b.aplikace, /^https:\/\/pecedomamobil\.netlify\.app\//);
+  b = await (await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'novy' } }))).json();
+  assert.match(b.klic, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/); assert.match(b.odkaz, /\?prsten=/);
+  const klic = b.klic;
+  assert.equal((await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'cizi', akce: 'novy' } }))).status, 404, 'kamera jiného tenanta');
+  // SMS klientovi s odkazem
+  r = await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'sms', telefon: '777 123 456' } }));
+  assert.equal(r.status, 200); assert.equal(sms.calls.length, 1); assert.equal(sms.calls[0].telefon, '777123456'); assert.match(sms.calls[0].text, new RegExp('prsten=' + klic));
+  assert.equal((await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'sms', telefon: 'x' } }))).status, 400);
+  // aplikace klienta pošle měření kódem v hlavičce (bez cookie) – uloží se ke kameře tenanta
+  r = await h(new Request('http://x/api/prsten/mereni', { method: 'POST', headers: { 'content-type': 'application/json', 'x-prsten-klic': klic.toLowerCase() }, body: JSON.stringify(telo) }));
+  b = await r.json(); assert.equal(r.status, 200, JSON.stringify(b)); assert.equal(b.ulozeno, 2); assert.equal(b.kamera, 'tapoc2020'); assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  const radky = await tabulky.vyber(T, 'A_KAM_Mereni', { kde: { KameraID: 'tapoc2020' } });
+  assert.equal(radky.length, 2); assert.ok(radky.every((x) => x.NaramekId === 'prsten-R06AB12'));
+  // kód v těle místo hlavičky; kód patří jiné kameře → 403
+  r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic } })); assert.equal(r.status, 200);
+  r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic, kamera: 'jina' } })); assert.equal(r.status, 403);
+  // rodina kód nespravuje; zrušení kódu → měření kódem končí
+  const u = await uzivatele.vytvor({ jmeno: 'Jana', telefon: '777000666', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  assert.equal((await h(req('GET', '/api/prsten/klic?kamera=tapoc2020', { cookies: rc }))).status, 403, 'rodina kód nespravuje');
+  b = await (await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'zrusit' } }))).json();
+  assert.equal(b.klic, null);
+  r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic } })); assert.equal(r.status, 401);
+  assert.equal(Object.keys(store.data['prsten-klice'] || {}).length, 0);
+});

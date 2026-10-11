@@ -616,12 +616,16 @@ function renderDetail(rebuild = false) {
         </div><div class="blok"><h3>Měření z prstenu</h3><p class="small muted">– tep si prsten měří sám každých 5 minut, kyslík v krvi měří telefon jednou za hodinu; stejná tabulka a export jako u náramku, jen s hodnotami, které prsten umí</p>
         <div class="akce"><label class="small">na stránku <select id="dprstenNa">${[10, 20, 50, 100].map((v) => `<option value="${v}">${v}</option>`).join('')}</select></label><button type="button" class="sm sec" id="dprstenPrev">‹ novější</button><span class="small muted" id="dprstenStrana"></span><button type="button" class="sm sec" id="dprstenNext">starší ›</button><button type="button" class="sm sec" id="dprstenExcel">Stáhnout do Excelu</button></div>
         <div id="dprstenMereni"></div>
-        </div></div><div class="blok"><h3>Připojení prstenu</h3><p class="small muted">– prsten (QRing / Colmi) nemá SIM ani GPS; s naší aplikací ho spojuje telefon s Androidem u klienta</p>
-        <ol class="small" style="margin:4px 0 0;padding-left:20px;line-height:1.6">
-          <li>Na telefonu s Androidem otevřete v Chrome <a href="/proto/rodina.html${JA?.tenant?.id ? '?tenant=' + encodeURIComponent(JA.tenant.id) : ''}" target="_blank" rel="noopener">aplikaci rodiny</a> a přihlaste se účtem rodiny tohoto klienta.</li>
-          <li>Otevřete <a href="/proto/prsten.html${JA?.tenant?.id ? '?tenant=' + encodeURIComponent(JA.tenant.id) : ''}" target="_blank" rel="noopener">stránku Prsten</a>, vyberte klienta a stiskněte <b>Připojit prsten</b> (prsten nesmí být zároveň spojený s aplikací QRing).</li>
-          <li>Telefon nechte u klienta na nabíječce s otevřenou stránkou: každých 15 minut pošle historii tepu, jednou za hodinu změří kyslík. Měření se objeví tady.</li>
+        </div></div><div class="blok"><h3>Připojení prstenu přes aplikaci klienta</h3><p class="small muted">– prsten (QRing / Colmi) nemá SIM ani GPS; spojuje ho aplikace klienta PéčeDoma na telefonu u klienta (Android, Chrome). Aplikace se prokazuje párovacím kódem této kamery – umí jen posílat měření sem.</p>
+        <div class="prstenKlic" id="dprstenKlicBox"><span class="small muted">Zjišťuji párovací kód…</span></div>
+        <div class="akce"><button type="button" class="sm" id="dprstenKlicNovy">Vytvořit párovací kód</button><a class="sm sec hide" id="dprstenKlicOdkaz" target="_blank" rel="noopener">Otevřít aplikaci klienta s kódem</a><button type="button" class="sm sec hide" id="dprstenKlicZrusit">Zrušit kód</button><span class="small muted" id="dprstenKlicStav"></span></div>
+        <form class="kontakty" id="dprstenSms"><div class="akce"><label class="small">SMS s odkazem klientovi na <input type="tel" id="dprstenSmsTel" maxlength="20" placeholder="777 123 456" style="width:130px" value="${esc((kon.rodina.find((r) => r.telefon) || {}).telefon ? formatTelefonMez(kon.rodina.find((r) => r.telefon).telefon) : '')}"></label><button class="sm sec" type="submit" id="dprstenSmsBtn" disabled>Poslat SMS</button><span class="small muted" id="dprstenSmsStav"></span></div></form>
+        <ol class="small" style="margin:8px 0 0;padding-left:20px;line-height:1.6">
+          <li>Klient otevře odkaz ze SMS v telefonu (aplikace PéčeDoma si kód uloží), nebo kód opíše v aplikaci na kartě Prsten.</li>
+          <li>Na kartě Prsten stiskne <b>Připojit prsten</b> a vybere prsten v nabídce Bluetooth (prsten nesmí být zároveň spojený s aplikací QRing).</li>
+          <li>Telefon nechá na nabíječce s otevřenou aplikací: každých 15 minut odejde historie tepu, jednou za hodinu změří kyslík. Měření se objeví tady.</li>
         </ol>
+        <p class="small muted" style="margin:8px 0 0">Náhradní cesta bez aplikace klienta: <a href="/proto/prsten.html${JA?.tenant?.id ? '?tenant=' + encodeURIComponent(JA.tenant.id) : ''}" target="_blank" rel="noopener">stránka Prsten</a> po přihlášení účtem rodiny.</p>
       </section>
       <section class="dsec hide" data-sec="nastaveni">
         <div class="blok"><h3>Sledování, nahrávání a upozornění</h3><p class="small muted">– nastavuje poskytovatel, rodina to vidí; ve sloupcích SMS komu a E-mail komu zatrhněte příjemce z Kontaktů (Komunikace) a telefony poskytovatele (⚙ Nastavení)</p>
@@ -805,6 +809,33 @@ function renderDetail(rebuild = false) {
     selNaP.onchange = () => { merP.na = Number(selNaP.value) || 10; merP.strana = 0; kresliMereniPrstenu(d); };
     d.querySelector('#dprstenPrev').onclick = () => { if (merP.strana > 0) { merP.strana--; kresliMereniPrstenu(d); } };
     d.querySelector('#dprstenNext').onclick = () => { if ((merP.strana + 1) * merP.na < (merP.radky?.length || 0)) { merP.strana++; kresliMereniPrstenu(d); } };
+    // párovací kód prstenu pro aplikaci klienta: zjistit, vytvořit, zrušit, poslat SMS
+    const klicBox = d.querySelector('#dprstenKlicBox');
+    const kresliKlic = (b) => {
+      const je = !!b?.klic;
+      setHtml(klicBox, je
+        ? `<span class="kod">${esc(b.klic)}</span><span class="small muted">vytvořen ${esc(fmtDT(b.vytvoreno))} · <a href="${esc(b.odkaz)}" target="_blank" rel="noopener">${esc(b.odkaz)}</a></span>`
+        : '<span class="small muted">Kamera zatím nemá párovací kód. Vytvořte ho a pošlete klientovi SMS s odkazem.</span>');
+      d.querySelector('#dprstenKlicNovy').textContent = je ? 'Nový kód (starý přestane platit)' : 'Vytvořit párovací kód';
+      d.querySelector('#dprstenKlicOdkaz').classList.toggle('hide', !je); if (je) d.querySelector('#dprstenKlicOdkaz').href = b.odkaz;
+      d.querySelector('#dprstenKlicZrusit').classList.toggle('hide', !je);
+      d.querySelector('#dprstenSmsBtn').disabled = !je;
+    };
+    const klicAkce = async (akce, navic = {}) => {
+      const st = d.querySelector('#dprstenKlicStav'); st.textContent = '…';
+      try { const b = await post('/api/prsten/klic', { kamera: p.id, akce, ...navic }); kresliKlic(b); st.textContent = akce === 'novy' ? 'kód vytvořen' : 'kód zrušen'; return b; }
+      catch (e) { st.textContent = e.message; toast(e.message, 'crit'); return null; }
+    };
+    if (sim.naServeru) apiJson(`/api/prsten/klic?kamera=${encodeURIComponent(p.id)}`).then(kresliKlic).catch((e) => setHtml(klicBox, `<span class="small bad">${esc(e.message)}</span>`));
+    else setHtml(klicBox, '<span class="small muted">Párovací kód jde jen se stavem na serveru.</span>');
+    d.querySelector('#dprstenKlicNovy').onclick = () => klicAkce('novy');
+    d.querySelector('#dprstenKlicZrusit').onclick = () => { if (confirm('Zrušit párovací kód? Aplikace klienta pak přestane měření posílat, dokud nedostane nový.')) klicAkce('zrusit'); };
+    d.querySelector('#dprstenSms').onsubmit = async (e) => {
+      e.preventDefault();
+      const st = d.querySelector('#dprstenSmsStav'); st.textContent = 'posílám…';
+      try { const b = await post('/api/prsten/klic', { kamera: p.id, akce: 'sms', telefon: d.querySelector('#dprstenSmsTel').value }); st.textContent = `SMS odeslána na ${b.sms?.telefon || ''} ${fmtT(Date.now())}`; }
+      catch (err) { st.textContent = err.message; toast(err.message, 'crit'); }
+    };
     d.querySelector('#dprstenExcel').onclick = () => {
       if (!sim.naServeru) { toast('Export jde jen se stavem na serveru.', 'crit'); return; }
       const a = document.createElement('a'); a.href = `/api/naramek/mereni?kamera=${encodeURIComponent(p.id)}&zdroj=prsten&format=xlsx`; a.download = ''; document.body.appendChild(a); a.click(); a.remove();

@@ -134,6 +134,17 @@ Stav příjmu je v `/api/health` (`naramky`: port, spojení, přijato, poplachy)
 
 ### Chytrý prsten QRing (od 3.48)
 
+Od 3.50 se o prsten stará **aplikace klienta PéčeDoma mobil** (Netlify
+`pecedomamobil`, repozitář PECEDOMA-pacient-mobil, karta Prsten): spáruje se
+s prstenem přes Web Bluetooth a měření posílá sem na `POST /api/prsten/mereni`
+s **párovacím kódem kamery** v hlavičce `x-prsten-klic` (nebo `klic` v těle),
+bez přihlášení k Famicuře; endpoint má CORS (`OPTIONS`). Kód vytvoří dispečink
+v záložce Prsten (`POST /api/prsten/klic` akce `novy` / `zrusit` / `sms`,
+`GET` ho zjistí), pošle klientovi SMS s odkazem `PRSTEN_APLIKACE_URL?prsten=KOD&tenant=ID`
+(`src/prsten-klic.mjs`, kódy v `data/prsten-klice.json`, jeden platný na
+kameru). Kód umí jen posílat měření ke své kameře. Aplikace klienta má také
+tlačítko do aplikace rodiny Famicura; obě aplikace zůstávají oddělené.
+
 Od 3.49 má prsten v detailu kamery v dispečinku vlastní záložku **Prsten**:
 stav (poslední ozvání, baterie, poslední hodnoty), grafy tepu a kyslíku,
 tabulka měření a export do Excelu (`GET /api/naramek/mereni?zdroj=prsten`,

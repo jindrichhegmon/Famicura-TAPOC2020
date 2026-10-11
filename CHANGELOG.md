@@ -5,6 +5,23 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.50 · 11. 10. 2026 · prsten přes aplikaci klienta PéčeDoma (párovací kód)
+
+- Párování prstenu a sběr měření dělá **aplikace klienta PéčeDoma mobil**
+  (Netlify, repozitář PECEDOMA-pacient-mobil, karta Prsten). Aplikaci
+  klienta se Famicura prokazuje **párovacím kódem kamery** (12 znaků, bez
+  0/O a 1/I), nikoli přihlášením: dispečink ho vytvoří v záložce Prsten,
+  pošle klientovi SMS s odkazem (`…/?prsten=KOD&tenant=ID`, aplikace si ho
+  uloží) nebo odkaz otevře; kód jde zrušit a vytvořit nový (starý přestane
+  platit). Kód umí jen posílat měření ke své kameře.
+- Server: `src/prsten-klic.mjs` (kódy v `data/prsten-klice.json`),
+  `GET/POST /api/prsten/klic` (jen poskytovatel; akce `novy`, `zrusit`,
+  `sms`), `POST /api/prsten/mereni` přijme měření i bez přihlášení s kódem
+  v hlavičce `x-prsten-klic` nebo v těle (`klic`), s CORS (`OPTIONS`) pro
+  aplikaci na jiné adrese; `PRSTEN_APLIKACE_URL` v `.env` (výchozí
+  https://pecedomamobil.netlify.app/). Stránka `/proto/prsten.html` zůstává
+  jako náhradní cesta po přihlášení účtem rodiny.
+
 ## 3.49 · 11. 10. 2026 · záložka Prsten v detailu kamery
 
 - Detail kamery má vedle Náramku záložku **💍 Prsten** (štítek „nepřipojen“,

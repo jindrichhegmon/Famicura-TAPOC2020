@@ -66,6 +66,7 @@ import { normTenant } from './tabulky.mjs';
 import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
 import { isDeviceId } from './plan-pravidla.mjs';
+import { createPrstenKlice, formatKlic, odkazAplikace, textSmsKlic } from './prsten-klic.mjs';
 import * as zaznamy from './zaznamy.mjs';
 
 // Když hostname v Caddy spadne na sousední aplikaci, vrátí se její 404 a
@@ -134,6 +135,26 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     return ids.map((id) => ({ id, name: names[id] || id, tenant: tenanty[id] || '', events: st[id]?.events || [] }));
   }
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
+  // párovací kódy prstenu (aplikace klienta posílá měření kódem, bez přihlášení)
+  const prstenKlice = createPrstenKlice({ store });
+  const CORS_PRSTEN = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type, x-prsten-klic', 'Access-Control-Max-Age': '86400' };
+  /** Měření z prstenu (stránka /proto/prsten.html nebo aplikace klienta) → stav tenanta; kontrola rozsahů, nejvýš týden zpátky, ne z budoucnosti. */
+  async function prstenMereni(st, kamera, { prsten, zaznamy } = {}) {
+    const prstenId = String(prsten?.id || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
+    if (!prstenId) throw chyba('Chybí ID prstenu.', 400);
+    if (!Array.isArray(zaznamy) || zaznamy.length > 2000) throw chyba('Záznamy: pole, nejvýš 2000 položek.', 400);
+    const ted = Date.now(), z = [];
+    for (const r of zaznamy) {
+      const cas = Math.round(Number(r?.cas));
+      if (!Number.isFinite(cas) || cas > ted + 10 * 60_000 || cas < ted - 8 * 86_400_000) continue;
+      const tep = Number(r.tep), spo2 = Number(r.spo2);
+      if (Number.isInteger(tep) && tep >= 25 && tep <= 230) z.push({ cas, tep });
+      if (Number.isInteger(spo2) && spo2 >= 70 && spo2 <= 100) z.push({ cas, spo2 });
+    }
+    const bat = Number(prsten?.baterie);
+    const v = await st.prsten({ kameraId: kamera, prstenId, nazev: String(prsten?.nazev || ''), baterie: Number.isInteger(bat) && bat >= 0 && bat <= 100 ? bat : null, zaznamy: z });
+    return { prijato: z.length, ulozeno: v.ulozeno };
+  }
 
   async function telo(req) {
     try { return await req.json(); }
@@ -233,6 +254,19 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const token = url.searchParams.get('token') || '';
         if (token.length > 100) return json({ ok: false, error: 'Neplatný odkaz.' }, 400);
         return json({ ok: true, ...(await uzivatele.pozvanka(token)) });
+      }
+
+      // Měření z prstenu z aplikace klienta (PéčeDoma mobil na Netlify, jiný původ): prokazuje se párovacím kódem
+      // v hlavičce x-prsten-klic nebo v těle (klic), bez přihlášení; kód umí jen poslat měření ke své kameře.
+      if (m === 'OPTIONS' && path === '/api/prsten/mereni') return new Response(null, { status: 204, headers: CORS_PRSTEN });
+      if (m === 'POST' && path === '/api/prsten/mereni' && (req.headers.get('x-prsten-klic') || !kdoSession(req.headers, tenantHint(req.headers, req.url)))) {
+        const t = await telo(req);
+        const klic = req.headers.get('x-prsten-klic') || t.klic || '';
+        const z = klic ? await prstenKlice.najdi(klic) : null;
+        if (!z) return json({ ok: false, error: klic ? 'Párovací kód neplatí. Požádejte dispečink o nový (záložka Prsten u kamery).' : 'Chybí párovací kód prstenu.' }, 401, CORS_PRSTEN);
+        if (t.kamera && t.kamera !== z.kamera) return json({ ok: false, error: 'Kód patří jiné kameře.' }, 403, CORS_PRSTEN);
+        try { return json({ ok: true, kamera: z.kamera, ...(await prstenMereni(await najemci.pro(z.tenant), z.kamera, t)) }, 200, CORS_PRSTEN); }
+        catch (e) { return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
       }
 
       // tenant, který stránka míní (?tenant= v adrese dispečinku / aplikace rodiny, přes Referer nebo hlavičku): vybere se jeho cookie
@@ -548,23 +582,33 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // Prsten (Colmi / QRing) u klienta: stránka /proto/prsten.html na telefonu přečte prsten přes Web Bluetooth a pošle sem
       // historii tepu a změřený kyslík. Posílat smí každý, kdo kameru vidí (rodina u své kamery, mobilní dispečer, dispečink).
       if (m === 'POST' && path === '/api/prsten/mereni') {
-        const { kamera, prsten, zaznamy } = await telo(req);
-        if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
-        const prstenId = String(prsten?.id || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
-        if (!prstenId) return json({ ok: false, error: 'Chybí ID prstenu.' }, 400);
-        if (!Array.isArray(zaznamy) || zaznamy.length > 2000) return json({ ok: false, error: 'Záznamy: pole, nejvýš 2000 položek.' }, 400);
-        const ted = Date.now(), z = [];
-        for (const r of zaznamy) {
-          const cas = Math.round(Number(r?.cas));
-          if (!Number.isFinite(cas) || cas > ted + 10 * 60_000 || cas < ted - 8 * 86_400_000) continue;   // nejvýš týden zpátky, ne z budoucnosti
-          const tep = Number(r.tep), spo2 = Number(r.spo2);
-          if (Number.isInteger(tep) && tep >= 25 && tep <= 230) z.push({ cas, tep });
-          if (Number.isInteger(spo2) && spo2 >= 70 && spo2 <= 100) z.push({ cas, spo2 });
+        const t = await telo(req);
+        if (!isDeviceId(t.kamera) || !(await smiKameruId(t.kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        return json({ ok: true, ...(await prstenMereni(await stavTenanta(), t.kamera, t)) });
+      }
+      // Párovací kód prstenu pro aplikaci klienta (jen poskytovatel): zjistit, vytvořit / zrušit, poslat klientovi SMS s odkazem.
+      if (path === '/api/prsten/klic') {
+        if (rodina) return jenPoskytovatel();
+        if (!tenant) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
+        const t = m === 'GET' ? { kamera: url.searchParams.get('kamera') || '' } : await telo(req);
+        if (!isDeviceId(t.kamera || '') || !(await smiKameruId(t.kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        const odpoved = async (navic = {}) => { const k = await prstenKlice.pro(tenant, t.kamera); return json({ ok: true, kamera: t.kamera, klic: k ? formatKlic(k.klic) : null, vytvoreno: k?.vytvoreno || null, odkaz: k ? odkazAplikace(k.klic, undefined, tenant) : null, aplikace: odkazAplikace('').replace(/\?.*$/, ''), ...navic }); };
+        if (m === 'GET') return odpoved();
+        if (m !== 'POST') return json({ ok: false, error: 'GET nebo POST' }, 405);
+        if (t.akce === 'novy') { await prstenKlice.vytvor(tenant, t.kamera); return odpoved(); }
+        if (t.akce === 'zrusit') { await prstenKlice.zrus(tenant, t.kamera); return odpoved(); }
+        if (t.akce === 'sms') {
+          const k = await prstenKlice.pro(tenant, t.kamera);
+          if (!k) return json({ ok: false, error: 'Nejdřív vytvořte párovací kód.' }, 400);
+          const tel = normalizeTelefon(t.telefon || '');
+          if (!tel) return json({ ok: false, error: 'Zadejte český mobil klienta (např. 777 123 456).' }, 400);
+          if (!sms.nastaveno) return json({ ok: false, error: 'SMS není na serveru nastavená (SMS_WEBHOOK_URL).' }, 503);
+          const sv = (await (await stavTenanta()).stav()).state;
+          const r = await sms.posli({ telefon: tel, text: textSmsKlic({ odkaz: odkazAplikace(k.klic, undefined, tenant), poskytovatel: sv.poskytovatel?.nazev || '' }), typ: 'FAMICURA_PRSTEN', poznamka: `Párovací kód prstenu, kamera ${t.kamera}.` });
+          if (!r.ok) return json({ ok: false, error: `SMS neodešla: ${r.error || 'chyba'}` }, 502);
+          return odpoved({ sms: { telefon: formatTelefon(tel), cas: Date.now() } });
         }
-        const bat = Number(prsten?.baterie);
-        const v = await (await stavTenanta()).prsten({ kameraId: kamera, prstenId, nazev: String(prsten?.nazev || ''),
-          baterie: Number.isInteger(bat) && bat >= 0 && bat <= 100 ? bat : null, zaznamy: z });
-        return json({ ok: true, prijato: z.length, ulozeno: v.ulozeno });
+        return json({ ok: false, error: 'akce: novy, zrusit, nebo sms' }, 400);
       }
 
       // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.
