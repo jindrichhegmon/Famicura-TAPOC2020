@@ -5,6 +5,26 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.48 · 11. 10. 2026 · chytrý prsten (QRing) přes Web Bluetooth
+
+- Nová stránka **`/proto/prsten.html`** pro telefon s Androidem (Chrome) u
+  klienta: přihlášení stejné jako v aplikaci rodiny, výběr klienta (kamery),
+  tlačítko Připojit prsten (Web Bluetooth). Podporované jsou prsteny
+  Yawell / Colmi s aplikací QRing (R02, R03, R06, R09, R10 …).
+- Po připojení stránka nastaví prstenu čas (UTC) a automatické měření tepu
+  každých 5 minut. Každých 15 minut stáhne historii tepu (dnešek, při prvním
+  spojení i včerejšek) a pošle jen nové záznamy; jednou za hodinu změří
+  kyslík (SpO2). Ručně: Změřit tep, Změřit kyslík, Odeslat historii.
+  Displej drží rozsvícený (Wake Lock), po výpadku se k prstenu připojí znovu.
+- Server: `POST /api/prsten/mereni` (`kamera`, `prsten { id, nazev, baterie }`,
+  `zaznamy [{ cas, tep | spo2 }]`, nejvýš 2000) – posílat smí každý, kdo
+  kameru vidí. Kontroluje rozsahy (tep 25–230, SpO2 70–100, nejvýš týden
+  zpátky, ne z budoucnosti). Zápis do `A_KAM_Mereni` s `NaramekId`
+  `prsten-…` a Id podle prstenu, času a druhu, takže opakované nahrání
+  historie řádky nezdvojí; poslední hodnoty a baterie ke kameře (`prsten`).
+- Protokol prstenu je v `public/proto/prsten-protokol.js` (testy
+  `test/prsten.test.mjs`), endpoint v `test/api.test.mjs`.
+
 ## 3.47 · 10. 10. 2026 · hlavní aplikace: čitelná správa kamer, bez karty Nahrávky
 
 - Správa kamer: místo stísněné tabulky je každá kamera na vlastní kartě –

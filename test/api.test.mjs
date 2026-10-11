@@ -1141,3 +1141,39 @@ test('správa kamer: jen správce serveru; seznam s tenanty a počty kamer; zave
   const { h: h2 } = handler({});
   assert.equal((await h2(req('GET', '/api/sprava/kamery', { cookies: cookieServer() }))).status, 503);
 });
+
+test('prsten přes API: měření z historie do A_KAM_Mereni bez zdvojení, poslední hodnoty u kamery, kontrola rozsahů, rodina jen u své kamery', async () => {
+  const tabulky = createMockTabulky();
+  const { h, uzivatele, vsichni } = handler({ tabulky });
+  const ted = Date.now();
+  const telo = { kamera: 'tapoc2020', prsten: { id: 'Ab:Cd-12/34xyZ99', nazev: 'R02_1A2B', baterie: 81 },
+    zaznamy: [{ cas: ted - 600_000, tep: 64 }, { cas: ted - 300_000, tep: 66 }, { cas: ted - 60_000, spo2: 97 },
+      { cas: ted - 120_000, tep: 400 }, { cas: ted + 3_600_000, tep: 70 }, { cas: ted - 10 * 86_400_000, tep: 70 }, { cas: 'x', tep: 70 }] };
+  let r = await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: telo }));
+  assert.equal(r.status, 200); let j = await r.json();
+  assert.equal(j.prijato, 3, 'nesmyslný tep, budoucnost a stará data se zahodí'); assert.equal(j.ulozeno, 3);
+  r = await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: telo }));
+  assert.equal((await r.json()).ulozeno, 3);
+  const radky = await tabulky.vyber(T, 'A_KAM_Mereni', { kde: { KameraID: 'tapoc2020' } });
+  assert.equal(radky.length, 3, 'opakované nahrání historie řádky nezdvojí');
+  assert.ok(radky.every((x) => x.NaramekId === 'prsten-AbCd1234xyZ9'), 'ID prstenu očištěné a zkrácené');
+  const p = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020');
+  assert.equal(p.prsten.zdravi.tep, 66); assert.equal(p.prsten.zdravi.spo2, 97); assert.equal(p.prsten.baterie, 81); assert.equal(p.prsten.nazev, 'R02_1A2B');
+  // starší historie poslední hodnotu nepřepíše
+  await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: { ...telo, zaznamy: [{ cas: ted - 3_600_000, tep: 90 }] } }));
+  const p2 = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020');
+  assert.equal(p2.prsten.zdravi.tep, 66);
+  // měření jsou vidět v záložce Náramek
+  r = await h(req('GET', '/api/naramek/mereni?kamera=tapoc2020', { cookies: cookie() }));
+  assert.ok((await r.json()).mereni.some((m) => m.spo2 === 97));
+  // chyby a oprávnění
+  assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: { ...telo, prsten: { id: '::' } } }))).status, 400);
+  assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: { ...telo, zaznamy: 'x' } }))).status, 400);
+  assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: { ...telo, kamera: 'cizi' } }))).status, 404);
+  assert.equal((await h(req('POST', '/api/prsten/mereni', { body: telo }))).status, 401);
+  const u = await uzivatele.vytvor({ jmeno: 'Petr', telefon: '777000555', kamery: ['tapoc2020'] });
+  const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
+  const rc = cookieRodina(T, rod.id).split(';')[0];
+  assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: rc, body: telo }))).status, 200, 'rodina u své kamery');
+  assert.equal((await h(req('POST', '/api/prsten/mereni', { cookies: rc, body: { ...telo, kamera: 'jina' } }))).status, 404, 'rodina u cizí kamery');
+});
