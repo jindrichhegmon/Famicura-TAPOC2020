@@ -121,7 +121,8 @@ const MAX_BODY_NAHRAVKA = 64 * 1024 * 1024;
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
-  '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+  '.webmanifest': 'application/manifest+json', '.json': 'application/json',
+  '.plist': 'text/xml', '.ipa': 'application/octet-stream' };   // ad hoc instalace aplikace PéčeDoma pro iPhone (public/ios/, nahrává mobil/vydat-adhoc.sh)
 
 const server = http.createServer(async (req, res) => {
   try {

@@ -11,3 +11,6 @@ cameras.json
 go2rtc.yaml
 bin/
 *.mp4
+
+# ad hoc instalace aplikace PéčeDoma pro iPhone (.ipa, manifest) – nahrává skript z PECEDOMA-pacient-mobil
+public/ios/

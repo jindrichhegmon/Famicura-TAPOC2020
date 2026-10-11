@@ -5,6 +5,13 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.51 · 11. 10. 2026 · instalace aplikace PéčeDoma pro iPhone ze serveru
+
+- Server vydává soubory v `public/ios/` (`.ipa` jako `application/octet-stream`,
+  `manifest.plist` jako `text/xml`) pro ad hoc instalaci aplikace klienta
+  PéčeDoma do iPhonu bez App Storu; nahrává je skript `mobil/vydat-adhoc.sh`
+  z repozitáře PECEDOMA-pacient-mobil, složka je mimo git.
+
 ## 3.50 · 11. 10. 2026 · prsten přes aplikaci klienta PéčeDoma (párovací kód)
 
 - Párování prstenu a sběr měření dělá **aplikace klienta PéčeDoma mobil**
