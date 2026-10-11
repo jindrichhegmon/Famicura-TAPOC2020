@@ -541,6 +541,28 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         return json({ ok: true, obsah: r.obsah, ...(r.predtim ? { predtim: r.predtim } : {}) });
       }
 
+      // Prsten (Colmi / QRing) u klienta: stránka /proto/prsten.html na telefonu přečte prsten přes Web Bluetooth a pošle sem
+      // historii tepu a změřený kyslík. Posílat smí každý, kdo kameru vidí (rodina u své kamery, mobilní dispečer, dispečink).
+      if (m === 'POST' && path === '/api/prsten/mereni') {
+        const { kamera, prsten, zaznamy } = await telo(req);
+        if (!isDeviceId(kamera) || !(await smiKameruId(kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
+        const prstenId = String(prsten?.id || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
+        if (!prstenId) return json({ ok: false, error: 'Chybí ID prstenu.' }, 400);
+        if (!Array.isArray(zaznamy) || zaznamy.length > 2000) return json({ ok: false, error: 'Záznamy: pole, nejvýš 2000 položek.' }, 400);
+        const ted = Date.now(), z = [];
+        for (const r of zaznamy) {
+          const cas = Math.round(Number(r?.cas));
+          if (!Number.isFinite(cas) || cas > ted + 10 * 60_000 || cas < ted - 8 * 86_400_000) continue;   // nejvýš týden zpátky, ne z budoucnosti
+          const tep = Number(r.tep), spo2 = Number(r.spo2);
+          if (Number.isInteger(tep) && tep >= 25 && tep <= 230) z.push({ cas, tep });
+          if (Number.isInteger(spo2) && spo2 >= 70 && spo2 <= 100) z.push({ cas, spo2 });
+        }
+        const bat = Number(prsten?.baterie);
+        const v = await (await stavTenanta()).prsten({ kameraId: kamera, prstenId, nazev: String(prsten?.nazev || ''),
+          baterie: Number.isInteger(bat) && bat >= 0 && bat <= 100 ? bat : null, zaznamy: z });
+        return json({ ok: true, prijato: z.length, ulozeno: v.ulozeno });
+      }
+
       // Nahrávky na Google Disk poskytovatele: účet z Péče doma plus, adresář, seznam, ruční nahrávka, soubor z hlavní aplikace.
       if (path === '/api/nahravky' || path.startsWith('/api/nahravky/')) {
         const nejsou = () => json({ ok: false, nastaveno: false, error: 'Nahrávky nejsou na serveru nastavené (NAHRAVKY_KLIC pro úložiště na serveru, nebo JHN_APPS_TOKEN a FAMICURA_KAMERA_KLIC pro Google Disk – ./deploy/vps-env.sh).' }, 503);

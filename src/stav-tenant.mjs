@@ -333,6 +333,34 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
         return { v: data.v };
       });
     },
+    /** Prsten (Colmi / QRing) přes stránku /proto/prsten.html: měření do A_KAM_Mereni (Id podle prstenu, času a druhu,
+     *  takže opakované nahrání téže historie řádky nezdvojí), poslední hodnoty a baterie ke kameře (p.prsten). */
+    prsten({ kameraId, prstenId, nazev = '', baterie = null, zaznamy = [] }) {
+      return serializovane(async () => {
+        await nacti();
+        const p = data.state.patients.find((x) => x.id === kameraId); if (!p) return { v: data.v, ulozeno: 0 };
+        const naramekId = ('prsten-' + prstenId).slice(0, 20);
+        let ulozeno = 0;
+        for (const z of zaznamy) {
+          const druh = z.tep != null ? 't' : 's';
+          try {
+            await tabulky.ulozit(tenant, 'A_KAM_Mereni', { Id: `r${prstenId}${z.cas}${druh}`.slice(0, 40), KameraID: kameraId, NaramekId: naramekId, Cas: z.cas,
+              Tep: z.tep ?? null, TlakS: null, TlakD: null, Spo2: z.spo2 ?? null, Teplota: null });
+            ulozeno++;
+          } catch (e) { log.error('[stav] zápis měření prstenu:', e.message); }
+        }
+        // poslední známé hodnoty: novější měření přepíše starší, starší historie poslední hodnotu nepřepíše
+        const zdravi = { ...(p.prsten?.id === prstenId ? p.prsten.zdravi || {} : {}) };
+        for (const k of ['tep', 'spo2']) {
+          const z = zaznamy.filter((x) => x[k] != null).sort((a, b) => b.cas - a.cas)[0];
+          if (z && !(zdravi[k + 'Cas'] > z.cas)) { zdravi[k] = z[k]; zdravi[k + 'Cas'] = z.cas; }
+        }
+        const bat = Number.isFinite(Number(baterie)) && baterie !== null ? Number(baterie) : (p.prsten?.id === prstenId ? p.prsten.baterie ?? null : null);
+        p.prsten = { id: prstenId, nazev: String(nazev || '').slice(0, 40), posledni: now(), baterie: bat, zdravi };
+        data.v++; await uloz();
+        return { v: data.v, ulozeno };
+      });
+    },
     /** Měření zdraví jedné kamery z A_KAM_Mereni, nejnovější první (tabulka a export v záložce Náramek). */
     vypisMereni({ kameraId, limit = 2000 } = {}) {
       return serializovane(async () => {

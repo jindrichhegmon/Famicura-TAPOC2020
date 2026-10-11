@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Famicura · Prsten</title>
+<meta name="description" content="Most mezi chytrým prstenem (QRing / Colmi) a Famicurou: telefon u klienta čte tep a kyslík a posílá je do aplikace kamer a náramku.">
+<meta name="theme-color" content="#106FD5">
+<link rel="icon" type="image/png" sizes="32x32" href="/proto/ikony/famicura-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/proto/ikony/famicura-192.png">
+<link rel="stylesheet" href="/proto/proto.css">
+<script src="/verze.js"></script>
+<style>
+  main{max-width:560px;margin:0 auto;padding:0 12px 40px}
+  .velke{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .velke div{background:var(--soft);border-radius:14px;padding:12px}
+  .velke b{display:block;font-size:2rem;line-height:1.1}
+  .velke span{color:var(--muted);font-size:.85rem}
+  .radek{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .radek button{flex:1;min-width:140px}
+  label.chk{display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:600}
+  #log{max-height:240px;overflow:auto;font-size:.85rem}
+  .stav{font-weight:700}
+  .stav.ok{color:var(--ok)} .stav.bad{color:var(--bad)} .stav.warn{color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="topbar"><b>Famicura · Prsten</b><span data-verze></span></div>
+<main>
+  <div class="banner crit hide" id="neumi">
+    <span>Tento prohlížeč neumí Bluetooth. Otevřete stránku v <b>Chrome na telefonu s Androidem</b> (na iPhonu Web Bluetooth nefunguje).</span>
+  </div>
+  <div class="banner warn hide" id="prihlas">
+    <span>Nejste přihlášeni. <a id="prihlasOdkaz" href="/proto/rodina.html">Přihlaste se v aplikaci Famicura</a> a pak se sem vraťte.</span>
+  </div>
+
+  <section class="c">
+    <h3>Klient</h3>
+    <select id="kamera" style="width:100%"></select>
+    <p class="muted hint">Měření z prstenu se uloží ke kameře tohoto klienta a ukážou se v dispečinku v záložce Náramek.</p>
+  </section>
+
+  <section class="c">
+    <h3>Prsten</h3>
+    <p>Stav: <span class="stav" id="stav">nepřipojen</span></p>
+    <p class="muted" id="info">—</p>
+    <div class="radek">
+      <button id="pripojit">Připojit prsten</button>
+      <button class="sec hide" id="odpojit">Odpojit</button>
+    </div>
+    <p class="muted hint">Prsten nesmí být zároveň spojený s aplikací QRing – v ní ho nejdřív odpojte nebo aplikaci zavřete.</p>
+  </section>
+
+  <section class="c">
+    <h3>Poslední hodnoty</h3>
+    <div class="velke">
+      <div><b id="vTep">–</b><span>tep / min <span id="vTepCas"></span></span></div>
+      <div><b id="vSpo2">–</b><span>kyslík SpO2 % <span id="vSpo2Cas"></span></span></div>
+    </div>
+    <div class="radek">
+      <button class="sec" id="mTep" disabled>Změřit tep</button>
+      <button class="sec" id="mSpo2" disabled>Změřit kyslík</button>
+      <button class="sec" id="mSync" disabled>Odeslat historii</button>
+    </div>
+  </section>
+
+  <section class="c">
+    <h3>Automatický režim</h3>
+    <label class="chk"><input type="checkbox" id="auto" checked> Každých 15 minut odeslat historii tepu</label>
+    <label class="chk"><input type="checkbox" id="autoSpo2" checked> Jednou za hodinu změřit kyslík</label>
+    <p class="muted hint">Telefon nechte u klienta na nabíječce s otevřenou touto stránkou. Stránka drží displej rozsvícený,
+      jinak by ji Android uspal a data by se neposílala.</p>
+    <p class="muted" id="dalsi"></p>
+  </section>
+
+  <section class="c">
+    <h3>Záznam</h3>
+    <ul class="list" id="log"></ul>
+  </section>
+</main>
+<script type="module" src="/proto/prsten.js"></script>
+</body>
+</html>

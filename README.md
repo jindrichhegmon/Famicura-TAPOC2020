@@ -132,6 +132,27 @@ data na server výrobce (aplikace AnyTracking zařízení neuvidí); původní
 adresu serveru si předem zjistěte u prodejce, kdyby bylo potřeba se vrátit.
 Stav příjmu je v `/api/health` (`naramky`: port, spojení, přijato, poplachy).
 
+### Chytrý prsten QRing (od 3.48)
+
+Prsten Yawell / Colmi (aplikace QRing: R02, R03, R06, R09, R10 …) nemá SIM
+ani GPS, jen Bluetooth. Most dělá stránka **`/proto/prsten.html`** na
+telefonu s Androidem (Chrome; iPhone Web Bluetooth neumí), který leží
+u klienta na nabíječce s otevřenou stránkou:
+
+1. Na telefonu se přihlásit jako rodina klienta (nebo mobilní dispečer)
+   v `/proto/rodina.html?tenant=…`, pak otevřít `/proto/prsten.html?tenant=…`.
+2. Vybrat klienta (kameru), **Připojit prsten**. Prsten nesmí být zároveň
+   spojený s aplikací QRing.
+3. Stránka nastaví prstenu čas (UTC) a měření tepu každých 5 min, každých
+   15 min pošle novou historii tepu, jednou za hodinu změří SpO2.
+
+Data jdou přes `POST /api/prsten/mereni` do `A_KAM_Mereni` (`NaramekId`
+`prsten-…`) a jsou vidět v záložce Náramek u kamery (tabulka, grafy,
+export). Protokol: `public/proto/prsten-protokol.js` – služba
+`6e40fff0-…`, 16bajtové pakety s kontrolním součtem (podle Gadgetbridge
+a colmi_r02_client). Tlak a teplotu tyto prsteny neposílají (teplotu jen
+R09, zatím se nečte).
+
 ### Odkud nahrávka bere obraz
 
 Když je obraz zobrazený tak, jak je (bez rozostření, černého pozadí a
