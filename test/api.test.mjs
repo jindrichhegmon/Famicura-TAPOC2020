@@ -1238,6 +1238,13 @@ test('prsten z aplikace klienta: párovací kód (dispečink vytvoří, pošle S
   // kód v těle místo hlavičky; kód patří jiné kameře → 403
   r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic } })); assert.equal(r.status, 200);
   r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic, kamera: 'jina' } })); assert.equal(r.status, 403);
+  // aplikace klienta PéčeDoma jen čte (s prstenem se nespojuje): GET kódem vrátí měření a stav prstenu své kamery, s CORS
+  r = await h(new Request('http://x/api/prsten/mereni', { headers: { 'x-prsten-klic': klic } }));
+  b = await r.json(); assert.equal(r.status, 200, JSON.stringify(b)); assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  assert.ok(b.mereni.some((x) => x.tep === 71) && b.mereni.some((x) => x.spo2 === 96)); assert.ok(b.mereni.every((x) => !('naramek' in x)));
+  assert.equal(b.prsten.nazev, 'R06_AB12'); assert.equal(b.prsten.baterie, 70); assert.ok(b.prsten.posledni > 0);
+  assert.equal((await h(new Request('http://x/api/prsten/mereni'))).status, 401, 'bez kódu nic');
+  assert.equal((await h(new Request('http://x/api/prsten/mereni', { headers: { 'x-prsten-klic': 'ABCD-EFGH-JKL2' } }))).status, 401, 'cizí kód nic');
   // rodina kód nespravuje; zrušení kódu → měření kódem končí
   const u = await uzivatele.vytvor({ jmeno: 'Jana', telefon: '777000666', kamery: ['tapoc2020'] });
   const rod = await vsichni.aktivuj(u.token, 'rodina-heslo-1');
@@ -1246,6 +1253,7 @@ test('prsten z aplikace klienta: párovací kód (dispečink vytvoří, pošle S
   b = await (await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'zrusit' } }))).json();
   assert.equal(b.klic, null);
   r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic } })); assert.equal(r.status, 401);
+  assert.equal((await h(new Request('http://x/api/prsten/mereni', { headers: { 'x-prsten-klic': klic } }))).status, 401, 'zrušený kód už nečte');
   assert.equal(Object.keys(store.data['prsten-klice'] || {}).length, 0);
 });
 

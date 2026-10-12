@@ -141,7 +141,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
   const prstenKlice = createPrstenKlice({ store });
   // iPhony s aplikací PéčeDoma Prsten, které server probouzí tichou notifikací (server.mjs volá probudVse každých 15 min)
   prstenZarizeni = prstenZarizeni || createPrstenZarizeni({ store, apns: createApns({ keyId: '' }), prstenKlice });
-  const CORS_PRSTEN = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type, x-prsten-klic', 'Access-Control-Max-Age': '86400' };
+  const CORS_PRSTEN = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type, x-prsten-klic', 'Access-Control-Max-Age': '86400' };
   /** Měření z prstenu (stránka /proto/prsten.html nebo aplikace klienta) → stav tenanta; kontrola rozsahů, nejvýš týden zpátky, ne z budoucnosti. */
   async function prstenMereni(st, kamera, { prsten, zaznamy } = {}) {
     const prstenId = String(prsten?.id || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
@@ -282,6 +282,22 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           console.log(`[famicura-tapo] [prsten] ${z.tenant} ${z.kamera}: prsten ${String(t.prsten?.id || '?').slice(0, 12)}, přijato ${v.prijato}, uloženo ${v.ulozeno}${v.ulozeno === 0 && v.prijato > 0 ? ' – KAMERA VE STAVU TENANTA NENÍ' : ''}`);
           return json({ ok: true, kamera: z.kamera, ...v }, 200, CORS_PRSTEN);
         } catch (e) { console.warn('[famicura-tapo] [prsten] měření se neuložilo:', e.message); return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
+      }
+
+      // Čtení měření prstenu pro aplikaci klienta PéčeDoma (web i iPhone): ta se s prstenem nespojuje, jen ukazuje, co poslala aplikace pro prsten.
+      // Stejný párovací kód jako u zápisu; vrací jen měření prstenu a stav prstenu své kamery, nic jiného.
+      if (m === 'GET' && path === '/api/prsten/mereni' && (req.headers.get('x-prsten-klic') || !kdoSession(req.headers, tenantHint(req.headers, req.url)))) {
+        const klic = req.headers.get('x-prsten-klic') || url.searchParams.get('klic') || '';
+        const z = klic ? await prstenKlice.najdi(klic) : null;
+        if (!z) return json({ ok: false, error: klic ? 'Párovací kód neplatí. Požádejte dispečink o nový (záložka Prsten u kamery).' : 'Chybí párovací kód prstenu.' }, 401, CORS_PRSTEN);
+        try {
+          const st = await najemci.pro(z.tenant);
+          const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 200));
+          const vse = (await st.vypisMereni({ kameraId: z.kamera, limit: limit * 4 })).filter((r) => /^prsten-/.test(String(r.naramek || '')));
+          const p = (await st.stav()).state.patients.find((x) => x.id === z.kamera);
+          const pr = p?.prsten ? { nazev: p.prsten.nazev || '', posledni: p.prsten.posledni || null, baterie: p.prsten.baterie ?? null } : null;
+          return json({ ok: true, prsten: pr, mereni: slucMereni(vse).slice(0, limit).map(({ naramek, ...r }) => r) }, 200, { ...CORS_PRSTEN, 'Cache-Control': 'no-store' });
+        } catch (e) { return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
       }
 
       // Registrace iPhonu s aplikací PéčeDoma Prsten k probouzení (tichá notifikace každých 15 min): párovací kód jako u měření.

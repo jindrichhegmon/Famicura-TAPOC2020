@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.60 · 12. 10. 2026 · prsten: aplikace klienta PéčeDoma jen čte
+
+- Nový `GET /api/prsten/mereni` pro aplikaci klienta PéčeDoma (web i iPhone): párovacím kódem
+  v `x-prsten-klic` (nebo `?klic=`) vrátí stav prstenu (`nazev`, `posledni`, `baterie`) a měření
+  prstenu své kamery (`slucMereni`, nejnovější první, `limit` 1–500, výchozí 200), bez pole
+  `naramek`. Bez kódu nebo se zrušeným kódem 401. `CORS_PRSTEN` povoluje i GET.
+- Aplikace klienta se od PéčeDoma mobil 3.4 s prstenem nespojuje; s prstenem se spojuje jen
+  aplikace pro prsten (PéčeDoma Prsten, případně `/proto/prsten.html`) a posílá `POST` jako dřív.
+
 ## 3.59 · 12. 10. 2026 · náramek a prsten striktně odděleně, mobilní dispečer podle nastavení rodiny
 
 - `GET /api/naramek/mereni`: bez zdroje (a s neznámým zdrojem) vrací jen náramek,

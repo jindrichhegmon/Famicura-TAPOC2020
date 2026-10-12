@@ -142,8 +142,12 @@ bez přihlášení k Famicuře; endpoint má CORS (`OPTIONS`). Kód vytvoří di
 v záložce Prsten (`POST /api/prsten/klic` akce `novy` / `zrusit` / `sms`,
 `GET` ho zjistí), pošle klientovi SMS s odkazem `PRSTEN_APLIKACE_URL?prsten=KOD&tenant=ID`
 (`src/prsten-klic.mjs`, kódy v `data/prsten-klice.json`, jeden platný na
-kameru). Kód umí jen posílat měření ke své kameře. Aplikace klienta má také
-tlačítko do aplikace rodiny Famicura; obě aplikace zůstávají oddělené.
+kameru). Kód umí posílat měření ke své kameře a od 3.60 je i číst: **`GET /api/prsten/mereni`**
+s kódem v `x-prsten-klic` vrátí stav prstenu (`nazev`, `posledni`, `baterie`) a měření prstenu
+té kamery (sloučené sady, nejnovější první, `limit` nejvýš 500), nic jiného; CORS i pro GET.
+Od PéčeDoma mobil 3.4 se **aplikace klienta s prstenem nespojuje** – jen tímto GET zobrazuje,
+co poslala aplikace pro prsten (PéčeDoma Prsten pro iPhone, případně most `/proto/prsten.html`).
+Aplikace klienta má také tlačítko do aplikace rodiny Famicura; obě aplikace zůstávají oddělené.
 
 Od 3.49 má prsten v detailu kamery v dispečinku vlastní záložku **Prsten**:
 stav (poslední ozvání, baterie, poslední hodnoty), grafy tepu a kyslíku,
@@ -727,7 +731,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 3.58) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.60) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:
