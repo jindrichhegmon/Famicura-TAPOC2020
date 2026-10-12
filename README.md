@@ -147,7 +147,13 @@ s kódem v `x-prsten-klic` vrátí stav prstenu (`nazev`, `posledni`, `baterie`)
 té kamery (sloučené sady, nejnovější první, `limit` nejvýš 500), nic jiného; CORS i pro GET.
 Od PéčeDoma mobil 3.4 se **aplikace klienta s prstenem nespojuje** – jen tímto GET zobrazuje,
 co poslala aplikace pro prsten (PéčeDoma Prsten pro iPhone, případně most `/proto/prsten.html`).
-Aplikace klienta má také tlačítko do aplikace rodiny Famicura; obě aplikace zůstávají oddělené.
+Od PéčeDoma mobil 3.5 je **PéčeDoma jediná aplikace pro klienty i rodinu**: dlaždice Kamera
+a náramek otevře `/proto/rodina.html?tenant=…&zpet=…` uvnitř aplikace (na iPhonu ve stejném okně
+díky `allowNavigation` v Capacitoru, na webu ve stejné záložce). `public/proto/z-aplikace.js` si
+`zpet` uloží (`localStorage` `famicura.zpet`, jen adresy PéčeDoma: `capacitor://localhost`,
+`pecedomamobil`/`pecedomapacient.netlify.app`, dev `127.0.0.1:8792`; `?zpet=ne` ho smaže), dá do
+hlavičky i na bránu přihlášení tlačítko „‹ PéčeDoma“ a schová kartu Aplikace na telefonu.
+Přihlášení rodiny zůstává (telefon a heslo, cookie 30 dní).
 
 Od 3.49 má prsten v detailu kamery v dispečinku vlastní záložku **Prsten**:
 stav (poslední ozvání, baterie, poslední hodnoty), grafy tepu a kyslíku,
@@ -731,7 +737,7 @@ v historii gitu u tohoto commitu.
 
 ## Verze
 
-Číslo verze je v `public/verze.js` (teď 3.60) a vidí ho každá aplikace
+Číslo verze je v `public/verze.js` (teď 3.63) a vidí ho každá aplikace
 v hlavičce. Nová verze = tři kroky v jednom commitu: změnit číslo v
 `public/verze.js`, dopsat odstavec do `CHANGELOG.md` a do tématu „Co je
 nové“ v `public/proto/napoveda.js`, a po nahrání označit commit:

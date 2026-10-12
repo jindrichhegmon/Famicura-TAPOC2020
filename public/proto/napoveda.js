@@ -353,6 +353,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.63 (12. 10. 2026)**: rodina i klient mají jedinou aplikaci PéčeDoma: kamera a náramek se otevírají přímo v ní (dlaždice Kamera a náramek), nahoře je tlačítko ‹ PéčeDoma zpět. Rodina se přihlašuje stejně jako dřív telefonem a heslem.
 - **Verze 3.62 (12. 10. 2026)**: u náramku jsou v tabulce, grafech i v Excelu jen hodnoty, které náramek opravdu naměřil – bez prázdných sloupců a grafů.
 - **Verze 3.61 (12. 10. 2026)**: dispečer, který je zároveň rodinou, se v mobilní aplikaci přepne na režim Rodina jen heslem hlavní aplikace Famicura (platí 12 hodin). Mobilní dispečer už nepřehraje nahrávku, kterou rodina zamkla.
 - **Verze 3.60 (12. 10. 2026)**: aplikace klienta PéčeDoma (web i iPhone) se s prstenem už nespojuje, jen ukazuje měření, která na server poslala aplikace pro prsten (PéčeDoma Prsten). Párovací kód ze záložky Prsten slouží v aplikaci PéčeDoma ke čtení, v aplikaci PéčeDoma Prsten k posílání.

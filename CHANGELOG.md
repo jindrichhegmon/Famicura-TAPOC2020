@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.63 · 12. 10. 2026 · aplikace rodiny uvnitř PéčeDoma mobil
+
+- PéčeDoma mobil je jediná aplikace pro klienty i rodinu; kamera a náramek se v ní otevírají
+  jako `/proto/rodina.html` (iPhone: stejné okno aplikace, web: stejná záložka) s `?zpet=`.
+- Nový `public/proto/z-aplikace.js` (načte ho `rodina.html`): uloží adresu návratu
+  (`famicura.zpet`, jen pevný seznam adres PéčeDoma – žádné otevřené přesměrování), přidá tlačítko
+  „‹ PéčeDoma“ do hlavičky i na bránu přihlášení s vysvětlením a schová kartu Aplikace na telefonu.
+- Text u prstenu v aplikaci rodiny: měření posílá aplikace PéčeDoma Prsten.
+
 ## 3.62 · 12. 10. 2026 · náramek ukazuje jen druhy hodnot, které naměřil
 
 - Záložka Náramek v dispečinku a karta Náramek v aplikaci na telefonu: sloupce
