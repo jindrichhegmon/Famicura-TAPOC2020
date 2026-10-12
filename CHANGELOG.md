@@ -5,6 +5,18 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.59 · 12. 10. 2026 · náramek a prsten striktně odděleně, mobilní dispečer podle nastavení rodiny
+
+- `GET /api/naramek/mereni`: bez zdroje (a s neznámým zdrojem) vrací jen náramek,
+  `zdroj=prsten` jen prsten, obojí jen na výslovné `zdroj=vse`. Aplikace na
+  telefonu (rodina i mobilní dispečer) načítá kartu Náramek se `zdroj=naramek` –
+  dřív se do ní míchala měření prstenu.
+- Mobilní dispečer u cizí kamery vidí obraz jen tak, jak ho rodina povolila
+  poskytovateli (den/noc, rychlé přepnutí, povolení na žádost) – stejně jako
+  dispečink na počítači. Štítek v obraze: „rodina povolila: …“; drátěný model
+  jde přidat jen k plnému nebo rozostřenému obrazu. Rodina u své kamery
+  (i dispečer v režimu Rodina) si zobrazení volí dál sama.
+
 ## 3.58 · 12. 10. 2026 · dispečink: drátěný model si zapne dispečer sám
 
 - V liště nad dlaždicemi je tlačítko `#ovlVse` „🦴 Drátěný model: zapnuto/vypnuto“.

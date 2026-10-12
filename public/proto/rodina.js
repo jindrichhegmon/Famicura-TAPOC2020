@@ -16,7 +16,19 @@ const zRezimu = REZIM[params.get('rezim')];
 let baseMode = zRezimu ? zRezimu[0] : 'full';
 // Drátěný model je výchozí (rodina si ho může vypnout); k plnému i rozostřenému obrazu jde kdykoli přidat.
 let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) !== '0';
-const viewMode = () => (sim.patient?.(patientId)?.deaktivace ? 'deaktivace' : baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode);
+/** Mobilní dispečer u cizí kamery (ne své rodiny) vidí jen to, co rodina povolila poskytovateli – stejně jako
+ *  dispečink na počítači: režim podle nastavení rodiny (den/noc, rychlé přepnutí, povolení na žádost);
+ *  drátěný model si může přidat jen k plnému nebo rozostřenému obrazu. Rodina si u své kamery volí zobrazení sama. */
+const jakoPoskytovatel = () => JA.ucet === 'dispecer' && !jsemRodina(patientId);
+function rezimPoskytovatele() {
+  const m = sim.effectiveMode(patientId);
+  return m === 'full' || m === 'blur' || m === 'skeleton' ? m : 'none';
+}
+const viewMode = () => {
+  if (sim.patient?.(patientId)?.deaktivace) return 'deaktivace';
+  if (jakoPoskytovatel()) { const m = rezimPoskytovatele(); return skel && (m === 'full' || m === 'blur') ? `${m}skel` : m; }
+  return baseMode === 'skeleton' ? 'skeleton' : skel ? `${baseMode}skel` : baseMode;
+};
 let filter = 'all';
 let histStrana = 0;   // stránka deníku (po 12), při změně filtru zpět na začátek
 const seen = new Set(sim.state.notifications.map((n) => n.id));
@@ -354,7 +366,7 @@ function kresliNaramek(p) {
   if (n.vypnuto) setHtml(vyp, popisVypnuti(n));
   const mapa = $('naramekMapa');
   if (n.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
-  nactiMereni(mereni, p.id, n, { naServeru: sim.naServeru, apiJson: (path) => api(path), hotovo: kresliMereni });
+  nactiMereni(mereni, p.id, n, { naServeru: sim.naServeru, apiJson: (path) => api(path), hotovo: kresliMereni, zdroj: 'naramek' });   // jen náramek – prsten má svou kartu
   const popl = poplachyNaramku(sim.state.events, p.id, 10);
   setHtml($('naramekPoplachy'), popl.length
     ? popl.map((e) => { const u = urovenUdalosti(e); const tail = e.state && e.state !== 'uzavřen' ? ` · <span class="badge warn">${esc(e.state)}${e.by ? ' – ' + esc(e.by) : ''}</span>` : e.result ? ` · <span class="muted">${esc(e.result)}</span>` : ''; return `<li class="${u}"><span class="when">${fmtDT(e.at)}</span><span class="grow"><span class="badge ${levelClass(u)}">${esc(KINDS[e.kind]?.source || 'náramek')}</span> ${escOdkazy(eventText(e))}${tail}</span></li>`; }).join('')
@@ -466,7 +478,13 @@ function render() {
   kresliNaramek(p);
   kresliPrsten(p);
   kresliKamVyber();
-  $('modeTag').textContent = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
+  const popisRezimu = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model', none: 'bez obrazu', deaktivace: 'kamera deaktivovaná' }[viewMode()] || '';
+  $('modeTag').textContent = jakoPoskytovatel() && !p.deaktivace ? `rodina povolila: ${popisRezimu}` : popisRezimu;
+  if (jakoPoskytovatel()) {   // drátěný model jen k obrazu, který rodina povolila (plný / rozostřený)
+    const m = rezimPoskytovatele(), lze = m === 'full' || m === 'blur', ch = $('skelChip');
+    ch.disabled = !lze; ch.setAttribute('aria-pressed', String(lze ? skel : m === 'skeleton'));
+    ch.textContent = lze ? `🦴 Drátěný model: ${skel ? 'zapnuto' : 'vypnuto'}` : m === 'skeleton' ? '🦴 Rodina povolila jen drátěný model' : '🚫 Rodina obraz poskytovateli nepovolila';
+  }
   const efZdroj = { deaktivace: 'kameru jste deaktivovali', povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';
   setHtml($('effective'), `Teď poskytovatel vidí: <strong>${esc(ef.zdroj === 'deaktivace' ? 'nic, kamera je deaktivovaná' : ef.mode === 'offline' ? 'nic, kamera nedostupná' : CONSENT[ef.mode] || ef.mode)}</strong><small>${esc(efZdroj)}${ef.do ? ` · do ${fmtT(ef.do)}` : ''}</small>`);
   const kontakty = describeKontakty(p);

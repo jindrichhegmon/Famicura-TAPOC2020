@@ -571,8 +571,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!isDeviceId(kam) || !(await smiKameruId(kam))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
         const st = await stavTenanta();
         const xl = url.searchParams.get('format') === 'xlsx';
-        // zdroj=prsten: jen měření prstenu (NaramekId prsten-…), zdroj=naramek: jen náramek; bez zdroje vše (aplikace rodiny)
-        const zdroj = url.searchParams.get('zdroj') || '';
+        // Náramek a prsten se striktně nemíchají: zdroj=prsten jen měření prstenu (NaramekId prsten-…), bez zdroje nebo
+        // zdroj=naramek jen náramek; obojí dohromady jen na výslovné zdroj=vse.
+        const zdroj = ['prsten', 'vse'].includes(url.searchParams.get('zdroj')) ? url.searchParams.get('zdroj') : 'naramek';
         const jePrsten = (r) => /^prsten-/.test(String(r.naramek || ''));
         const vse = (await st.vypisMereni({ kameraId: kam, limit: xl ? 10000 : 2000 })).filter((r) => zdroj === 'prsten' ? jePrsten(r) : zdroj === 'naramek' ? !jePrsten(r) : true);
         const radky = slucMereni(vse);   // jedna sada měření = jeden řádek

@@ -353,6 +353,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.59 (12. 10. 2026)**: měření náramku a prstenu se nikde nemíchají – karta Náramek ukazuje jen náramek, karta Prsten jen prsten (i v aplikaci na telefonu). Mobilní aplikace dispečera ukazuje obraz jen tak, jak ho rodina povolila poskytovateli (rozostření, drátěný model, bez obrazu).
 - **Verze 3.58 (12. 10. 2026)**: dispečer si drátěný model zapne sám tlačítkem 🦴 Drátěný model v liště nad dlaždicemi – kostra postavy se pak kreslí přes plný nebo rozostřený obraz ve všech dlaždicích i v detailu. U kamery, kde rodina povolila jen „bez obrazu“, se kostra nekreslí. Tlačítko v detailu je stejná volba.
 - **Verze 3.57 (12. 10. 2026)**: nová malá aplikace PéčeDoma Prsten pro iPhone posílá tep a kroky z prstenu sama i na pozadí – server ji každých 15 minut probudí. V záložce Prsten pod párovacím kódem uvidíte, který iPhone je zaregistrovaný a kdy byl naposledy probuzen.
 - **Verze 3.56 (12. 10. 2026)**: v záložce Náramek je telefon náramku přímo v zeleném pruhu nahoře (velké číslo vpravo, klepnutím se volá); druhé zelené pole pod Stavem náramku zmizelo.
