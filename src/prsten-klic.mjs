@@ -20,10 +20,12 @@ export function novyKlic(rand = randomInt) {
 export function odkazAplikace(klic, aplikace = process.env.PRSTEN_APLIKACE_URL || 'https://pecedomamobil.netlify.app/', tenant = '') {
   const u = new URL(aplikace); u.searchParams.set('prsten', formatKlic(klic)); if (tenant) u.searchParams.set('tenant', tenant); return u.toString();
 }
-/** SMS klientovi bez diakritiky (odkaz s kódem má ~55 znaků, zpráva se vejde do dvou dílů SMS). */
+/** SMS klientovi bez diakritiky: kód pro aplikaci PéčeDoma Prsten a odkaz s kódem (zpráva se vejde do dvou dílů SMS). */
 export function textSmsKlic({ odkaz, poskytovatel = '' }) {
   const p = String(poskytovatel || '').normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 30);
-  return `PeceDoma${p ? ' (' + p + ')' : ''}: prsten - otevrete odkaz v telefonu a stisknete Pripojit prsten: ${odkaz}`;
+  // od 3.64: prsten spojuje aplikace PeceDoma Prsten (iPhone) – kod se do ni opise, nebo se vlozi cely odkaz
+  const kod = (/[?&]prsten=([A-Z0-9-]{12,14})/i.exec(String(odkaz)) || [])[1] || '';
+  return `PeceDoma${p ? ' (' + p + ')' : ''}: kod prstenu ${kod} pro aplikaci PeceDoma Prsten (nebo vlozte odkaz) ${odkaz}`;
 }
 
 export function createPrstenKlice({ store, now = Date.now, rand } = {}) {

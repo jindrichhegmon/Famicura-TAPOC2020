@@ -97,6 +97,8 @@ V detailu skutečné kamery → záložka Komunikace a kontakty → část „U�
 
 ### Mobilní dispečer
 - Stejná aplikace na telefonu, ale vidí všechny kamery poskytovatele a nic nenastavuje: souhlas s obrazem, klid a deaktivaci kamery nastavuje rodina, hlídání dispečink na počítači; server mu každé nastavení odmítne. Jediné, co si mění, je barevné schéma.
+- **Obraz vidí jen tak, jak ho rodina povolila poskytovateli** – stejně jako dispečink na počítači (denní a noční nastavení, rychlé přepnutí, povolení na žádost). V obraze je štítek „rodina povolila: …“; drátěný model si přidá jen k plnému nebo rozostřenému obrazu, u „bez obrazu“ obraz nevidí.
+- Nahrávku, kterou rodina zamkla, nepřehraje.
 - U kamery s náramkem má (stejně jako rodina) kartu ⌚ Náramek SOS: stav, poloha na mapě, grafy, měření a poplachy, jen ke čtení.
 - V jeho aplikaci je nahoře oranžový pruh APLIKACE DISPEČERA a v hlavičce „DISPEČER“; SMS s pozvánkou říká, že jde o přístup dispečera ke všem kamerám poskytovatele.
 - Před odesláním pozvánky dispečera se dispečink zeptá, jestli ji opravdu chcete poslat (dispečer uvidí všechny kamery).
@@ -105,7 +107,11 @@ V detailu skutečné kamery → záložka Komunikace a kontakty → část „U�
 ### Jeden telefon = jeden účet
 - Pozvánka dispečera na telefon, který už má účet rodiny, přidá účtu roli dispečera; své kamery mu zůstanou jako rodině (u kamery má vedle DISPEČER i odznak RODINA).
 - V aplikaci na telefonu si v Můj účet přepíná režim **Rodina** (jen své kamery, nastavuje souhlas, klid a deaktivaci) / **Dispečer** (všechny kamery, jen sledování; deaktivovat a aktivovat kameru smí jen rodina).
+- Na režim **Rodina** se přepne jen **heslem hlavní aplikace Famicura** (ne svým heslem do aplikace). Heslo ověřuje server a po několika špatných pokusech na chvíli zablokuje. Režim Rodina platí 12 hodin, pak se aplikace vrátí na Dispečer; zpět na Dispečer jde kdykoli bez hesla. Bez odemčení je i u svých kamer jen dispečer, který sleduje.
 - Dispečerovi jde u kamery založit i účet rodiny stejným telefonem.
+
+### Kamera a náramek v aplikaci PéčeDoma
+- Klient a rodina s aplikací **PéčeDoma** otevřou kameru a náramek Famicura přímo v ní; tlačítko **‹ PéčeDoma** vede zpět. Přihlašuje se stejně – telefonem a heslem z pozvánky.
 
 ### Deaktivovat, Odebrat, nové heslo
 - **Deaktivovat** (u rodiny i dispečera) účet zablokuje: nepřihlásí se, přihlášený je odhlášen, pozvánka neplatí. **Aktivovat** ho vrátí.
@@ -125,11 +131,13 @@ Nouzový přívěsek nebo hodinky (ReachFar V48 a podobné) posílají poplachy 
 2. Zadejte ID zařízení (v aplikaci náramku: O zařízení → ID zařízení).
 3. Zadejte telefonní číslo SIM karty v náramku (povinné) a uložte.
 4. Přívěsek musí mít nastavenou adresu našeho serveru: SMS příkaz z mobilu na číslo SIM v přívěsku pw,123456,ip,95.216.201.2,5093#
-- Telefon náramku je pak výrazně v zeleném rámečku nahoře ve Stavu náramku (klepnutím se volá) a stejně na kartě Náramek v aplikaci rodiny a mobilního dispečera; bez něj svítí červené upozornění.
+- Nahoře v záložce je jeden zelený pruh: ID náramku, kdy se naposledy ozval, baterie a vpravo velké telefonní číslo náramku (klepnutím se volá). Stejně je číslo na kartě Náramek v aplikaci rodiny a mobilního dispečera. Bez telefonu je v pruhu upozornění, kde ho doplnit.
 - Záložka má napřed výsledky (Stav náramku s mapou a grafy posledních 10 měření, Měření zdraví, Poplachy) a pod nimi Ovládání a nastavení náramku (měření, poloha, vypnutí, automatické měření) s přehledem, koho náramek volá.
 
 ### Co náramek hlásí
-- Jakmile se ozve, vidíte čas posledního ozvání, baterii, odkaz na poslední polohu, poslední měření zdraví (tep, tlak, kyslík, teplota) a tabulku měření.
+- Jakmile se ozve, vidíte čas posledního ozvání, baterii, odkaz na poslední polohu, poslední měření zdraví a tabulku měření.
+- Tabulka, grafy i Excel ukazují **jen druhy hodnot, které náramek opravdu naměřil** (u V48 obvykle tep, tlak a kyslík); prázdné sloupce a grafy se nezobrazují.
+- Měření prstenu se sem nemíchají – jsou jen v záložce Prsten.
 - Stisk SOS vytvoří kritickou událost **Nouzové tlačítko**, pád událost **Pád hlášený náramkem**, slabá baterie technickou událost. SMS, e-mail a nahrávka kamery se řídí zatržením v Nastavení alertů u těchto druhů.
 - Stejný poplach do minuty se počítá jednou. SOS projde i u kamery deaktivované rodinou.
 - U poplachu z náramku je odkaz „mapa“, který otevře polohu v Google Mapách v novém okně.
@@ -140,10 +148,10 @@ Nouzový přívěsek nebo hodinky (ReachFar V48 a podobné) posílají poplachy 
 - V48 posílá tep jen s tlakem a teplotu na vyžádání zatím neposlal (příkaz přijme, hodnotu ne); teplotu hlásí jen podle plánu nastaveného v jeho mobilní aplikaci a ta se do tabulky zapíše také.
 - **Automatické měření**: zadejte interval v minutách, zatrhněte „měřit zdraví“ a uložte; server pak celou sadu posílá sám.
 - Příkaz jde jen do připojeného náramku, jinak hlásí, že není připojený (náramek se ozývá v intervalech).
-- Hodnoty z jedné sady měření (tlak s tepem, kyslík, teplota přicházejí zvlášť během pár desítek sekund) jsou v jednom řádku. Tabulka je trvalá, stránkuje se po 10, 20, 50 nebo 100 (volba se pamatuje v prohlížeči), tlačítka novější/starší listují a **Stáhnout do Excelu** uloží sešit se všemi měřeními kamery (datum, čas, tep, tlak, kyslík, teplota).
+- Hodnoty z jedné sady měření (tlak s tepem, kyslík, teplota přicházejí zvlášť během pár desítek sekund) jsou v jednom řádku. Tabulka je trvalá, stránkuje se po 10, 20, 50 nebo 100 (volba se pamatuje v prohlížeči), tlačítka novější/starší listují a **Stáhnout do Excelu** uloží sešit se všemi měřeními náramku (datum, čas a sloupce s naměřenými hodnotami).
 
 ### Grafy a barvy hodnot
-- Vedle mapy jsou grafy za posledních 24 hodin (tep, tlak horní a dolní, kyslík, teplota) se světlým pásmem běžného rozmezí; body mimo rozmezí jsou oranžové nebo červené a po najetí myší ukážou čas a hodnotu.
+- Vedle mapy jsou grafy posledních 10 měření pro každý naměřený druh (tep, tlak horní a dolní, kyslík, teplota) se světlým pásmem běžného rozmezí; body mimo rozmezí jsou oranžové nebo červené a po najetí myší ukážou čas a hodnotu.
 - **Oranžově** = mimo běžné rozmezí: tep 50–100, tlak 90–139/60–89, kyslík od 94 %, teplota 35,5–37,4 °C.
 - **Červeně** = výrazně mimo: tep pod 40 nebo nad 120, tlak nad 159/99 nebo pod 80/50, kyslík pod 90 %, teplota nad 38,4 nebo pod 35 °C.
 
@@ -164,26 +172,27 @@ Nouzový přívěsek nebo hodinky (ReachFar V48 a podobné) posílají poplachy 
 - Rodina i mobilní dispečer mají kartu ⌚ Náramek SOS (za Nahrávkami, dole v liště záložka Náramek): stav a baterie, mapa polohy, grafy posledních 10 měření, tabulka měření po 10 a poplachy z náramku. Jen ke čtení, nic se tam neovládá. Stejně tak kartu 💍 Prsten (stav, dlaždice posledních hodnot, grafy, tabulka), jakmile prsten něco poslal.
 - Karta je vidět jen u kamery s přiřazeným náramkem; vypnutý náramek tam svítí stejným červeným hlášením jako v dispečinku.
 ` },
-  { id: 'prsten', obrazky: [], nazev: 'Prsten (QRing / Colmi) u klienta', klicova: ['prsten', 'prstýnek', 'parovaci kod', 'parovani', 'aplikace klienta', 'pecedoma', 'qring', 'colmi', 'yawell', 'bluetooth', 'kyslik z prstenu', 'tep z prstenu', 'zalozka prsten', 'telefon u klienta', 'r02', 'r06', 'r10'],
+  { id: 'prsten', obrazky: [], nazev: 'Prsten (QRing / Colmi) u klienta', klicova: ['prsten', 'prstýnek', 'parovaci kod', 'parovani', 'aplikace klienta', 'pecedoma', 'pecedoma prsten', 'iphone', 'qring', 'colmi', 'yawell', 'bluetooth', 'kyslik z prstenu', 'tep z prstenu', 'kroky', 'stres', 'hrv', 'unava', 'zalozka prsten', 'telefon u klienta', 'na pozadi', 'probouzeni', 'r02', 'r06', 'r10'],
     obsah: `
-Chytrý prsten (aplikace QRing, výrobci Colmi / Yawell: R02, R03, R06, R09, R10 …) měří tep a kyslík v krvi. Nemá SIM ani GPS, jen Bluetooth; s naší aplikací ho spojuje telefon s Androidem u klienta.
+Chytrý prsten (aplikace QRing, výrobci Colmi / Yawell: R02, R03, R06, R09, R10 …) měří tep a kyslík v krvi, orientačně tlak, stres, HRV a únavu a počítá kroky. Nemá SIM ani GPS, jen Bluetooth; s Famicurou ho spojuje iPhone u klienta s aplikací **PéčeDoma Prsten**.
 
 ### Záložka Prsten v detailu kamery
-- Nahoře pruh: prsten posílá měření (naposledy se ozval, baterie), nebo zatím nic neposlal. Když se přes 2 hodiny neozval, je to v pruhu zvýrazněné – je telefon u klienta zapnutý se stránkou Prsten?
-- Poslední hodnoty (tep, kyslík), grafy posledních 10 měření tepu a kyslíku.
-- Tabulka Měření z prstenu se stránkováním a **Stáhnout do Excelu** – stejná jako u náramku, jen se sloupci tep a kyslík. Měření prstenu a náramku se nemíchají: každá záložka má svá.
+- Nahoře pruh: prsten posílá měření (naposledy se ozval, baterie), teď neposílá (uložená měření jsou níže), nebo zatím nic neposlal. Když se přes 2 hodiny neozval, je to v pruhu zvýrazněné – je iPhone u klienta zapnutý a v dosahu prstenu?
+- Dlaždice posledních hodnot (tep, kyslík, tlak, stres, HRV, únava, kroky) a grafy posledních 10 měření. Tlak, stres, HRV a únava jsou z prstenu jen orientační.
+- Tabulka Měření z prstenu se stránkováním a **Stáhnout do Excelu** (jen sloupce s hodnotami). Měření prstenu a náramku se nemíchají: prsten je jen v záložce Prsten, náramek jen v záložce Náramek.
 - Prsten nemá poplachy ani příkazy; SOS, pád a čísla volání zůstávají náramku.
 
-### Připojení prstenu přes aplikaci klienta
-O prsten se stará aplikace klienta **PéčeDoma** na telefonu u klienta (Android, Chrome). Famicuře se prokazuje párovacím kódem kamery, nemusí se přihlašovat.
-1. V záložce Prsten klepněte na **Vytvořit párovací kód**. Kód má 12 znaků (bez 0/O a 1/I) a platí jen pro tuto kameru; umí jen posílat měření.
-2. **Poslat SMS** na mobil klienta: v SMS je odkaz, který aplikaci PéčeDoma kód předá. Nebo kód klient opíše v aplikaci na kartě Prsten, nebo mu odkaz otevřete tlačítkem Otevřít aplikaci klienta s kódem.
-3. Klient v aplikaci na kartě Prsten stiskne **Připojit prsten** a vybere prsten v nabídce Bluetooth (R0…, R1… nebo COLMI).
-4. Telefon nechá na nabíječce s otevřenou aplikací: drží displej rozsvícený, každých 15 minut pošle historii tepu (prsten si ho měří sám každých 5 minut) a jednou za hodinu změří kyslík. Po výpadku se k prstenu připojí sám.
-! Prsten se umí spojit jen s jednou aplikací. Na telefonu u klienta aplikaci QRing neinstalujte, nebo v ní prsten nejdřív odpojte.
-- **Nový kód** starý zruší (aplikace klienta pak potřebuje nový odkaz); **Zrušit kód** posílání zastaví.
-- Aplikace klienta má i tlačítko do aplikace rodiny Famicura (kamera a náramek); obě aplikace zůstávají oddělené.
-- Náhradní cesta bez aplikace klienta: stránka /proto/prsten.html po přihlášení účtem rodiny (ručně Změřit tep, Změřit kyslík, Odeslat historii).
+### Připojení prstenu – aplikace PéčeDoma Prsten (iPhone)
+1. V záložce Prsten klepněte na **Vytvořit párovací kód**. Kód má 12 znaků (bez 0/O a 1/I), platí jen pro tuto kameru a umí jen posílat měření.
+2. Kód předejte klientovi nebo rodině: **Poslat SMS** (kód a odkaz s kódem), nebo ho nadiktujte.
+3. Na iPhonu u klienta v aplikaci **PéčeDoma Prsten** opište kód (nebo vložte celý odkaz ze SMS) a klepněte na **Uložit kód**, pak **Vybrat prsten** a zvolte prsten (R0…, R1… nebo COLMI).
+4. Dál aplikace pracuje sama i na pozadí: prsten si měří tep každých 15 minut, aplikace stáhne historii tepu a dnešní kroky a pošle je sem. Server ji k tomu každých 15 minut probouzí tichou notifikací; po výpadku Bluetooth se k prstenu připojí sama.
+- Pod párovacím kódem je řádek 📱 se zaregistrovaným iPhonem (název prstenu, verze aplikace) a časem posledního probuzení. Červené „server nemá klíč Apple“ znamená, že na serveru chybí klíč pro probouzení – aplikace pak posílá, jen když je otevřená nebo když se prsten znovu připojí.
+! Prsten se umí spojit jen s jednou aplikací. V aplikaci QRing ho na iPhonu u klienta odpojte. Aplikace PéčeDoma prsten nepřipojuje, jen ukazuje jeho hodnoty ze serveru.
+! Aplikaci PéčeDoma Prsten nezavírejte přejetím prstem nahoru a nezapínejte režim nízké spotřeby – iOS ji pak nebudí.
+- Kyslík, tlak, stres, HRV a únavu prsten sám neukládá; na pozadí se proto posílá jen tep a kroky.
+- **Nový kód** starý zruší (aplikace pak potřebuje nový kód); **Zrušit kód** posílání zastaví.
+- Náhradní cesta bez iPhonu (Android nebo počítač s Chrome): stránka /proto/prsten.html po přihlášení účtem rodiny (ručně Změřit tep, Změřit kyslík, Odeslat historii).
 ` },
   { id: 'deaktivace', obrazky: [], nazev: 'Deaktivace kamery rodinou', klicova: ['deaktiv', 'aktivov', 'vypnout kameru', 'zapnout kameru', 'strop', 'otocena', 'kamera vypnuta', 'deaktivovana rodinou', 'bez obrazu rodina'],
     obsah: `
@@ -353,6 +362,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.64 (12. 10. 2026)**: nápověda doplněná o poslední novinky (prsten přes aplikaci PéčeDoma Prsten na iPhonu, náramek jen s naměřenými hodnotami, mobilní dispečer a režim Rodina). SMS s párovacím kódem prstenu obsahuje kód pro aplikaci PéčeDoma Prsten.
 - **Verze 3.63 (12. 10. 2026)**: rodina i klient mají jedinou aplikaci PéčeDoma: kamera a náramek se otevírají přímo v ní (dlaždice Kamera a náramek), nahoře je tlačítko ‹ PéčeDoma zpět. Rodina se přihlašuje stejně jako dřív telefonem a heslem.
 - **Verze 3.62 (12. 10. 2026)**: u náramku jsou v tabulce, grafech i v Excelu jen hodnoty, které náramek opravdu naměřil – bez prázdných sloupců a grafů.
 - **Verze 3.61 (12. 10. 2026)**: dispečer, který je zároveň rodinou, se v mobilní aplikaci přepne na režim Rodina jen heslem hlavní aplikace Famicura (platí 12 hodin). Mobilní dispečer už nepřehraje nahrávku, kterou rodina zamkla.

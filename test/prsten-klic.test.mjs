@@ -12,6 +12,8 @@ test('párovací kód prstenu: tvar, normalizace, odkaz do aplikace klienta a SM
   assert.equal(odkazAplikace('ABCDEFGHJKL2', 'https://pecedomamobil.netlify.app/'), 'https://pecedomamobil.netlify.app/?prsten=ABCD-EFGH-JKL2');
   const sms = textSmsKlic({ odkaz: odkazAplikace('ABCDEFGHJKL2'), poskytovatel: 'Péče doma Liberec' });
   assert.ok(sms.length <= 200, `délka ${sms.length}`); assert.match(sms, /^PeceDoma \(Pece doma Liberec\): /); assert.doesNotMatch(sms, /[^\x00-\x7F]/);
+  assert.match(sms, /kod prstenu ABCD-EFGH-JKL2 pro aplikaci PeceDoma Prsten/);
+  const smsT = textSmsKlic({ odkaz: odkazAplikace('ABCDEFGHJKL2', undefined, '22202480FAMICURA'), poskytovatel: 'x'.repeat(40) }); assert.ok(smsT.length <= 200, `s tenantem ${smsT.length}`);
 });
 
 test('párovací kódy: jeden platný na kameru, nový starý nahradí, zrušení, hledání podle kódu i s pomlčkami a malými písmeny', async () => {

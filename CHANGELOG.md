@@ -5,6 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.64 · 12. 10. 2026 · nápověda podle posledních novinek, SMS s kódem pro aplikaci PéčeDoma Prsten
+
+- Nápověda dispečinku: téma Prsten přepsané (aplikace PéčeDoma Prsten na iPhonu, sběr
+  na pozadí a probouzení, všechny hodnoty prstenu, řádek se zaregistrovaným iPhonem);
+  Náramek (jeden zelený pruh s telefonem, jen naměřené druhy, prsten se nemíchá, grafy
+  posledních 10 měření); Mobilní dispečer (obraz podle nastavení rodiny, zamčené nahrávky,
+  režim Rodina jen heslem hlavní aplikace na 12 hodin, kamera a náramek v aplikaci PéčeDoma).
+- Záložka Prsten: krátký návod popisuje aplikaci PéčeDoma Prsten místo aplikace PéčeDoma.
+- SMS s párovacím kódem: kód pro aplikaci PéčeDoma Prsten a odkaz (do 200 znaků bez diakritiky).
+
 ## 3.63 · 12. 10. 2026 · aplikace rodiny uvnitř PéčeDoma mobil
 
 - PéčeDoma mobil je jediná aplikace pro klienty i rodinu; kamera a náramek se v ní otevírají
