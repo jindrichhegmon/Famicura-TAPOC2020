@@ -206,7 +206,8 @@ Rodina může kameru kdykoli deaktivovat tlačítkem „⏻ Deaktivovat kameru�
   { id: 'sledovani', obrazky: [{ src: '/proto/napoveda/sledovani.png', popis: 'Záložka Nastavení alertů v detailu kamery: Hlídat, Jen v hodinách, Nahrávat, SMS komu, E-mail komu' }], nazev: 'Sledování, nahrávání a upozornění (záložka Nastavení alertů)', klicova: ['sledov', 'hlidat', 'nahrav', 'hodiny', 'vypnout udalost', 'nezapsala', 'prekroceni', 'cara', 'zakryti', 'necinnost', 'zatrhnout', 'nastaveni kamery', 'plac', 'zvuk', 'sklo', 'vozidlo', 'zvire', 'oblast', 'vstup', 'detekce', 'co kamera umi'],
     obsah: `
 ### Záložky detailu kamery
-- **Sledování – co se děje**: Monitoring (obraz, žádost o plný obraz, nouzový přístup, poznámky, historie, nahrávky) a Náramek.
+- Detail kamery nabízí **dlaždice agend**: po klepnutí zůstane na obrazovce jen zvolená agenda (seznam kamer, fronta alertů a směna se schovají) a zpět vede tlačítko **Zpět na výběr agend**.
+- **Sledování – co se děje**: Monitoring (obraz, žádost o plný obraz, nouzový přístup, poznámky, historie, nahrávky), Náramek a Prsten.
 - **Nastavení – jak se má chovat**: Komunikace a kontakty (uživatelé rodiny, kontakty pro upozornění, poznámky) a Nastavení alertů.
 
 ### Tabulka Sledování, nahrávání a upozornění
@@ -351,6 +352,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.53 (12. 10. 2026)**: nová navigace detailu kamery – pod seznamem kamer jsou jen dlaždice agend (Monitoring, Náramek, Prsten, Komunikace a kontakty, Nastavení alertů); po klepnutí zůstane na obrazovce jen zvolená agenda a zpět vede výrazné tlačítko „Zpět na výběr agend“.
 - **Verze 3.52 (12. 10. 2026)**: telefon pro SMS s odkazem na prsten je předvyplněný z prvního telefonu rodiny (Komunikace a kontakty) a přepsané číslo si dispečink pamatuje. Záložka Prsten ukazuje kromě tepu a kyslíku i tlak, stres, HRV, únavu a kroky za den (tabulka, grafy posledních 10 měření, Excel). Tlak, stres, HRV a únavu prsten jen odhaduje – hodnoty jsou orientační; tep a kyslík měří.
 - **Verze 3.51 (11. 10. 2026)**: server nabízí instalaci aplikace klienta PéčeDoma pro iPhone (odkaz …/ios/ pro registrované telefony, bez App Storu).
 - **Verze 3.50 (11. 10. 2026)**: o prsten se stará aplikace klienta PéčeDoma na telefonu u klienta – v záložce Prsten vytvoříte párovací kód kamery a pošlete klientovi SMS s odkazem; aplikace pak měření posílá sama (bez přihlášení k Famicuře). Kód jde zrušit nebo nahradit novým.

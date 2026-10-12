@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.53 · 12. 10. 2026 · dispečink: dlaždice agend v detailu kamery
+
+- Detail kamery: místo záložek jsou pod seznamem kamer jen dlaždice agend
+  (Monitoring, Náramek, Prsten, Komunikace a kontakty, Nastavení alertů).
+  Po klepnutí se seznam kamer, fronta alertů i směna schovají
+  (`body.agenda-otevrena`) a zůstane jen zvolená agenda s lištou a výrazným
+  tlačítkem „Zpět na výběr agend“. Při otevření jiné kamery se začíná
+  výběrem agend. Ovládací prvky mají stejná id a `data-t` jako dřív.
+
 ## 3.52 · 12. 10. 2026 · prsten: tlak, stres, HRV, únava a kroky
 
 - `A_KAM_Mereni` má nové sloupce `Stres`, `Hrv`, `Unava`, `Kroky` (DDL je

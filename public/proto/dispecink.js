@@ -306,7 +306,7 @@ const OVL_KEY = 'famicura.dispecink.skel';
 let overlay = (() => { try { return localStorage.getItem(OVL_KEY) !== '0'; } catch { return true; } })();   // drátěný model přes plný/rozostřený obraz v detailu: výchozí zapnuto, volba se pamatuje v prohlížeči
 function ulozOverlay(v) { overlay = v; try { localStorage.setItem(OVL_KEY, v ? '1' : '0'); } catch { /* bez paměti prohlížeče */ } }
 let askOpen = false, emergOpen = false;   // inline forms in the detail
-let dtab = 'monitoring';            // sekce detailu: monitoring | komunikace | nastaveni (zůstává při přepnutí kamery)
+let dtab = null;                    // otevřená agenda detailu: monitoring | naramek | prsten | komunikace | nastaveni; null = výběr agend (dlaždice)
 const seen = new Set(sim.state.events.map((e) => e.id));
 const tileRegs = new Map();          // patientId → unregister
 let detailUnreg = null;
@@ -528,17 +528,29 @@ function renderQueue() {
 function renderDetail(rebuild = false) {
   if (!zobrazuj) return;
   const d = $('detail');
-  if (!selected) { d.classList.add('hide'); return; }
+  if (!selected) { d.classList.add('hide'); document.body.classList.remove('agenda-otevrena'); delete d.dataset.kamera; return; }
   const p = sim.patient(selected); if (!p) return;
   d.classList.remove('hide');
   if (rebuild || !d.querySelector('canvas')) {
     detailUnreg?.(); 
+    if (d.dataset.kamera !== p.id) dtab = null;   // jiná kamera: začít výběrem agend
+    d.dataset.kamera = p.id;
     const kon = kontaktyPro(p);
+    // Navigace detailu: pod seznamem kamer jen dlaždice agend; po klepnutí zůstane na obrazovce jen zvolená agenda
+    // (seznam kamer, fronta alertů a směna se schovají) a zpět vede výrazné tlačítko „Zpět na výběr agend“.
     d.innerHTML = `<div class="row"><h2 class="grow">${esc(p.name)} <span class="muted small">${esc(p.place)}</span></h2><button class="sm sec" id="closeD">Zavřít</button></div>
-      <div class="dtabsSk" id="dtabs" role="tablist">
-        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="seg dtabs"><button type="button" data-t="monitoring" role="tab">👁 Monitoring</button><button type="button" data-t="naramek" role="tab">⌚ Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></button><button type="button" data-t="prsten" role="tab">💍 Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">nepřipojen</span></button></div></div>
-        <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="seg dtabs"><button type="button" data-t="komunikace" role="tab">💬 Komunikace a kontakty</button><button type="button" data-t="nastaveni" role="tab">⚙ Nastavení alertů</button></div></div>
+      <div class="agendy" id="dtabs" role="tablist">
+        <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="agendy-mriz">
+          <button type="button" class="agenda" data-t="monitoring" role="tab"><span class="ic">👁</span><span class="nz">Monitoring</span><span class="po">obraz z kamery, poznámky, historie, nahrávky</span></button>
+          <button type="button" class="agenda" data-t="naramek" role="tab"><span class="ic">⌚</span><span class="nz">Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></span><span class="po">SOS, poloha, měření zdraví</span></button>
+          <button type="button" class="agenda" data-t="prsten" role="tab"><span class="ic">💍</span><span class="nz">Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">nepřipojen</span></span><span class="po">tep, kyslík a další hodnoty z prstenu</span></button>
+        </div></div>
+        <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="agendy-mriz">
+          <button type="button" class="agenda" data-t="komunikace" role="tab"><span class="ic">💬</span><span class="nz">Komunikace a kontakty</span><span class="po">uživatelé rodiny, kontakty pro upozornění</span></button>
+          <button type="button" class="agenda" data-t="nastaveni" role="tab"><span class="ic">⚙</span><span class="nz">Nastavení alertů</span><span class="po">co hlídat, kdy nahrávat, komu SMS a e-mail</span></button>
+        </div></div>
       </div>
+      <div class="agendaBar hide" id="dagendaBar"><button type="button" class="zpet" id="dagendaZpet">‹ Zpět na výběr agend</button><span class="kde"><b id="dagendaNazev"></b> · ${esc(p.name)}</span></div>
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div><button type="button" class="svetlo hide" id="dsvetlo" title="světlo kamery (reflektor): rozsvítit / zhasnout">💡 <span>Světlo</span></button>` : ''}</div>
@@ -634,9 +646,20 @@ function renderDetail(rebuild = false) {
       </div></section>`;
     detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
     const tabs = d.querySelector('#dtabs');
-    const ukazTab = (t) => { dtab = t; tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t))); d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== t)); };
-    tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => ukazTab(b.dataset.t); });
-    ukazTab(dtab);
+    const NAZVY_AGEND = { monitoring: '👁 Monitoring', naramek: '⌚ Náramek', prsten: '💍 Prsten', komunikace: '💬 Komunikace a kontakty', nastaveni: '⚙ Nastavení alertů' };
+    const ukazTab = (t, posun = true) => {
+      dtab = t && NAZVY_AGEND[t] ? t : null;
+      tabs.querySelectorAll('button.agenda').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === dtab)));
+      d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== dtab));
+      tabs.classList.toggle('hide', !!dtab);
+      d.querySelector('#dagendaBar').classList.toggle('hide', !dtab);
+      d.querySelector('#dagendaNazev').textContent = dtab ? NAZVY_AGEND[dtab] : '';
+      document.body.classList.toggle('agenda-otevrena', !!dtab);   // schová seznam kamer, frontu alertů a směnu (proto.css)
+      if (posun) d.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    };
+    tabs.querySelectorAll('button.agenda').forEach((b) => { b.onclick = () => ukazTab(b.dataset.t); });
+    d.querySelector('#dagendaZpet').onclick = () => ukazTab(null);
+    ukazTab(dtab, false);
     // příjemci upozornění: rodina (Kontakty), dispečink a služba (⚙ Nastavení) pro SMS; sada 1 / sada 2 pro e-mail
     const volbyPrijemcu = (pp) => {
       const kk = kontaktyPro(pp), rod = rodinaSTelefonem(pp), tp = telefonyPoskytovatele(sim.state);

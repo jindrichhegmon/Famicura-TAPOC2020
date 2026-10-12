@@ -135,6 +135,27 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .queue .head{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .queue .esc{color:var(--bad);font-weight:700;font-size:.8rem}
 .detail .stage{margin-bottom:10px}
+/* Detail kamery: výběr agend jako dlaždice; otevřená agenda = na obrazovce jen ona (body.agenda-otevrena) a lišta Zpět */
+.detail .agendy{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 14px;align-items:flex-start}
+.detail .agendy .skupina{display:flex;flex-direction:column;gap:6px;flex:1 1 300px;min-width:0}
+.detail .agendy .skupina+.skupina{border-left:2px solid var(--line);padding-left:16px}
+.detail .agendy .sklabel{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--muted);padding-left:4px}
+.detail .agendy .zobrazeni .sklabel{color:var(--blue)}
+.detail .agendy-mriz{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.detail .agenda{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:104px;padding:12px 14px;border:2px solid #bcc8d1;border-radius:14px;background:#fff;color:var(--ink);cursor:pointer}
+.detail .agenda:hover{border-color:var(--blue);background:#f3f8fd}
+.detail .agenda .ic{font-size:1.5rem;line-height:1}
+.detail .agenda .nz{font-weight:800;font-size:1rem;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.detail .agenda .po{font-size:.78rem;color:var(--muted);line-height:1.3}
+.detail .chovani .agenda{border-style:dashed;border-color:#9fb0bf;background:#f1f4f7}
+.detail .chovani .agenda:hover{border-color:#7d8b99;background:#e8edf2}
+.detail .agendaBar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:4px 0 14px;padding:10px 12px;border-radius:12px;background:var(--soft);border:1px solid var(--line)}
+.detail .agendaBar .zpet{font-size:1.05rem;font-weight:800;padding:12px 20px;border-radius:12px;background:var(--blue);color:#fff;border:0;cursor:pointer;min-height:48px}
+.detail .agendaBar .zpet:hover{filter:brightness(.92)}
+.detail .agendaBar .kde{font-size:1rem;color:var(--ink)}
+body.agenda-otevrena .tileshint,body.agenda-otevrena #tiles,body.agenda-otevrena .cols>div:last-child{display:none}
+body.agenda-otevrena .cols{grid-template-columns:1fr}
+body.agenda-otevrena .cols #detail{margin-top:0}
 .detail .dtabsSk{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 14px;align-items:flex-end}
 .detail .dtabsSk .skupina{display:flex;flex-direction:column;gap:4px;flex:1 1 240px;min-width:0}
 .detail .dtabsSk .skupina+.skupina{border-left:2px solid var(--line);padding-left:16px}
@@ -512,6 +533,7 @@ html[data-schema=tmava]{--hdr1:#0d4a75;--hdr2:#1b6bb8}
   .cols .c,.cols .tiles,.cols .row{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
   .detail .dtabs button{flex:1;padding:8px 4px;font-size:.85rem}
   .detail .dtabsSk{gap:10px}.detail .dtabsSk .skupina+.skupina{border-left:0;padding-left:0}
+  .detail .agendy{gap:10px}.detail .agendy .skupina+.skupina{border-left:0;padding-left:0}.detail .agendy-mriz{grid-template-columns:1fr 1fr}.detail .agenda{min-height:88px}
   .deskbar .right{flex-wrap:wrap}
   .deskbar .stats{width:100%;order:2}
   .cols .c:has(#queue){order:-1;margin-top:0}
