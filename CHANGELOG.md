@@ -5,6 +5,12 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.56 · 12. 10. 2026 · dispečink: jeden zelený pruh u náramku
+
+- Záložka Náramek: telefon náramku (`tel:` odkaz, velké číslo vpravo) je
+  součástí pruhu `#dnaramekBanner`; samostatné pole `#dnaramekTelStav` je
+  pryč. Chybějící telefon se hlásí v pruhu. Aplikace na telefonu beze změny.
+
 ## 3.55 · 12. 10. 2026 · aplikace na telefonu: karta Prsten
 
 - `rodina.html` / `rodina.js` (rodina i mobilní dispečer): karta `#prsten`

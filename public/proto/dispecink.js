@@ -600,7 +600,6 @@ function renderDetail(rebuild = false) {
         <div id="dnaramekAgenda">
         <div class="blok"><h3>Stav náramku</h3><p class="small muted">– poslední ozvání, baterie a poloha (GPS, nebo přibližná z mobilní sítě)</p>
         <div class="naramekVyp hide" id="dnaramekVyp"></div>
-        <div class="naramekTel hide" id="dnaramekTelStav"></div>
         <p id="dnaramekInfo"></p>
         <div class="mapagraf"><div class="mapa hide" id="dnaramekMapa"></div><div class="grafy" id="dnaramekGraf"></div></div>
         </div><div class="blok"><h3>Měření zdraví</h3><p class="small muted">– tep, krevní tlak, kyslík v krvi a teplota; měření spouští náramek sám nebo jeho aplikace, hodnoty posílá na server</p>
@@ -963,15 +962,13 @@ function renderDetail(rebuild = false) {
     d.querySelector('#dtabNeni').classList.toggle('hide', je);
     const ban = d.querySelector('#dnaramekBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
     setHtml(ban, je
-      ? `<span class="ic">⌚</span><span><b>Náramek ${esc(n.id)} je přiřazen</b>${n.telefon ? ` · telefon ${esc(formatTelefonMez(n.telefon))}` : ''}<br><span class="small">${esc(n.posledni ? `naposledy se ozval ${fmtDT(n.posledni)}` : 'zatím se neozval')}${Number.isFinite(n.baterie) ? ` · baterie ${esc(String(n.baterie))} %` : ''}${n.vypnuto ? ' · <b>vypnutý</b>' : ''}</span></span>`
+      ? `<span class="ic">⌚</span><span class="grow"><b>Náramek ${esc(n.id)} je přiřazen</b><br><span class="small">${esc(n.posledni ? `naposledy se ozval ${fmtDT(n.posledni)}` : 'zatím se neozval')}${Number.isFinite(n.baterie) ? ` · baterie ${esc(String(n.baterie))} %` : ''}${n.vypnuto ? ' · <b>vypnutý</b>' : ''}</span></span>${n.telefon ? `<a class="tel" href="tel:${esc(n.telefon)}" title="zavolat na náramek"><span class="pop">📞 telefon náramku</span>${esc(formatTelefonMez(n.telefon))}</a>` : '<span class="tel chybi">📞 Telefon náramku není zadaný – doplňte ho v Přiřazení náramku (dole v této záložce).</span>'}`
       : '<span class="ic">⌚</span><span><b>Náramek není přiřazen</b><br><span class="small">Zadejte ID zařízení a telefon SIM karty níže. Stav, měření, poplachy a ovládání se ukážou po přiřazení.</span></span>');
     d.querySelector('#dnaramekPrirH3').textContent = je ? 'Změna nebo odebrání náramku' : 'Přiřazení nového náramku';
     setHtml(info, popisStavu(n));
     const vyp = d.querySelector('#dnaramekVyp'), tabVyp = d.querySelector('#dtabVyp');
     vyp.classList.toggle('hide', !n?.vypnuto); tabVyp.classList.toggle('hide', !n?.vypnuto);
     if (n?.vypnuto) setHtml(vyp, popisVypnuti(n));
-    const telSt = d.querySelector('#dnaramekTelStav'); const pt = popisTelefonu(n);
-    telSt.classList.toggle('hide', !pt.html); telSt.classList.toggle('chybi', pt.chybi); setHtml(telSt, pt.html);
     const mapa = d.querySelector('#dnaramekMapa');
     if (n?.poloha) { mapa.classList.remove('hide'); kresliMapu(mapa, n.poloha.lat, n.poloha.lon); } else mapa.classList.add('hide');
     const sf = d.querySelector('#dksos');   // Telefonní čísla náramku v Kontaktech (Komunikace)
