@@ -550,6 +550,13 @@ svg.g{width:100%;height:auto;display:block;flex:1}
 .prstenKlic .small{overflow-wrap:anywhere}
 /* záložka Prsten: jen tep a kyslík, dva grafy vedle sebe přes celou šířku */
 .grafy.prsten{flex-basis:100%;grid-template-columns:1fr 1fr;max-width:760px}
+/* záložka Prsten: dlaždice posledních hodnot (jako v aplikaci klienta) */
+.prsten-dlazdice{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:6px 0 10px}
+.prsten-dlazdice .dlaz{background:var(--soft);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.prsten-dlazdice .dlaz.prazdna{opacity:.55}
+.prsten-dlazdice .dlaz b.hod{font-size:26px;line-height:1.1}
+.prsten-dlazdice .dlaz b.hod.warn{color:var(--oranz)}.prsten-dlazdice .dlaz b.hod.bad{color:var(--bad)}
+.prsten-dlazdice .dlaz span{color:var(--muted);font-size:12px}
 @media(max-width:1100px){.grafy{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.grafy{grid-template-columns:1fr}}
 .mereni td.hod.warn{color:var(--oranz);font-weight:700}.mereni td.hod.bad{color:var(--bad);font-weight:700}

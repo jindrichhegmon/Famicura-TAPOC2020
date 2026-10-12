@@ -1174,15 +1174,21 @@ function kresliPrsten(d, p) {
   d.querySelector('#dtabPrstenNeni').classList.toggle('hide', je);
   const ban = d.querySelector('#dprstenBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
   const z = r?.zdravi || {};
-  const hodnoty = [
-    z.tep != null ? `tep ${z.tep} /min (${fmtDT(z.tepCas)})` : '', z.spo2 != null ? `kyslík ${z.spo2} % (${fmtDT(z.spo2Cas)})` : '',
-    z.tlakS != null && z.tlakD != null ? `tlak ${z.tlakS}/${z.tlakD} mmHg (${fmtDT(z.tlakSCas)})` : '', z.stres != null ? `stres ${z.stres} (${fmtDT(z.stresCas)})` : '',
-    z.hrv != null ? `HRV ${z.hrv} ms (${fmtDT(z.hrvCas)})` : '', z.unava != null ? `únava ${z.unava} (${fmtDT(z.unavaCas)})` : '', z.kroky != null ? `kroky ${z.kroky} (${fmtDT(z.krokyCas)})` : '',
-  ].filter(Boolean).join(' · ');
+  // dlaždice posledních hodnot jako v aplikaci klienta: hodnota, veličina s jednotkou, čas; tep, kyslík a tlak barevně podle mezí (MEZE_ZDRAVI)
+  const DLAZDICE = [
+    ['tep', 'tep', '/min'], ['spo2', 'kyslík SpO2', '%'], ['tlak', 'tlak', 'mmHg'], ['stres', 'stres', '1–100'], ['hrv', 'HRV', 'ms'], ['unava', 'únava', '1–100'], ['kroky', 'kroky dnes', ''],
+  ].map(([k, nazev, jed]) => {
+    const je = k === 'tlak' ? z.tlakS != null && z.tlakD != null : z[k] != null;
+    const hod = !je ? '–' : k === 'tlak' ? `${z.tlakS}/${z.tlakD}` : String(z[k]);
+    const cas = je ? fmtDT(k === 'tlak' ? z.tlakSCas : z[k + 'Cas']) : '';
+    const u = !je ? '' : k === 'tlak' ? (['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || '') : urovenHodnoty(k, z[k]);
+    return `<div class="dlaz${je ? '' : ' prazdna'}"><b class="hod ${u}">${esc(hod)}</b><span>${esc(nazev)}${jed ? ' ' + esc(jed) : ''}</span><span class="small muted">${esc(cas) || 'zatím neměřeno'}</span></div>`;
+  }).join('');
+  const hodnoty = Object.keys(z).some((k) => !/Cas$/.test(k) && z[k] != null) ? `<div class="prsten-dlazdice">${DLAZDICE}</div>` : '';
   setHtml(ban, je
     ? `<span class="ic">💍</span><span><b>Prsten ${esc(r.nazev || r.id)} posílá měření</b><br><span class="small">${esc(r.posledni ? `naposledy se ozval ${fmtDT(r.posledni)}` : 'zatím se neozval')}${Number.isFinite(r.baterie) ? ` · baterie ${esc(String(r.baterie))} %` : ''}${jeTicho(r) ? ' · <b>přes 2 hodiny nic – je telefon u klienta zapnutý se stránkou Prsten?</b>' : ''}</span></span>`
     : '<span class="ic">💍</span><span><b>Prsten zatím nic neposlal</b><br><span class="small">Připojte prsten přes telefon u klienta (postup níže). Stav a měření se ukážou, jakmile přijde první měření.</span></span>');
-  setHtml(d.querySelector('#dprstenInfo'), je ? (hodnoty ? `Poslední hodnoty: ${esc(hodnoty)}` : '<span class="muted">Zatím bez hodnot.</span>') : '');
+  setHtml(d.querySelector('#dprstenInfo'), je ? (hodnoty || '<span class="muted">Zatím bez hodnot.</span>') : '');
   if (je) nactiMereniNaramku(d.__mereniPrsten, p.id, r, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereniPrstenu(d), zdroj: 'prsten' });
 }
 function kresliMereni(d) {

@@ -13,7 +13,8 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   `unava` (1–100), `hrv` (1–250 ms), `kroky` (0–100000); každá veličina je
   vlastní řádek s druhem v Id (t, s, b, r, h, u, k). Poslední hodnoty u
   kamery (`p.prsten.zdravi`) pro všechny veličiny.
-- Dispečink, záložka Prsten: banner s posledními hodnotami, tabulka a grafy
+- Dispečink, záložka Prsten: dlaždice posledních hodnot (jako v aplikaci klienta,
+  tep/kyslík/tlak barevně podle mezí), tabulka a grafy
   posledních 10 měření pro tep, kyslík, tlak, stres, HRV, únavu a kroky
   (`SLOUPCE_PRSTENU` v naramek-ui.js), Excel má nové sloupce.
 - Aplikace klienta PéčeDoma 3.3.0 tyto veličiny měří (tlačítka Změřit tlak /
