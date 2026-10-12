@@ -305,6 +305,17 @@ kresliSchemata();
 const OVL_KEY = 'famicura.dispecink.skel';
 let overlay = (() => { try { return localStorage.getItem(OVL_KEY) !== '0'; } catch { return true; } })();   // drátěný model přes plný/rozostřený obraz v detailu: výchozí zapnuto, volba se pamatuje v prohlížeči
 function ulozOverlay(v) { overlay = v; try { localStorage.setItem(OVL_KEY, v ? '1' : '0'); } catch { /* bez paměti prohlížeče */ } }
+/** Dispečer si drátěný model zapíná sám: jedna volba pro dlaždice i detail (lišta nad dlaždicemi i tlačítko v detailu). */
+function kresliOvlVse() {
+  const b = $('ovlVse'); if (!b) return;
+  b.setAttribute('aria-pressed', overlay ? 'true' : 'false'); b.className = overlay ? 'sm' : 'sm sec';
+  b.textContent = `🦴 Drátěný model: ${overlay ? 'zapnuto' : 'vypnuto'}`;
+}
+function prepniOverlay() {
+  ulozOverlay(!overlay); kresliOvlVse();
+  const d = $('detail'); if (d) kresliOvl(d);
+  renderTiles();
+}
 let askOpen = false, emergOpen = false;   // inline forms in the detail
 let dtab = null;                    // otevřená agenda detailu: monitoring | naramek | prsten | komunikace | nastaveni; null = výběr agend (dlaždice)
 const seen = new Set(sim.state.events.map((e) => e.id));
@@ -394,6 +405,8 @@ function nastavZobrazeni(v) {
 }
 $('zobrazeni').querySelectorAll('button').forEach((b) => { b.onclick = () => nastavZobrazeni(b.dataset.v); });
 renderZobrazeni();
+$('ovlVse').onclick = prepniOverlay;
+kresliOvlVse();
 const panel = mountPanel({ role: 'dispecink', patientIds: () => sim.state.patients.filter(visible).map((p) => p.id), onPatient: () => {} });
 
 // ?rezim=full|blur|skeleton|none opens the real camera in that mode (as if the
@@ -416,6 +429,8 @@ function kresliOvl(d, mode = null) {
   b.setAttribute('aria-pressed', overlay ? 'true' : 'false'); b.className = overlay ? 'sm' : 'sm sec';
   b.textContent = `🦴 Drátěný model přes obraz: ${overlay ? 'zapnuto' : 'vypnuto'}`;
 }
+/** Co se v dlaždici i v detailu skutečně kreslí: režim od rodiny, k plnému a rozostřenému obrazu
+ *  navíc drátěný model, když si ho dispečer zapnul. Bez obrazu zůstává bez obrazu – kostru nepřidáváme. */
 function detailMode(pid) {
   const m = tileMode(pid);
   if (overlay && (m === 'full' || m === 'blur')) return m === 'full' ? 'fullskel' : 'blurskel';
@@ -460,7 +475,7 @@ function renderTiles() {
     box.innerHTML = list.map((p) => `<div class="tile" data-id="${p.id}"><div class="stage"><canvas></canvas><span class="tag"></span></div><div class="nm"><span>${esc(p.name)}</span><span class="badge st-badge"></span></div><div class="st"></div></div>`).join('');
     box.querySelectorAll('.tile').forEach((t) => {
       const pid = t.dataset.id;
-      tileRegs.set(pid, zdrojPro(pid).register(t.querySelector('canvas'), () => tileMode(pid)));
+      tileRegs.set(pid, zdrojPro(pid).register(t.querySelector('canvas'), () => detailMode(pid)));
       t.onclick = () => { selected = pid; askOpen = emergOpen = false; panel.select(pid); renderDetail(true); renderTiles(); };
     });
   }
@@ -470,7 +485,7 @@ function renderTiles() {
     const z = zdroje.get(p.id);
     if (z) { if (p.deaktivace && !z.deakt) { z.deakt = true; z.odpoj('kamera deaktivovaná rodinou'); } else if (!p.deaktivace && z.deakt) { z.deakt = false; z.connect(); } }
     t.className = 'tile ' + st + (selected === p.id ? ' sel' : '') + (p.deaktivace ? ' deakt' : '');
-    const rezimText = p.deaktivace ? MODE_TAG.deaktivace : p.offline ? 'kamera nedostupná' : MODE_TAG[tileMode(p.id)] || '';
+    const rezimText = p.deaktivace ? MODE_TAG.deaktivace : p.offline ? 'kamera nedostupná' : (MODE_TAG[tileMode(p.id)] || '') + (/skel$/.test(detailMode(p.id)) ? ' + drátěný model' : '');
     t.querySelector('.tag').textContent = rezimText;
     t.querySelector('.st').dataset.rezim = rezimText;   // v zobrazení Seznam je štítek schovaný, režim se čte z řádku stavu
     const b = t.querySelector('.st-badge'); b.textContent = { crit: 'kritické', warn: 'varování', off: 'offline', klid: 'klid' }[st]; b.className = 'badge st-badge ' + (st === 'klid' ? 'ok' : st === 'off' ? 'tech' : st);
@@ -881,7 +896,7 @@ function renderDetail(rebuild = false) {
       try { const r = await sim.setNaramekAuto(p.id, auto, ME()); if (r === undefined && sim.naServeru) throw new Error('uložení se nepodařilo'); d.querySelector('#dnaramekAutoStav').textContent = auto.min > 0 ? `uloženo: každých ${auto.min} min` : 'vypnuto'; toast(auto.min > 0 ? `Automatické měření každých ${auto.min} min uloženo.` : 'Automatické měření vypnuto.'); }
       catch (ex) { toast(`Nepodařilo se: ${ex.message}`, 'crit'); }
     };
-    const ovl = d.querySelector('#ovl'); ovl.onclick = () => { ulozOverlay(!overlay); kresliOvl(d); };
+    const ovl = d.querySelector('#ovl'); ovl.onclick = prepniOverlay;
     const tf = d.querySelector('#dtrvalaForm');
     d.querySelector('#dtrvalaEdit').onclick = () => { d.querySelector('#dtrvalaText').value = sim.patient(p.id)?.note || ''; tf.classList.remove('hide'); d.querySelector('#dtrvalaText').focus(); };
     d.querySelector('#dtrvalaCancel').onclick = () => tf.classList.add('hide');

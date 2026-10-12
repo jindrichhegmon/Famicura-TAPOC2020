@@ -99,7 +99,8 @@
       <div class="row tileshint"><span class="small muted grow">Dlaždice ukazují jen to, co rodina povolila. Klepnutím otevřete detail.</span>
         <div class="seg zdroj" id="zdroj" title="Jen skutečné kamery: pouze kamery připojené k serveru. Demo: navíc fiktivní pacienti pro ukázku."><button data-z="real" aria-pressed="true">Jen skutečné kamery</button><button data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div>
         <label class="small"><input type="checkbox" id="onlyOpen"> jen s otevřeným alertem</label>
-        <div class="seg zobrazeni" id="zobrazeni" title="Jak velké jsou dlaždice kamer: malé okno (hodně kamer na obrazovce), velké okno, nebo seznam s malým náhledem."><button data-v="male" aria-pressed="false">Malé okno</button><button data-v="velke" aria-pressed="true">Velké okno</button><button data-v="seznam" aria-pressed="false">Seznam</button></div></div>
+        <div class="seg zobrazeni" id="zobrazeni" title="Jak velké jsou dlaždice kamer: malé okno (hodně kamer na obrazovce), velké okno, nebo seznam s malým náhledem."><button data-v="male" aria-pressed="false">Malé okno</button><button data-v="velke" aria-pressed="true">Velké okno</button><button data-v="seznam" aria-pressed="false">Seznam</button></div>
+        <button type="button" class="sm" id="ovlVse" aria-pressed="true" title="Dispečer si sám zapne kostru postavy přes plný nebo rozostřený obraz – ve všech dlaždicích i v detailu. Kostra se počítá v prohlížeči (MediaPipe), nikam se nezapisuje. Kde rodina povolila jen „bez obrazu“, se nekreslí. Volba se pamatuje v tomhle prohlížeči.">🦴 Drátěný model: zapnuto</button></div>
       <div class="tiles" id="tiles"></div>
       <div class="c detail hide" id="detail"></div>
     </div>

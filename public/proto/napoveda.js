@@ -21,6 +21,7 @@ Každá dlaždice ukazuje kameru v režimu, který povolila rodina. Štítek na 
 - **Plný obraz** – ostrý obraz z kamery.
 - **Rozostření** – obraz je rozmazaný, postava je rozeznatelná jen podle obrysu.
 - **Drátěný model** – jen kostra postavy, bez obrazu.
+- Tlačítkem **🦴 Drátěný model** v liště nad dlaždicemi si dispečer sám přidá kostru postavy přes plný nebo rozostřený obraz ve všech dlaždicích i v detailu (u „bez obrazu“ se nekreslí). Volba se pamatuje v prohlížeči.
 - **Bez obrazu** – obraz se nekreslí, chodí jen události.
 
 ### Kdo režim nastavuje
@@ -352,6 +353,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.58 (12. 10. 2026)**: dispečer si drátěný model zapne sám tlačítkem 🦴 Drátěný model v liště nad dlaždicemi – kostra postavy se pak kreslí přes plný nebo rozostřený obraz ve všech dlaždicích i v detailu. U kamery, kde rodina povolila jen „bez obrazu“, se kostra nekreslí. Tlačítko v detailu je stejná volba.
 - **Verze 3.57 (12. 10. 2026)**: nová malá aplikace PéčeDoma Prsten pro iPhone posílá tep a kroky z prstenu sama i na pozadí – server ji každých 15 minut probudí. V záložce Prsten pod párovacím kódem uvidíte, který iPhone je zaregistrovaný a kdy byl naposledy probuzen.
 - **Verze 3.56 (12. 10. 2026)**: v záložce Náramek je telefon náramku přímo v zeleném pruhu nahoře (velké číslo vpravo, klepnutím se volá); druhé zelené pole pod Stavem náramku zmizelo.
 - **Verze 3.55 (12. 10. 2026)**: aplikace na telefonu (rodina i mobilní dispečer) má kartu 💍 Prsten: stav, dlaždice posledních hodnot, grafy posledních 10 měření a tabulka (jen ke čtení, jako Náramek). Karta se ukáže, jakmile prsten něco poslal.

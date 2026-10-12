@@ -5,6 +5,19 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.58 · 12. 10. 2026 · dispečink: drátěný model si zapne dispečer sám
+
+- V liště nad dlaždicemi je tlačítko `#ovlVse` „🦴 Drátěný model: zapnuto/vypnuto“.
+  Dispečer si jím sám zapne kostru postavy přes plný nebo rozostřený obraz,
+  a to **ve všech dlaždicích i v detailu** (dřív jen v detailu). Je to stejná
+  volba jako tlačítko v detailu (`#ovl`, `famicura.dispecink.skel` v localStorage),
+  obě se drží v souladu (`prepniOverlay`).
+- Dlaždice kreslí `detailMode(pid)`: k plnému a rozostřenému obrazu přidá kostru,
+  u „bez obrazu“ ji nepřidá (rodina obraz nepovolila). Štítek dlaždice ukáže
+  např. „rozostření + drátěný model“.
+- Kostra se počítá v prohlížeči jednou na kameru a sdílí ji dlaždice i detail;
+  nic se nezapisuje.
+
 ## 3.57 · 12. 10. 2026 · probouzení aplikace PéčeDoma Prsten na iPhonu
 
 - Nová malá nativní aplikace **PéčeDoma Prsten** (PECEDOMA-pacient-mobil, složka
