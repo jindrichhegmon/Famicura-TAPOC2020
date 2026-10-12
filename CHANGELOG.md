@@ -17,6 +17,9 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   tep/kyslík/tlak barevně podle mezí), tabulka a grafy
   posledních 10 měření pro tep, kyslík, tlak, stres, HRV, únavu a kroky
   (`SLOUPCE_PRSTENU` v naramek-ui.js), Excel má nové sloupce.
+- Telefon pro SMS s odkazem na prsten: předvyplněný z prvního telefonu rodiny,
+  přepsané číslo se pamatuje v prohlížeči podle kamery (dřív ho překreslení
+  detailu vracelo zpět).
 - Aplikace klienta PéčeDoma 3.3.0 tyto veličiny měří (tlačítka Změřit tlak /
   stres / HRV / únavu, Kroky dnes; kroky i s každou synchronizací) a ukazuje
   u každé dlaždice graf posledních 10 hodnot.

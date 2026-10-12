@@ -619,7 +619,7 @@ function renderDetail(rebuild = false) {
         </div></div><div class="blok"><h3>Připojení prstenu přes aplikaci klienta</h3><p class="small muted">– prsten (QRing / Colmi) nemá SIM ani GPS; spojuje ho aplikace klienta PéčeDoma na telefonu u klienta (Android, Chrome). Aplikace se prokazuje párovacím kódem této kamery – umí jen posílat měření sem.</p>
         <div class="prstenKlic" id="dprstenKlicBox"><span class="small muted">Zjišťuji párovací kód…</span></div>
         <div class="akce"><button type="button" class="sm" id="dprstenKlicNovy">Vytvořit párovací kód</button><a class="sm sec hide" id="dprstenKlicOdkaz" target="_blank" rel="noopener">Otevřít aplikaci klienta s kódem</a><button type="button" class="sm sec hide" id="dprstenKlicZrusit">Zrušit kód</button><span class="small muted" id="dprstenKlicStav"></span></div>
-        <form class="kontakty" id="dprstenSms"><div class="akce"><label class="small">SMS s odkazem klientovi na <input type="tel" id="dprstenSmsTel" maxlength="20" placeholder="777 123 456" style="width:130px" value="${esc((kon.rodina.find((r) => r.telefon) || {}).telefon ? formatTelefonMez(kon.rodina.find((r) => r.telefon).telefon) : '')}"></label><button class="sm sec" type="submit" id="dprstenSmsBtn" disabled>Poslat SMS</button><span class="small muted" id="dprstenSmsStav"></span></div></form>
+        <form class="kontakty" id="dprstenSms"><div class="akce"><label class="small">SMS s odkazem klientovi na <input type="tel" id="dprstenSmsTel" maxlength="20" placeholder="777 123 456" style="width:130px" value="${esc(prstenSmsTel(p.id) || ((kon.rodina.find((r) => r.telefon) || {}).telefon ? formatTelefonMez(kon.rodina.find((r) => r.telefon).telefon) : ''))}" title="Předvyplněno z prvního telefonu rodiny v Komunikaci a kontaktech; přepsané číslo si dispečink pamatuje"></label><button class="sm sec" type="submit" id="dprstenSmsBtn" disabled>Poslat SMS</button><span class="small muted" id="dprstenSmsStav"></span></div></form>
         <ol class="small" style="margin:8px 0 0;padding-left:20px;line-height:1.6">
           <li>Klient otevře odkaz ze SMS v telefonu (aplikace PéčeDoma si kód uloží), nebo kód opíše v aplikaci na kartě Prsten.</li>
           <li>Na kartě Prsten stiskne <b>Připojit prsten</b> a vybere prsten v nabídce Bluetooth (prsten nesmí být zároveň spojený s aplikací QRing).</li>
@@ -830,10 +830,13 @@ function renderDetail(rebuild = false) {
     else setHtml(klicBox, '<span class="small muted">Párovací kód jde jen se stavem na serveru.</span>');
     d.querySelector('#dprstenKlicNovy').onclick = () => klicAkce('novy');
     d.querySelector('#dprstenKlicZrusit').onclick = () => { if (confirm('Zrušit párovací kód? Aplikace klienta pak přestane měření posílat, dokud nedostane nový.')) klicAkce('zrusit'); };
+    // přepsané číslo si dispečink pamatuje (v prohlížeči, pro tuto kameru) – jinak by ho každé překreslení vrátilo na telefon rodiny
+    d.querySelector('#dprstenSmsTel').oninput = (e) => prstenSmsTel(p.id, e.target.value);
     d.querySelector('#dprstenSms').onsubmit = async (e) => {
       e.preventDefault();
       const st = d.querySelector('#dprstenSmsStav'); st.textContent = 'posílám…';
-      try { const b = await post('/api/prsten/klic', { kamera: p.id, akce: 'sms', telefon: d.querySelector('#dprstenSmsTel').value }); st.textContent = `SMS odeslána na ${b.sms?.telefon || ''} ${fmtT(Date.now())}`; }
+      const telefon = d.querySelector('#dprstenSmsTel').value; prstenSmsTel(p.id, telefon);
+      try { const b = await post('/api/prsten/klic', { kamera: p.id, akce: 'sms', telefon }); st.textContent = `SMS odeslána na ${b.sms?.telefon || ''} ${fmtT(Date.now())}`; }
       catch (err) { st.textContent = err.message; toast(err.message, 'crit'); }
     };
     d.querySelector('#dprstenExcel').onclick = () => {
@@ -1160,6 +1163,12 @@ function kresliVolaUlozene(d, p) {
   setHtml(el, `Náramek volá: ${ulozena.some(Boolean) ? radkySos(d, p, ulozena).join(' · ') : '<span class="muted">žádná čísla</span>'}${popisPoslanych(n)} · <span class="muted">čísla nastavíte v Komunikaci a kontaktech → Telefonní čísla náramku</span>`);
 }
 const MERENI_NA_KEY = 'famicura.mereniNa';
+/** Telefon pro SMS s odkazem na prsten, který dispečer přepsal (localStorage, podle kamery): čtení bez hodnoty, zápis s hodnotou ('' smaže). */
+function prstenSmsTel(kameraId, hodnota) {
+  const k = 'famicura.prstenSmsTel.' + kameraId;
+  try { if (hodnota === undefined) return localStorage.getItem(k) || ''; if (String(hodnota).trim()) localStorage.setItem(k, String(hodnota)); else localStorage.removeItem(k); } catch { /* bez paměti */ }
+  return hodnota || '';
+}
 /** Měření zdraví: načte ze serveru, když přibylo (naramek-ui.nactiMereni), a překreslí tabulku, grafy a mapu. */
 function nactiMereni(d, p, n) { nactiMereniNaramku(d.__mereni, p.id, n, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereni(d), zdroj: 'naramek' }); }
 function kresliMereniPrstenu(d) {
