@@ -160,7 +160,7 @@ Nouzový přívěsek nebo hodinky (ReachFar V48 a podobné) posílají poplachy 
 - Řádek „Náramek bude volat“ ukazuje skutečná čísla ještě před uložením a vedle nich čísla naposledy nastavená v náramku; pod ním jsou čísla z Péče doma a Péče doma plus (chybějící červeně). Náramek hlásí přijetí v logu serveru (SOS1, SOS2, SOS3).
 
 ### Náramek v aplikaci na telefonu
-- Rodina i mobilní dispečer mají kartu ⌚ Náramek SOS (za Nahrávkami, dole v liště záložka Náramek): stav a baterie, mapa polohy, grafy posledních 10 měření, tabulka měření po 10 a poplachy z náramku. Jen ke čtení, nic se tam neovládá.
+- Rodina i mobilní dispečer mají kartu ⌚ Náramek SOS (za Nahrávkami, dole v liště záložka Náramek): stav a baterie, mapa polohy, grafy posledních 10 měření, tabulka měření po 10 a poplachy z náramku. Jen ke čtení, nic se tam neovládá. Stejně tak kartu 💍 Prsten (stav, dlaždice posledních hodnot, grafy, tabulka), jakmile prsten něco poslal.
 - Karta je vidět jen u kamery s přiřazeným náramkem; vypnutý náramek tam svítí stejným červeným hlášením jako v dispečinku.
 ` },
   { id: 'prsten', obrazky: [], nazev: 'Prsten (QRing / Colmi) u klienta', klicova: ['prsten', 'prstýnek', 'parovaci kod', 'parovani', 'aplikace klienta', 'pecedoma', 'qring', 'colmi', 'yawell', 'bluetooth', 'kyslik z prstenu', 'tep z prstenu', 'zalozka prsten', 'telefon u klienta', 'r02', 'r06', 'r10'],
@@ -352,6 +352,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.55 (12. 10. 2026)**: aplikace na telefonu (rodina i mobilní dispečer) má kartu 💍 Prsten: stav, dlaždice posledních hodnot, grafy posledních 10 měření a tabulka (jen ke čtení, jako Náramek). Karta se ukáže, jakmile prsten něco poslal.
 - **Verze 3.54 (12. 10. 2026)**: stav prstenu (kdo posílá, baterie, poslední hodnoty) se ukládá do databáze – dřív po restartu serveru zmizel a záložka hlásila „zatím nic neposlal“, i když měření v tabulce byla. Záložka Prsten teď uložená měření ukáže vždy; odznak u dlaždice je „bez měření“ (ne „nepřipojen“ – dispečink nevidí živé spojení, jen co telefon poslal).
 - **Verze 3.53 (12. 10. 2026)**: nová navigace detailu kamery – pod seznamem kamer jsou jen dlaždice agend (Monitoring, Náramek, Prsten, Komunikace a kontakty, Nastavení alertů); po klepnutí zůstane na obrazovce jen zvolená agenda a zpět vede výrazné tlačítko „Zpět na výběr agend“.
 - **Verze 3.52 (12. 10. 2026)**: telefon pro SMS s odkazem na prsten je předvyplněný z prvního telefonu rodiny (Komunikace a kontakty) a přepsané číslo si dispečink pamatuje. Záložka Prsten ukazuje kromě tepu a kyslíku i tlak, stres, HRV, únavu a kroky za den (tabulka, grafy posledních 10 měření, Excel). Tlak, stres, HRV a únavu prsten jen odhaduje – hodnoty jsou orientační; tep a kyslík měří.

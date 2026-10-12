@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku, SLOUPCE_PRSTENU, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
 import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -368,6 +368,28 @@ function kresliMereni() {
 $('naramekPrev').onclick = () => { if (mereni.strana > 0) { mereni.strana--; kresliMereni(); } };
 $('naramekNext').onclick = () => { mereni.strana++; kresliMereni(); };
 
+/* ---------- prsten (přes aplikaci klienta PéčeDoma): karta jen ke čtení (rodina i mobilní dispečer) ----------
+ * Stav a poslední hodnoty jsou ve stavu poskytovatele (p.prsten), měření z GET /api/naramek/mereni?zdroj=prsten.
+ * Karta se ukáže, jakmile prsten něco poslal – i bez živého záznamu, když jsou měření uložená v databázi. */
+const mereniPrsten = pametMereni(10);
+function kresliPrsten(p) {
+  const card = $('prsten'); if (!card) return;
+  const r = p.prsten; const je = !!r?.id;
+  const ulozena = !je && mereniPrsten.kamera === p.id && !!(mereniPrsten.radky?.length);
+  card.classList.toggle('hide', !je && !ulozena); $('navPrsten').classList.toggle('hide', !je && !ulozena);
+  if (je) setHtml($('prstenInfo'), `<b>Prsten ${esc(r.nazev || r.id)} posílá měření</b> · ${popisPrstenu(r)}`);
+  else if (ulozena) setHtml($('prstenInfo'), `<b>Prsten teď neposílá</b> · poslední uložené měření ${esc(fmtDT(mereniPrsten.radky[0].cas))}`);
+  setHtml($('prstenDlazdice'), je ? dlazdicePrstenu(r.zdravi || {}) : '');
+  nactiMereni(mereniPrsten, p.id, r || null, { naServeru: sim.naServeru, apiJson: (path) => api(path), hotovo: () => { kresliMereniPrstenu(); if (!p.prsten?.id) kresliPrsten(p); }, zdroj: 'prsten' });
+}
+function kresliMereniPrstenu() {
+  const radky = kresliStranuMereni(mereniPrsten, { el: $('prstenMereni'), strana: $('prstenStrana'), prev: $('prstenPrev'), next: $('prstenNext'), sloupce: SLOUPCE_PRSTENU });
+  $('prstenPaging').classList.toggle('hide', radky.length <= mereniPrsten.na);
+  kresliGrafy($('prstenGraf'), radky, undefined, SLOUPCE_PRSTENU);
+}
+$('prstenPrev').onclick = () => { if (mereniPrsten.strana > 0) { mereniPrsten.strana--; kresliMereniPrstenu(); } };
+$('prstenNext').onclick = () => { mereniPrsten.strana++; kresliMereniPrstenu(); };
+
 function levelClass(l) { return l === 'crit' ? 'crit' : l === 'warn' ? 'warn' : l === 'tech' ? 'tech' : 'info'; }
 
 /* ---------- žádost o plný obraz přes celou obrazovku ----------
@@ -442,6 +464,7 @@ function render() {
   $('heroS').textContent = p.deaktivace ? `Vypnuto od ${fmtDT(p.deaktivace.od)} · bez obrazu, nahrávek a událostí` : lastEv ? `Poslední událost: ${eventText(lastEv)} · ${fmtT(lastEv.at)}` : 'Zatím žádná událost';
   kresliDeaktivaci(p);
   kresliNaramek(p);
+  kresliPrsten(p);
   kresliKamVyber();
   $('modeTag').textContent = { full: 'plný obraz', blur: 'rozostřený obraz', fullskel: 'drátěný model přes obraz', blurskel: 'rozostření s drátěným modelem', skeleton: 'jen drátěný model' }[viewMode()];
   const efZdroj = { deaktivace: 'kameru jste deaktivovali', povoleni: 'povolení na žádost poskytovatele', rychle: 'vaše rychlé přepnutí', offline: 'kamera je nedostupná', den: `denní nastavení (den ${denOd}–${nocOd})`, noc: `noční nastavení (noc ${nocOd}–${denOd})` }[ef.zdroj] || '';

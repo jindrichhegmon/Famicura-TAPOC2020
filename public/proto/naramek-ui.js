@@ -123,6 +123,25 @@ const GRAFY = [
 ];
 /** Sloupce a grafy záložky Prsten (v tomto pořadí). */
 export const SLOUPCE_PRSTENU = ['tep', 'spo2', 'tlak', 'stres', 'hrv', 'unava', 'kroky'];
+/** Dlaždice posledních hodnot z prstenu (p.prsten.zdravi) jako v aplikaci klienta: hodnota, veličina s jednotkou, čas;
+ *  tep, kyslík a tlak barevně podle mezí (MEZE_ZDRAVI). Vrací HTML, nebo '' když zatím žádná hodnota není. */
+export function dlazdicePrstenu(z = {}) {
+  if (!Object.keys(z).some((k) => !/Cas$/.test(k) && z[k] != null)) return '';
+  const dl = [
+    ['tep', 'tep', '/min'], ['spo2', 'kyslík SpO2', '%'], ['tlak', 'tlak', 'mmHg'], ['stres', 'stres', '1–100'], ['hrv', 'HRV', 'ms'], ['unava', 'únava', '1–100'], ['kroky', 'kroky dnes', ''],
+  ].map(([k, nazev, jed]) => {
+    const je = k === 'tlak' ? z.tlakS != null && z.tlakD != null : z[k] != null;
+    const hod = !je ? '–' : k === 'tlak' ? `${z.tlakS}/${z.tlakD}` : String(z[k]);
+    const cas = je ? fmtDT(k === 'tlak' ? z.tlakSCas : z[k + 'Cas']) : '';
+    const u = !je ? '' : k === 'tlak' ? (['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || '') : urovenHodnoty(k, z[k]);
+    return `<div class="dlaz${je ? '' : ' prazdna'}"><b class="hod ${u}">${esc(hod)}</b><span>${esc(nazev)}${jed ? ' ' + esc(jed) : ''}</span><span class="small muted">${esc(cas) || 'zatím neměřeno'}</span></div>`;
+  }).join('');
+  return `<div class="prsten-dlazdice">${dl}</div>`;
+}
+/** Text stavu prstenu (pruh): kdo posílá, kdy naposledy, baterie, ticho přes 2 hodiny. */
+export function popisPrstenu(r) {
+  return `${esc(r.posledni ? `naposledy se ozval ${fmtDT(r.posledni)}` : 'zatím se neozval')}${Number.isFinite(r.baterie) ? ` · baterie ${esc(String(r.baterie))} %` : ''}${jeTicho(r) ? ' · <b>přes 2 hodiny nic – je telefon u klienta zapnutý se stránkou Prsten?</b>' : ''}`;
+}
 export function kresliGrafy(el, radky, pocet = GRAF_MERENI, jen = null) {
   if (!el) return;
   const grafy = jen ? GRAFY.filter((g) => jen.includes(g.k)) : GRAFY;

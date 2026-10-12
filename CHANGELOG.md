@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.55 · 12. 10. 2026 · aplikace na telefonu: karta Prsten
+
+- `rodina.html` / `rodina.js` (rodina i mobilní dispečer): karta `#prsten`
+  a odkaz `#navPrsten` v dolní liště – stav prstenu, dlaždice posledních
+  hodnot, grafy a tabulka měření (`zdroj=prsten`, stránkování po 10), jen ke
+  čtení. Vidět, jakmile je `p.prsten` nebo uložená měření.
+- Dlaždice a text stavu prstenu jsou společné v `naramek-ui.js`
+  (`dlazdicePrstenu`, `popisPrstenu`); dispečink je používá také.
+
 ## 3.54 · 12. 10. 2026 · prsten: stav přežije restart serveru
 
 - `A_KAM_Kamera` má sloupec `Prsten` (JSON `{ id, nazev, posledni, baterie,

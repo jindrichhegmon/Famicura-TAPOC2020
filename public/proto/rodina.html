@@ -192,6 +192,18 @@
     <p class="hint">Nouzové tlačítko, pád a slabá baterie hlásí náramek přímo na server, vyřizuje je dispečink. Měření, polohu, čísla SOS a vypnutí náramku ovládá dispečink na počítači; tady se jen sleduje.</p>
   </section>
 
+  <!-- prsten (QRing / Colmi) přes aplikaci klienta PéčeDoma: jen ke čtení – stav, poslední hodnoty, grafy a tabulka měření; karta je vidět, jakmile přijde první měření -->
+  <section class="card hide" id="prsten">
+    <div class="cardhead"><span class="ic">💍</span><h2>Prsten</h2></div>
+    <p class="now" id="prstenInfo"></p>
+    <div id="prstenDlazdice"></div>
+    <div class="mapagraf"><div class="grafy prsten" id="prstenGraf"></div></div>
+    <h3 class="sub">Měření z prstenu</h3>
+    <div class="tabwrap" id="prstenMereni"></div>
+    <div class="row hide" id="prstenPaging" style="justify-content:space-between;margin-top:6px"><button type="button" class="sm sec" id="prstenPrev">◀ Novějších 10</button><span class="small muted" id="prstenStrana"></span><button type="button" class="sm sec" id="prstenNext">Starších 10 ▶</button></div>
+    <p class="hint">Tep a kyslík prsten měří, tlak, stres, HRV a únavu jen odhaduje – hodnoty jsou orientační. Měření posílá aplikace klienta PéčeDoma z telefonu u klienta; párovací kód a SMS s odkazem vytváří dispečink na počítači.</p>
+  </section>
+
   <section class="card" id="nastaveni">
     <div class="cardhead"><span class="ic">⚙️</span><h2>Co poskytovatel hlídá</h2></div>
     <p class="hint">Nastavuje dispečink poskytovatele; rodina nic nenastavuje. Symboly: 🎞 událost se nahrává (15 s, plus 5 s před ní), 📱 jde SMS a ✉ e-mail na kontakty, které poskytovatel zadal.</p>
@@ -250,6 +262,7 @@
   <a href="#soukromi"><span class="ic">🔒</span>Soukromí</a>
   <a href="#historie"><span class="ic">🕓</span>Historie</a>
   <a href="#naramek" class="hide" id="navNaramek"><span class="ic">⌚</span>Náramek</a>
+  <a href="#prsten" class="hide" id="navPrsten"><span class="ic">💍</span>Prsten</a>
   <a href="#nastaveni"><span class="ic">⚙️</span>Nastavení</a>
 </nav>
 <script type="module" src="/proto/rodina.js"></script>

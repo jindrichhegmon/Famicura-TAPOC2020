@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho, SLOUPCE_PRSTENU } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho, SLOUPCE_PRSTENU, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1208,20 +1208,10 @@ function kresliPrsten(d, p) {
   d.querySelector('#dtabPrstenNeni').classList.toggle('hide', je || ulozena);
   const ban = d.querySelector('#dprstenBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
   const z = r?.zdravi || {};
-  // dlaždice posledních hodnot jako v aplikaci klienta: hodnota, veličina s jednotkou, čas; tep, kyslík a tlak barevně podle mezí (MEZE_ZDRAVI)
-  const DLAZDICE = [
-    ['tep', 'tep', '/min'], ['spo2', 'kyslík SpO2', '%'], ['tlak', 'tlak', 'mmHg'], ['stres', 'stres', '1–100'], ['hrv', 'HRV', 'ms'], ['unava', 'únava', '1–100'], ['kroky', 'kroky dnes', ''],
-  ].map(([k, nazev, jed]) => {
-    const je = k === 'tlak' ? z.tlakS != null && z.tlakD != null : z[k] != null;
-    const hod = !je ? '–' : k === 'tlak' ? `${z.tlakS}/${z.tlakD}` : String(z[k]);
-    const cas = je ? fmtDT(k === 'tlak' ? z.tlakSCas : z[k + 'Cas']) : '';
-    const u = !je ? '' : k === 'tlak' ? (['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || '') : urovenHodnoty(k, z[k]);
-    return `<div class="dlaz${je ? '' : ' prazdna'}"><b class="hod ${u}">${esc(hod)}</b><span>${esc(nazev)}${jed ? ' ' + esc(jed) : ''}</span><span class="small muted">${esc(cas) || 'zatím neměřeno'}</span></div>`;
-  }).join('');
-  const hodnoty = Object.keys(z).some((k) => !/Cas$/.test(k) && z[k] != null) ? `<div class="prsten-dlazdice">${DLAZDICE}</div>` : '';
+  const hodnoty = dlazdicePrstenu(z);
   const posl = ulozena ? m.radky[0] : null;
   setHtml(ban, je
-    ? `<span class="ic">💍</span><span><b>Prsten ${esc(r.nazev || r.id)} posílá měření</b><br><span class="small">${esc(r.posledni ? `naposledy se ozval ${fmtDT(r.posledni)}` : 'zatím se neozval')}${Number.isFinite(r.baterie) ? ` · baterie ${esc(String(r.baterie))} %` : ''}${jeTicho(r) ? ' · <b>přes 2 hodiny nic – je telefon u klienta zapnutý se stránkou Prsten?</b>' : ''}</span></span>`
+    ? `<span class="ic">💍</span><span><b>Prsten ${esc(r.nazev || r.id)} posílá měření</b><br><span class="small">${popisPrstenu(r)}</span></span>`
     : ulozena
       ? `<span class="ic">💍</span><span><b>Prsten teď neposílá, uložená měření jsou níže</b><br><span class="small">poslední měření ${esc(fmtDT(posl.cas))}${posl.naramek ? ` (${esc(String(posl.naramek).replace(/^prsten-/, 'prsten '))})` : ''}. Stav a nové hodnoty se ukážou, jakmile telefon u klienta zase něco pošle.</span></span>`
       : '<span class="ic">💍</span><span><b>Prsten zatím nic neposlal</b><br><span class="small">Připojte prsten přes telefon u klienta (postup níže). Stav a měření se ukážou, jakmile přijde první měření.</span></span>');
