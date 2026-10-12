@@ -838,6 +838,9 @@ function renderDetail(rebuild = false) {
       setHtml(klicBox, je
         ? `<span class="kod">${esc(b.klic)}</span><span class="small muted">vytvořen ${esc(fmtDT(b.vytvoreno))} · <a href="${esc(b.odkaz)}" target="_blank" rel="noopener">${esc(b.odkaz)}</a></span>`
         : '<span class="small muted">Kamera zatím nemá párovací kód. Vytvořte ho a pošlete klientovi SMS s odkazem.</span>');
+      // iPhony s aplikací PéčeDoma Prsten (sběr na pozadí): server je probouzí tichou notifikací
+      const zar = Array.isArray(b?.zarizeni) ? b.zarizeni : [];
+      if (je && zar.length) klicBox.insertAdjacentHTML('beforeend', `<div class="small" style="flex-basis:100%;margin-top:4px">📱 Aplikace PéčeDoma Prsten na iPhonu: ${zar.map((z) => `<b>${esc(z.prsten || 'prsten')}</b>${z.verze ? ` (v${esc(z.verze)})` : ''} – ${!b.probouzeni ? '<span class="bad">server nemá klíč Apple pro probouzení (deploy/vps-apns.sh)</span>' : z.posledniPush ? `probouzení každých ${esc(String(b.intervalMin || 15))} min, naposledy ${esc(fmtDT(z.posledniPush))}${z.stavPush && z.stavPush !== 'ok' ? ` <span class="bad">(${esc(z.stavPush)})</span>` : ''}` : 'zaregistrován, první probuzení do pár minut'}`).join('; ')}</div>`);
       d.querySelector('#dprstenKlicNovy').textContent = je ? 'Nový kód (starý přestane platit)' : 'Vytvořit párovací kód';
       d.querySelector('#dprstenKlicOdkaz').classList.toggle('hide', !je); if (je) d.querySelector('#dprstenKlicOdkaz').href = b.odkaz;
       d.querySelector('#dprstenKlicZrusit').classList.toggle('hide', !je);

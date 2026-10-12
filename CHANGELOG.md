@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.57 · 12. 10. 2026 · probouzení aplikace PéčeDoma Prsten na iPhonu
+
+- Nová malá nativní aplikace **PéčeDoma Prsten** (PECEDOMA-pacient-mobil, složka
+  `prsten-ios/`) sbírá z prstenu tep a kroky i na pozadí. Server ji každých
+  `PRSTEN_PROBOUZET_MIN` minut (výchozí 15) probudí tichou notifikací Apple.
+- `src/apns.mjs`: tichá notifikace přes HTTP/2 a JWT ES256 klíčem .p8
+  (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_TOPIC`, `APNS_KEY_FILE` = data/apns-klic.p8).
+  Klíč nahrává `deploy/vps-apns.sh` přes stdin, do gitu nepatří (`*.p8` v .gitignore).
+- `src/prsten-zarizeni.mjs` + `POST /api/prsten/zarizeni`: registrace iPhonu
+  párovacím kódem, nejvýš 5 telefonů na kameru, vyřazení po zrušení kódu nebo
+  když Apple token odmítne (410, BadDeviceToken).
+- Dispečink, záložka Prsten: pod párovacím kódem řádek s iPhony aplikace Prsten
+  a časem posledního probuzení (nebo upozornění, že server nemá klíč Apple).
+- Bez klíče APNs server běží jako dřív, jen nikoho neprobouzí.
+
 ## 3.56 · 12. 10. 2026 · dispečink: jeden zelený pruh u náramku
 
 - Záložka Náramek: telefon náramku (`tel:` odkaz, velké číslo vpravo) je

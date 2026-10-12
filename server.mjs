@@ -112,7 +112,20 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { naramky?.stop()
 // Správa kamer z hlavní aplikace (zavedení, poskytovatel, světlo, smazání) – zapisuje cameras.json, go2rtc.yaml a CAMERA_NAMES bez restartu.
 const { createSpravaKamer } = await import('./src/sprava-kamer.mjs');
 const sprava = createSpravaKamer({ root: ROOT, soubor: KAMERY, go2rtc, udalosti, svetlo });
-const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, svetlo, zasobnik, naramky, sluzba, sprava });
+// Aplikace PéčeDoma Prsten na iPhonu: server ji každých PRSTEN_PROBOUZET_MIN minut (výchozí 15) probudí tichou notifikací Apple,
+// ona stáhne z prstenu historii tepu a kroky a pošle je sem. Klíč APNs (.p8) nahrává deploy/vps-apns.sh do data/apns-klic.p8.
+const { createApns } = await import('./src/apns.mjs');
+const { createPrstenZarizeni, INTERVAL_MIN: PRSTEN_INTERVAL } = await import('./src/prsten-zarizeni.mjs');
+const { createPrstenKlice } = await import('./src/prsten-klic.mjs');
+const apns = createApns({ root: ROOT });
+const prstenZarizeni = createPrstenZarizeni({ store, apns, prstenKlice: createPrstenKlice({ store }) });
+if (apns.nastaveno) {
+  const probud = () => prstenZarizeni.probudVse().then((r) => { if (r.poslano || r.chyb || r.vyrazeno) console.log(`[famicura-tapo] [apns] probuzení aplikace Prsten: odesláno ${r.poslano}, chyb ${r.chyb}, vyřazeno ${r.vyrazeno}`); })
+    .catch((e) => console.error('[famicura-tapo] [apns] probouzení:', e.message));
+  setTimeout(probud, 60 * 1000); setInterval(probud, PRSTEN_INTERVAL * 60 * 1000);
+  console.log(`[famicura-tapo] [apns] probouzení aplikace Prsten každých ${PRSTEN_INTERVAL} min (${apns.topic})`);
+}
+const handle = createHandler({ dbs, go2rtc, store, udalosti, pdp, najemci, uzivatele: uzivatele || undefined, sms, kameryTenanty, disk, nahravky, ptz, svetlo, zasobnik, naramky, sluzba, sprava, prstenZarizeni });
 
 // An SDP offer or a CLB1 row is a few kB; anything far bigger is not ours.
 // A recording from the browser (POST /api/nahravky) is the one big body: up to 64 MB.

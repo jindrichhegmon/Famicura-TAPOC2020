@@ -69,7 +69,7 @@ function handler(over = {}) {
   const pdp = over.pdp || { nastaveno: true, tabulky, async zajistiTabulky() { return true; }, async tenant(id) { return TENANTI[String(id || '').toUpperCase()] || null; } };
   const najemci = createNajemci({ pdp, kamery: kameryTenanty, udalosti: over.udalosti || null, upozorni: createUpozorneni({ sms, uzivatele, log: { log() {} } }), nahravky: over.nahravky || null, log: { log() {}, error() {} } });
   const dispecer = over.dispecer || { nastaveno: false, async login() { const e = new Error('Přihlášení dispečera není na serveru nastavené.'); e.status = 503; throw e; } };
-  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null, svetlo: over.svetlo || null, naramky: over.naramky || null, sluzba: over.sluzba || null, sprava: over.sprava || null }),
+  return { h: createHandler({ dbs: db.dbs, go2rtc, store, limiter: over.limiter, udalosti: over.udalosti || null, uzivatele, sms, asistent: over.asistent || null, pdp, najemci, dispecer, kameryTenanty, disk: over.disk || null, nahravky: over.nahravky || null, ptz: over.ptz || null, svetlo: over.svetlo || null, naramky: over.naramky || null, sluzba: over.sluzba || null, sprava: over.sprava || null, prstenZarizeni: over.prstenZarizeni || null }),
     ...db, go2rtc, store, uzivatele: uzivatele.pro(T), vsichni: uzivatele, tabulky, najemci };
 }
 
@@ -1240,4 +1240,37 @@ test('prsten z aplikace klienta: párovací kód (dispečink vytvoří, pošle S
   assert.equal(b.klic, null);
   r = await h(req('POST', '/api/prsten/mereni', { body: { ...telo, klic } })); assert.equal(r.status, 401);
   assert.equal(Object.keys(store.data['prsten-klice'] || {}).length, 0);
+});
+
+test('aplikace PéčeDoma Prsten: registrace iPhonu párovacím kódem, probouzení tichou notifikací, vyřazení po zrušení kódu', async () => {
+  const { createPrstenZarizeni } = await import('../src/prsten-zarizeni.mjs');
+  const { createPrstenKlice } = await import('../src/prsten-klic.mjs');
+  const store = memStore();
+  const posláno = [];
+  const apns = { nastaveno: true, async probud(token, prostredi) { posláno.push({ token, prostredi }); return token.startsWith('dead') ? { ok: false, status: 410, reason: 'Unregistered' } : { ok: true, status: 200 }; } };
+  const prstenZarizeni = createPrstenZarizeni({ store, apns, prstenKlice: createPrstenKlice({ store }), log: { warn() {} } });
+  const { h } = handler({ store, prstenZarizeni });
+  const kl = await (await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'novy' } }))).json();
+  const token = 'ab'.repeat(32), mrtvy = 'dead' + 'cd'.repeat(30);
+  const reg = (tok, klic = kl.klic, prostredi = 'produkce') => h(new Request('http://localhost/api/prsten/zarizeni', { method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-prsten-klic': klic }, body: JSON.stringify({ token: tok, prostredi, prsten: { id: 'A1B2', nazev: 'R02_BF04' }, verze: '1.0' }) }));
+  assert.equal((await reg(token, 'AAAA-BBBB-CCCC')).status, 401, 'neplatný kód');
+  assert.equal((await reg('ne-hex')).status, 400, 'neplatný token');
+  let r = await reg(token); assert.equal(r.status, 200);
+  const b = await r.json(); assert.equal(b.kamera, 'tapoc2020'); assert.equal(b.probouzeni, true); assert.equal(b.intervalMin, 15);
+  assert.equal((await reg(mrtvy, kl.klic, 'sandbox')).status, 200);
+  // dispečink vidí zaregistrované telefony u párovacího kódu (bez celého tokenu)
+  let k = await (await h(req('GET', '/api/prsten/klic?kamera=tapoc2020', { cookies: cookie() }))).json();
+  assert.equal(k.zarizeni.length, 2); assert.equal(k.probouzeni, true); assert.ok(k.zarizeni.every((z) => z.token.length < 12), 'token jen zkrácený');
+  // kolo probouzení: oba dostanou notifikaci, mrtvý token (410) se vyřadí
+  let v = await prstenZarizeni.probudVse();
+  assert.deepEqual(v, { poslano: 1, chyb: 1, vyrazeno: 1 });
+  assert.deepEqual(posláno.map((x) => x.prostredi).sort(), ['produkce', 'sandbox']);
+  k = await (await h(req('GET', '/api/prsten/klic?kamera=tapoc2020', { cookies: cookie() }))).json();
+  assert.equal(k.zarizeni.length, 1); assert.equal(k.zarizeni[0].stavPush, 'ok'); assert.ok(k.zarizeni[0].posledniPush);
+  // nový kód ke kameře = starý přestane platit → telefon se starým kódem se při dalším kole vyřadí, nic se mu neposílá
+  await h(req('POST', '/api/prsten/klic', { cookies: cookie(), body: { kamera: 'tapoc2020', akce: 'novy' } }));
+  posláno.length = 0;
+  v = await prstenZarizeni.probudVse();
+  assert.deepEqual(v, { poslano: 0, chyb: 0, vyrazeno: 1 }); assert.equal(posláno.length, 0);
 });

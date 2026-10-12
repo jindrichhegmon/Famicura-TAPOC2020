@@ -352,6 +352,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.57 (12. 10. 2026)**: nová malá aplikace PéčeDoma Prsten pro iPhone posílá tep a kroky z prstenu sama i na pozadí – server ji každých 15 minut probudí. V záložce Prsten pod párovacím kódem uvidíte, který iPhone je zaregistrovaný a kdy byl naposledy probuzen.
 - **Verze 3.56 (12. 10. 2026)**: v záložce Náramek je telefon náramku přímo v zeleném pruhu nahoře (velké číslo vpravo, klepnutím se volá); druhé zelené pole pod Stavem náramku zmizelo.
 - **Verze 3.55 (12. 10. 2026)**: aplikace na telefonu (rodina i mobilní dispečer) má kartu 💍 Prsten: stav, dlaždice posledních hodnot, grafy posledních 10 měření a tabulka (jen ke čtení, jako Náramek). Karta se ukáže, jakmile prsten něco poslal.
 - **Verze 3.54 (12. 10. 2026)**: stav prstenu (kdo posílá, baterie, poslední hodnoty) se ukládá do databáze – dřív po restartu serveru zmizel a záložka hlásila „zatím nic neposlal“, i když měření v tabulce byla. Záložka Prsten teď uložená měření ukáže vždy; odznak u dlaždice je „bez měření“ (ne „nepřipojen“ – dispečink nevidí živé spojení, jen co telefon poslal).

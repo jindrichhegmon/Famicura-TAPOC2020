@@ -14,3 +14,6 @@ bin/
 
 # ad hoc instalace aplikace PéčeDoma pro iPhone (.ipa, manifest) – nahrává skript z PECEDOMA-pacient-mobil
 public/ios/
+# ad hoc instalace aplikace PéčeDoma Prsten (nahrává prsten-ios/vydat-adhoc.sh z PECEDOMA-pacient-mobil); klíče Apple nikdy do gitu
+public/ios-prsten/
+*.p8

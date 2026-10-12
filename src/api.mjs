@@ -67,6 +67,8 @@ import { createLimiter } from './limit.mjs';
 import { Go2rtcError } from './go2rtc.mjs';
 import { isDeviceId } from './plan-pravidla.mjs';
 import { createPrstenKlice, formatKlic, odkazAplikace, textSmsKlic } from './prsten-klic.mjs';
+import { createApns } from './apns.mjs';
+import { createPrstenZarizeni } from './prsten-zarizeni.mjs';
 import * as zaznamy from './zaznamy.mjs';
 
 // Když hostname v Caddy spadne na sousední aplikaci, vrátí se její 404 a
@@ -114,7 +116,7 @@ function verejnaAdresa(req) {
 }
 
 export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), udalosti = null, uzivatele = null, sms = null, asistent = null, disk = null, nahravky = null, ptz = null, svetlo = null, sluzba = null,
-                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null, sprava = null }) {
+                                pdp = null, najemci = null, dispecer = null, kameryTenanty = async () => [], zasobnik = null, naramky = null, sprava = null, prstenZarizeni = null }) {
   sms = sms || createSms();
   asistent = asistent || createAsistent();
   pdp = pdp || createPdp();
@@ -137,6 +139,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
   const chyba = (text, status) => { const e = new Error(text); e.status = status; return e; };
   // párovací kódy prstenu (aplikace klienta posílá měření kódem, bez přihlášení)
   const prstenKlice = createPrstenKlice({ store });
+  // iPhony s aplikací PéčeDoma Prsten, které server probouzí tichou notifikací (server.mjs volá probudVse každých 15 min)
+  prstenZarizeni = prstenZarizeni || createPrstenZarizeni({ store, apns: createApns({ keyId: '' }), prstenKlice });
   const CORS_PRSTEN = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type, x-prsten-klic', 'Access-Control-Max-Age': '86400' };
   /** Měření z prstenu (stránka /proto/prsten.html nebo aplikace klienta) → stav tenanta; kontrola rozsahů, nejvýš týden zpátky, ne z budoucnosti. */
   async function prstenMereni(st, kamera, { prsten, zaznamy } = {}) {
@@ -278,6 +282,20 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           console.log(`[famicura-tapo] [prsten] ${z.tenant} ${z.kamera}: prsten ${String(t.prsten?.id || '?').slice(0, 12)}, přijato ${v.prijato}, uloženo ${v.ulozeno}${v.ulozeno === 0 && v.prijato > 0 ? ' – KAMERA VE STAVU TENANTA NENÍ' : ''}`);
           return json({ ok: true, kamera: z.kamera, ...v }, 200, CORS_PRSTEN);
         } catch (e) { console.warn('[famicura-tapo] [prsten] měření se neuložilo:', e.message); return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
+      }
+
+      // Registrace iPhonu s aplikací PéčeDoma Prsten k probouzení (tichá notifikace každých 15 min): párovací kód jako u měření.
+      if (m === 'POST' && path === '/api/prsten/zarizeni') {
+        const t = await telo(req);
+        const klic = req.headers.get('x-prsten-klic') || t.klic || '';
+        const z = klic ? await prstenKlice.najdi(klic) : null;
+        if (!z) return json({ ok: false, error: 'Párovací kód neplatí. Požádejte dispečink o nový (záložka Prsten u kamery).' }, 401);
+        try {
+          const r = await prstenZarizeni.registruj({ tenant: z.tenant, kamera: z.kamera, klic, token: String(t.token || ''), prostredi: t.prostredi,
+            prstenId: t.prsten?.id, prsten: t.prsten?.nazev, verze: t.verze });
+          console.log(`[famicura-tapo] [prsten] ${z.tenant} ${z.kamera}: iPhone zaregistrován k probouzení (${r.prostredi}, token ${r.token}, aplikace ${r.verze || '?'})${prstenZarizeni.probouzi ? '' : ' – APNs NENÍ NASTAVENÉ (deploy/vps-apns.sh)'}`);
+          return json({ ok: true, kamera: z.kamera, probouzeni: prstenZarizeni.probouzi, intervalMin: prstenZarizeni.intervalMin });
+        } catch (e) { return json({ ok: false, error: e.message }, e.status || 500); }
       }
 
       // tenant, který stránka míní (?tenant= v adrese dispečinku / aplikace rodiny, přes Referer nebo hlavičku): vybere se jeho cookie
@@ -603,7 +621,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (!tenant) return json({ ok: false, error: 'Zadejte ID tenanta (poskytovatele) v odkazu: ?tenant=…' }, 400);
         const t = m === 'GET' ? { kamera: url.searchParams.get('kamera') || '' } : await telo(req);
         if (!isDeviceId(t.kamera || '') || !(await smiKameruId(t.kamera))) return json({ ok: false, error: 'Neznámá kamera.' }, 404);
-        const odpoved = async (navic = {}) => { const k = await prstenKlice.pro(tenant, t.kamera); return json({ ok: true, kamera: t.kamera, klic: k ? formatKlic(k.klic) : null, vytvoreno: k?.vytvoreno || null, odkaz: k ? odkazAplikace(k.klic, undefined, tenant) : null, aplikace: odkazAplikace('').replace(/\?.*$/, ''), ...navic }); };
+        const odpoved = async (navic = {}) => { const k = await prstenKlice.pro(tenant, t.kamera); return json({ ok: true, kamera: t.kamera, klic: k ? formatKlic(k.klic) : null, vytvoreno: k?.vytvoreno || null, odkaz: k ? odkazAplikace(k.klic, undefined, tenant) : null, aplikace: odkazAplikace('').replace(/\?.*$/, ''), zarizeni: await prstenZarizeni.proKameru(tenant, t.kamera), probouzeni: prstenZarizeni.probouzi, intervalMin: prstenZarizeni.intervalMin, ...navic }); };
         if (m === 'GET') return odpoved();
         if (m !== 'POST') return json({ ok: false, error: 'GET nebo POST' }, 405);
         if (t.akce === 'novy') { await prstenKlice.vytvor(tenant, t.kamera); return odpoved(); }
