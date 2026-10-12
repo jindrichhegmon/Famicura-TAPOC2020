@@ -53,7 +53,7 @@
  * Všechno kromě health, login, aktivace a odhlášení chce přihlášení. Uživatel
  * rodiny smí jen obraz a události svých kamer; nastavení je poskytovatele.
  */
-import { kdo as kdoSession, cookie, cookieRodina, cookieDispecer, odhlaseni, hesloSedi, tenantHint } from './session.mjs';
+import { kdo as kdoSession, cookie, cookieRodina, cookieDispecer, odhlaseni, hesloSedi, tenantHint, cookieRezimRodina, zrusRezimRodina, rezimRodinaOdemcen } from './session.mjs';
 import { createUzivatele, textPozvanky, textZadosti, formatTelefon, normalizeTelefon } from './uzivatele.mjs';
 import { createSms } from './sms.mjs';
 import { createAsistent } from './asistent.mjs';
@@ -324,6 +324,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       if (rodina?.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 401, { 'Set-Cookie': odhlaseni(tenant) });
       // Mobilní dispečer: účet rodiny s rolí dispecer – vidí všechny kamery tenanta, ale nic nenastavuje (jen sleduje).
       const mobilniDispecer = !!rodina && rodina.role === 'dispecer';
+      // Dispečer, který je zároveň rodinou u svých kamer, je nastavuje jen v odemčeném režimu Rodina (heslo hlavní aplikace, POST /api/rodina/rezim).
+      const rodinaOdemcena = mobilniDispecer && rezimRodinaOdemcen(req.headers, tenant, rodina.id);
+      const smiJakoRodina = (kameraId) => !mobilniDispecer || (rodinaOdemcena && rodina.kamery.includes(String(kameraId)));
       const jenSleduje = () => json({ ok: false, error: 'Dispečer v mobilní aplikaci jen sleduje, nic nenastavuje.' }, 403);
       // Kamera je vidět: rodině jen její, mobilnímu dispečerovi, dispečinku a správci s tenantem jen kamery tenanta, správci bez tenanta všechny.
       const smiKameru = (c) => {
@@ -348,8 +351,22 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const moje = vse.filter(smiKameru);
         // rodina má v účtu jen kameru, která už tomuto poskytovateli nepatří: stránka to řekne místo prázdné obrazovky
         const zprava = mobilniDispecer && !moje.length ? 'Poskytovatel zatím nemá žádnou kameru.' : rodina && !moje.length && rodina.kamery.length ? 'Kamera, ke které máte přístup, už u tohoto poskytovatele není (byla přiřazena jinému poskytovateli). Přístup u nového poskytovatele vám zřídí jeho dispečink.' : '';
-        return json({ ok: true, role: ja.role, ucet: rodina ? rodina.role : null, rodinaKamery: rodina ? rodina.kamery : [], tenant: t ? { id: t.id, nazev: t.nazev } : null, jmeno: rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce',
+        return json({ ok: true, role: ja.role, ucet: rodina ? rodina.role : null, rodinaKamery: rodina ? rodina.kamery : [], rezimRodina: !!rodinaOdemcena, tenant: t ? { id: t.id, nazev: t.nazev } : null, jmeno: rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce',
           telefon: rodina ? formatTelefon(rodina.telefon) : null, kamery: moje.map(({ id, name, events }) => ({ id, name, events })), zprava });
+      }
+      // Přepnutí aplikace mobilního dispečera: do režimu Rodina jen heslem hlavní aplikace (stejná brzda pokusů jako přihlášení), zpět na Dispečer kdykoli.
+      if (m === 'POST' && path === '/api/rodina/rezim') {
+        if (!mobilniDispecer || !rodina.kamery.length) return json({ ok: false, error: 'Přepínat režim může jen dispečer, který je zároveň rodinou u své kamery.' }, 400);
+        const { rezim, heslo } = await telo(req);
+        if (rezim === 'dispecer') return json({ ok: true, rezim: 'dispecer' }, 200, { 'Set-Cookie': zrusRezimRodina(tenant) });
+        if (rezim !== 'rodina') return json({ ok: false, error: 'Režim: rodina, nebo dispecer.' }, 400);
+        const ip = klientIp(req);
+        const cekat = limiter.blokovano(ip);
+        if (cekat) return json({ ok: false, error: `Příliš mnoho pokusů. Zkuste to za ${Math.ceil(cekat / 60)} min.` }, 429);
+        if (typeof heslo !== 'string' || !hesloSedi(heslo)) { limiter.chyba(ip); console.warn(`[famicura-tapo] ${tenant} ${rodina.id}: přepnutí na režim Rodina – špatné heslo hlavní aplikace`); return json({ ok: false, error: 'Heslo hlavní aplikace Famicura nesedí.' }, 401); }
+        limiter.uspech(ip);
+        console.log(`[famicura-tapo] ${tenant} ${rodina.id} (${rodina.jmeno}): aplikace přepnuta na režim Rodina`);
+        return json({ ok: true, rezim: 'rodina' }, 200, { 'Set-Cookie': cookieRezimRodina(tenant, rodina.id) });
       }
       if (m === 'POST' && path === '/api/rodina/heslo') {
         if (!rodina) return json({ ok: false, error: 'Heslo dispečera mění portál Péče doma plus, heslo správce ./deploy/vps-env.sh.' }, 400);
@@ -486,7 +503,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
         if ((akce === 'setNaramek' || akce === 'setNaramekAuto' || akce === 'setNaramekSos') && rodina) return jenPoskytovatel();
         // Mobilní dispečer jen sleduje: ze stavu smí jen zapsat, že se dívá (setWatching); u kamer, kde je zároveň rodina, nastavuje jako rodina.
-        if (mobilniDispecer && akce !== 'setWatching' && !rodina.kamery.includes(String(args[0]))) return jenSleduje();
+        if (mobilniDispecer && akce !== 'setWatching' && !smiJakoRodina(args[0])) return rodina.kamery.includes(String(args[0])) ? json({ ok: false, error: 'Nastavovat jako rodina jde jen v režimu Rodina (Můj účet → Rodina, heslo hlavní aplikace).' }, 403) : jenSleduje();
         // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
         if (akce === 'deaktivace') {
           if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);
@@ -673,7 +690,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
           if (mSoubor[2] === 'audit') { if (rodina) return jenPoskytovatel(); return json({ ok: true, nahravka: n, prehrani: await nahravky.prehraniSeznam(t, n.id) }); }
           // uzamčená nahrávka (rodina měla v tu chvíli rozostření): poskytovatel ani správce ji nedostanou, jen rodina
-          if (n.zamek && !rodina) return json({ ok: false, zamek: true, error: 'Nahrávka je uzamčená: rodina měla v tu chvíli nastavený rozostřený obraz. Odemknout ji může rodina ve své aplikaci (karta Nahrávky → Odemknout).' }, 423);
+          if (n.zamek && !(rodina && smiJakoRodina(n.kameraId))) return json({ ok: false, zamek: true, error: 'Nahrávka je uzamčená: rodina měla v tu chvíli nastavený rozostřený obraz. Odemknout ji může rodina ve své aplikaci (karta Nahrávky → Odemknout).' }, 423);
           const adresa = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim();
           const kdoText = rodina ? rodina.jmeno : ja.role === 'dispecer' ? ja.jmeno : 'Správce';
           if (n.uloziste === 'disk' && n.url) {
@@ -708,7 +725,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           if (!rodina) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci.' }, 403);
           const n = await nahravky.podleId(tenant, mOdemkni[1]);
           if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
-          if (mobilniDispecer && !rodina.kamery.includes(n.kameraId)) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina té kamery; dispečer jen sleduje.' }, 403);
+          if (!smiJakoRodina(n.kameraId)) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina té kamery (dispečer v režimu Rodina); dispečer jen sleduje.' }, 403);
           if (!n.zamek) return json({ ok: true, nahravka: n, zmena: false });
           const out = await nahravky.odemkni(tenant, n, { kdo: rodina.jmeno });
           await (await stavTenanta()).odemknutiNahravky({ id: n.id, kameraId: n.kameraId, cas: n.cas, delkaS: n.delkaS, kdo: rodina.jmeno }).catch((e) => console.error('[famicura-tapo] odemknutí nahrávky v historii:', e.message));

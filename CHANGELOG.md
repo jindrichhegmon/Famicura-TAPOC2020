@@ -5,8 +5,19 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
-## 3.60 · 12. 10. 2026 · prsten: aplikace klienta PéčeDoma jen čte
+## 3.61 · 12. 10. 2026 · mobilní dispečer přepne na Rodinu jen heslem hlavní aplikace
 
+- Dispečer, který je zároveň rodinou u své kamery, se v aplikaci na telefonu
+  (Můj účet → Režim aplikace) přepne na Rodinu jen heslem hlavní aplikace
+  Famicura (`FAMICURA_PASSWORD`), ne svým heslem. `POST /api/rodina/rezim`
+  heslo ověří (stejná brzda pokusů jako přihlášení) a vydá podepsanou cookie
+  `famrr_<TENANT>` na 12 hodin; zpět na Dispečer kdykoli bez hesla.
+- Hlídá to server: bez odemčení účet jen sleduje i u svých kamer (souhlas,
+  klid, deaktivace, rychlé přepnutí, odemknutí nahrávky). Volba v paměti
+  telefonu už nic neodemkne.
+- Oprava: mobilní dispečer nepřehraje nahrávku, kterou rodina zamkla
+  (dřív ho server u zámku bral jako rodinu).
+## 3.60 · 12. 10. 2026 · prsten: aplikace klienta PéčeDoma jen čte
 - Nový `GET /api/prsten/mereni` pro aplikaci klienta PéčeDoma (web i iPhone): párovacím kódem
   v `x-prsten-klic` (nebo `?klic=`) vrátí stav prstenu (`nazev`, `posledni`, `baterie`) a měření
   prstenu své kamery (`slucMereni`, nejnovější první, `limit` 1–500, výchozí 200), bez pole

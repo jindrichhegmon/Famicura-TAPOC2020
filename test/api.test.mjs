@@ -529,8 +529,26 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   assert.equal(pr.pridano, true); assert.equal(pr.uzivatel.role, 'dispecer'); assert.deepEqual(pr.uzivatel.kamery, ['tapoc2020']);
   const lg2 = await h(req('POST', '/api/rodina/login', { body: { telefon: '777000111', heslo: 'Dispecer2026' } })); const c2 = setCookie(lg2);
   assert.deepEqual((await (await h(req('GET', '/api/rodina/ja', { cookies: c2 }))).json()).rodinaKamery, ['tapoc2020']);
-  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c2, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }))).status, 200, 'u své kamery nastavuje jako rodina');
-  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c2, body: { akce: 'setConsent', args: ['druha', { den: 'full' }] } }))).status, 403, 'u ostatních jen sleduje');
+  // od 3.60: jako rodina nastavuje jen v režimu Rodina, který odemkne heslo hlavní aplikace (FAMICURA_PASSWORD)
+  let rz = await h(req('POST', '/api/proto/akce', { cookies: c2, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }));
+  assert.equal(rz.status, 403, 'bez režimu Rodina ani u své kamery'); assert.match((await rz.json()).error, /režimu Rodina/);
+  assert.equal((await (await h(req('GET', '/api/rodina/ja', { cookies: c2 }))).json()).rezimRodina, false);
+  rz = await h(req('POST', '/api/rodina/rezim', { cookies: c2, body: { rezim: 'rodina', heslo: 'Dispecer2026' } }));
+  assert.equal(rz.status, 401, 'vlastní heslo dispečera nestačí'); assert.equal(rz.headers.get('set-cookie'), null);
+  rz = await h(req('POST', '/api/rodina/rezim', { cookies: c2, body: { rezim: 'rodina' } })); assert.equal(rz.status, 401, 'bez hesla ne');
+  rz = await h(req('POST', '/api/rodina/rezim', { cookies: c2, body: { rezim: 'rodina', heslo: process.env.FAMICURA_PASSWORD } }));
+  assert.equal(rz.status, 200, 'heslo hlavní aplikace'); const rr = setCookie(rz); assert.match(rr, new RegExp(`^famrr_${T}=\\d+\\.`));
+  const c3 = `${c2}; ${rr}`;
+  assert.equal((await (await h(req('GET', '/api/rodina/ja', { cookies: c3 }))).json()).rezimRodina, true);
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }))).status, 200, 'v režimu Rodina u své kamery nastavuje');
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'setConsent', args: ['druha', { den: 'full' }] } }))).status, 403, 'u ostatních jen sleduje');
+  // podvržené nebo cizí odemčení neplatí
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: `${c2}; ${rr.replace(/\.[^.]+$/, '.podvrh')}`, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }))).status, 403, 'podvržený podpis');
+  // zpět na Dispečer: cookie se smaže
+  rz = await h(req('POST', '/api/rodina/rezim', { cookies: c3, body: { rezim: 'dispecer' } }));
+  assert.equal(rz.status, 200); assert.match(rz.headers.get('set-cookie'), new RegExp(`^famrr_${T}=;.*Max-Age=0`));
+  // režim přepíná jen dispečer, který je zároveň rodinou – ne poskytovatel / správce
+  assert.equal((await h(req('POST', '/api/rodina/rezim', { cookies: cookie(), body: { rezim: 'rodina', heslo: process.env.FAMICURA_PASSWORD } }))).status, 400);
   // odebrání u kamery, kde je rodina: zůstane dispečer; u kamery, kde rodina není: smazání účtu
   const d1 = await (await h(req('DELETE', `/api/rodina/uzivatele/${b.uzivatel.id}?kamera=tapoc2020`, { cookies: cookie() }))).json();
   assert.equal(d1.smazan, false); assert.equal(d1.uzivatel.role, 'dispecer'); assert.deepEqual(d1.uzivatel.kamery, []);

@@ -153,3 +153,26 @@ export function hesloSedi(heslo) {
   const spravne = process.env.FAMICURA_PASSWORD || '';
   return !!spravne && shodne(heslo, spravne);
 }
+
+/* Režim Rodina v aplikaci mobilního dispečera (od 3.60): účet rodiny s rolí dispecer, který je zároveň rodinou
+ * u svých kamer, se do režimu Rodina přepne jen heslem hlavní aplikace (FAMICURA_PASSWORD). Server pak vydá
+ * tuhle podepsanou cookie (famrr_<TENANT>, 12 hodin); bez ní účet jen sleduje, i u svých kamer. */
+const RR = 'famrr';
+const TTL_RR_MS = 12 * 60 * 60 * 1000;
+const jmenoRR = (tenant) => `${RR}_${normTenant(tenant)}`;
+export function cookieRezimRodina(tenant, id, now = Date.now()) {
+  const t = normTenant(tenant); if (!t) throw new Error('Neplatný tenant.');
+  if (!ID_RE.test(id)) throw new Error('Neplatné id uživatele.');
+  const exp = now + TTL_RR_MS, subjekt = `rr:${t}:${id}`;
+  return `${jmenoRR(t)}=${exp}.${id}.${podpis(exp, subjekt)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TTL_RR_MS / 1000}`;
+}
+export const zrusRezimRodina = (tenant) => `${jmenoRR(tenant)}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+/** Má tenhle prohlížeč odemčený režim Rodina pro uživatele id u tenanta? */
+export function rezimRodinaOdemcen(headers, tenant, id) {
+  const t = normTenant(tenant); if (!t || !ID_RE.test(String(id || ''))) return false;
+  const raw = headers.get ? (headers.get('cookie') || '') : (headers.cookie || '');
+  const m = new RegExp(`(?:^|;\\s*)${jmenoRR(t)}=([^;]+)`).exec(raw); if (!m) return false;
+  const [exp, uid, sig] = decodeURIComponent(m[1]).split('.');
+  if (!exp || !Number.isFinite(Number(exp)) || Date.now() > Number(exp) || uid !== id) return false;
+  try { return shodne(podpis(exp, `rr:${t}:${id}`), sig); } catch { return false; }
+}
