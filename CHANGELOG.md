@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.62 · 12. 10. 2026 · náramek ukazuje jen druhy hodnot, které naměřil
+
+- Záložka Náramek v dispečinku a karta Náramek v aplikaci na telefonu: sloupce
+  tabulky i grafy jen pro druhy, u kterých je aspoň jedna hodnota
+  (`namereneDruhy` v naramek-ui.js). Žádné prázdné grafy „zatím bez měření“
+  pro stres, HRV, únavu a kroky, které náramek neměří.
+- Export měření do Excelu má jen sloupce s hodnotami (náramek i prsten).
+
 ## 3.61 · 12. 10. 2026 · mobilní dispečer přepne na Rodinu jen heslem hlavní aplikace
 
 - Dispečer, který je zároveň rodinou u své kamery, se v aplikaci na telefonu
@@ -17,6 +25,7 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   telefonu už nic neodemkne.
 - Oprava: mobilní dispečer nepřehraje nahrávku, kterou rodina zamkla
   (dřív ho server u zámku bral jako rodinu).
+
 ## 3.60 · 12. 10. 2026 · prsten: aplikace klienta PéčeDoma jen čte
 - Nový `GET /api/prsten/mereni` pro aplikaci klienta PéčeDoma (web i iPhone): párovacím kódem
   v `x-prsten-klic` (nebo `?klic=`) vrátí stav prstenu (`nazev`, `posledni`, `baterie`) a měření

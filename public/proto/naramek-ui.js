@@ -88,7 +88,7 @@ export function nactiMereni(m, kameraId, n, { naServeru, apiJson, hotovo, zdroj 
 }
 /** Tabulka měření (HTML): hodnota mimo běžné rozmezí oranžově (warn), mimo varovné rozmezí červeně (bad); meze v sim-core MEZE_ZDRAVI. */
 export function tabulkaMereni(radky, sloupce = ['tep', 'tlak', 'spo2', 'teplota']) {
-  if (!radky.length) return '<p class="small muted">Zatím žádné měření.</p>';
+  if (!radky.length || !sloupce.length) return '<p class="small muted">Zatím žádné měření.</p>';
   const bunka = (k, v, text) => { const u = urovenHodnoty(k, v); const m = MEZE_ZDRAVI[k]; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ` title="mimo běžné rozmezí ${m.ok[0]}–${m.ok[1]} ${m.jednotka}"` : ''}>${text}</td>`; };
   const bunkaTlak = (z) => { if (!(z.tlakS && z.tlakD)) return '<td></td>'; const u = ['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || ''; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ' title="mimo běžné rozmezí 90–139 / 60–89 mmHg"' : ''}>${z.tlakS}/${z.tlakD}</td>`; };
   const HLAVICKA = { tep: 'Tep', tlak: 'Tlak', spo2: 'Kyslík', teplota: 'Teplota', stres: 'Stres', hrv: 'HRV', unava: 'Únava', kroky: 'Kroky' };
@@ -121,6 +121,13 @@ const GRAFY = [
   { k: 'unava', nazev: 'Únava', jednotka: '1–100', serie: [['unava', 'únava', 's1']] },
   { k: 'kroky', nazev: 'Kroky za den', jednotka: 'kroky', serie: [['kroky', 'kroky', 's1']] },
 ];
+/** Všechny druhy hodnot, které může náramek / přívěsek poslat (v tomto pořadí sloupců a grafů). */
+export const DRUHY_MERENI_NARAMKU = ['tep', 'tlak', 'spo2', 'teplota', 'stres', 'hrv', 'unava', 'kroky'];
+/** Jen druhy, u kterých je v měřeních aspoň jedna hodnota (tlak = horní i dolní) – náramek ukazuje jen to, co opravdu naměřil. */
+export function namereneDruhy(radky, druhy = DRUHY_MERENI_NARAMKU) {
+  const ma = (r, k) => (k === 'tlak' ? r.tlakS != null && r.tlakD != null : r[k] != null && r[k] !== '');
+  return druhy.filter((k) => (radky || []).some((r) => ma(r, k)));
+}
 /** Sloupce a grafy záložky Prsten (v tomto pořadí). */
 export const SLOUPCE_PRSTENU = ['tep', 'spo2', 'tlak', 'stres', 'hrv', 'unava', 'kroky'];
 /** Dlaždice posledních hodnot z prstenu (p.prsten.zdravi) jako v aplikaci klienta: hodnota, veličina s jednotkou, čas;

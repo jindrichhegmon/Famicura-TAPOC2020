@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku, SLOUPCE_PRSTENU, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni, kresliStranuMereni, kresliGrafy, poplachyNaramku, SLOUPCE_PRSTENU, namereneDruhy, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
 import { sim, KINDS, LEVEL_LABEL, urovenUdalosti, CONSENT, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, ago, setHtml, describeWatch, describeKontakty, casy, KLID_NAVZDY } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -373,9 +373,10 @@ function kresliNaramek(p) {
     : '<li class="muted">Zatím žádný poplach z náramku.</li>');
 }
 function kresliMereni() {
-  const radky = kresliStranuMereni(mereni, { el: $('naramekMereni'), strana: $('naramekStrana'), prev: $('naramekPrev'), next: $('naramekNext') });
+  const druhy = namereneDruhy(mereni.radky);   // jen druhy, které náramek opravdu naměřil
+  const radky = kresliStranuMereni(mereni, { el: $('naramekMereni'), strana: $('naramekStrana'), prev: $('naramekPrev'), next: $('naramekNext'), sloupce: druhy });
   $('naramekPaging').classList.toggle('hide', radky.length <= mereni.na);
-  kresliGrafy($('naramekGraf'), radky); prekresliMapu($('naramekMapa'));
+  kresliGrafy($('naramekGraf'), radky, undefined, druhy); prekresliMapu($('naramekMapa'));
 }
 $('naramekPrev').onclick = () => { if (mereni.strana > 0) { mereni.strana--; kresliMereni(); } };
 $('naramekNext').onclick = () => { mereni.strana++; kresliMereni(); };

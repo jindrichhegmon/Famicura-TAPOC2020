@@ -77,9 +77,12 @@ export function slucMereni(radky, oknoMs = 120_000) {
 /** Sešit .xlsx s měřením zdraví z náramku: list Měření + list Info. */
 export function mereniXlsx(radky, { poskytovatel = '', kamera = '', naramek = '' } = {}) {
   const t = (v) => (v == null ? '' : v);
+  // jen sloupce, ve kterých je aspoň jedna hodnota (náramek bez kroků nemá prázdný sloupec Kroky)
+  const SL = [['tep', 'Tep (/min)'], ['tlakS', 'Tlak horní'], ['tlakD', 'Tlak dolní'], ['spo2', 'Kyslík (%)'], ['teplota', 'Teplota (°C)'],
+    ['stres', 'Stres (1–100)'], ['hrv', 'HRV (ms)'], ['unava', 'Únava (1–100)'], ['kroky', 'Kroky za den']].filter(([k]) => radky.some((r) => r[k] != null && r[k] !== ''));
   return xlsx([
-    { nazev: 'Měření', hlavicka: ['Datum', 'Čas', 'Tep (/min)', 'Tlak horní', 'Tlak dolní', 'Kyslík (%)', 'Teplota (°C)', 'Stres (1–100)', 'HRV (ms)', 'Únava (1–100)', 'Kroky za den'],
-      radky: radky.map((r) => [fmtDatum.format(new Date(r.cas)), fmtCas.format(new Date(r.cas)), t(r.tep), t(r.tlakS), t(r.tlakD), t(r.spo2), t(r.teplota), t(r.stres), t(r.hrv), t(r.unava), t(r.kroky)]) },
+    { nazev: 'Měření', hlavicka: ['Datum', 'Čas', ...SL.map(([, h]) => h)],
+      radky: radky.map((r) => [fmtDatum.format(new Date(r.cas)), fmtCas.format(new Date(r.cas)), ...SL.map(([k]) => t(r[k]))]) },
     { nazev: 'Info', hlavicka: ['Poskytovatel', 'Kamera', 'Náramek', 'Měření', 'Vytvořeno'], radky: [[poskytovatel, kamera, naramek, radky.length, fmtDT.format(new Date())]] },
   ]);
 }

@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho, SLOUPCE_PRSTENU, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho, SLOUPCE_PRSTENU, namereneDruhy, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1236,8 +1236,9 @@ function kresliPrsten(d, p) {
 }
 function kresliMereni(d) {
   const m = d.__mereni; const el = d.querySelector('#dnaramekMereni'); if (!m || !el) return;
-  const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dnaramekStrana'), prev: d.querySelector('#dnaramekPrev'), next: d.querySelector('#dnaramekNext') });
-  kresliGrafy(d.querySelector('#dnaramekGraf'), radky);
+  const druhy = namereneDruhy(m.radky);   // jen druhy, které náramek opravdu naměřil
+  const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dnaramekStrana'), prev: d.querySelector('#dnaramekPrev'), next: d.querySelector('#dnaramekNext'), sloupce: druhy });
+  kresliGrafy(d.querySelector('#dnaramekGraf'), radky, undefined, druhy);
   prekresliMapu(d.querySelector('#dnaramekMapa'));   // mapa vedle grafů se natáhne na jejich výšku
 }
 async function apiJson(path, init) {
