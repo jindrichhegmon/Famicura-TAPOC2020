@@ -62,7 +62,7 @@ export function logXlsx(radky, { poskytovatel = '', od = '', do: doDne = '', kam
 /** Hodnoty z jedné sady měření (tlak s tepem, kyslík, teplota přicházejí zvlášť během pár desítek sekund) do jednoho řádku:
  *  řádky seřazené od nejnovějšího se slučují, když jsou do 2 minut od prvního ve skupině a žádná veličina se nepřekrývá. Čas = nejnovější. */
 export function slucMereni(radky, oknoMs = 120_000) {
-  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota'];
+  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota', 'stres', 'hrv', 'unava', 'kroky'];
   const out = [];
   for (const r of radky) {
     const g = out[out.length - 1];
@@ -78,8 +78,8 @@ export function slucMereni(radky, oknoMs = 120_000) {
 export function mereniXlsx(radky, { poskytovatel = '', kamera = '', naramek = '' } = {}) {
   const t = (v) => (v == null ? '' : v);
   return xlsx([
-    { nazev: 'Měření', hlavicka: ['Datum', 'Čas', 'Tep (/min)', 'Tlak horní', 'Tlak dolní', 'Kyslík (%)', 'Teplota (°C)'],
-      radky: radky.map((r) => [fmtDatum.format(new Date(r.cas)), fmtCas.format(new Date(r.cas)), t(r.tep), t(r.tlakS), t(r.tlakD), t(r.spo2), t(r.teplota)]) },
+    { nazev: 'Měření', hlavicka: ['Datum', 'Čas', 'Tep (/min)', 'Tlak horní', 'Tlak dolní', 'Kyslík (%)', 'Teplota (°C)', 'Stres (1–100)', 'HRV (ms)', 'Únava (1–100)', 'Kroky za den'],
+      radky: radky.map((r) => [fmtDatum.format(new Date(r.cas)), fmtCas.format(new Date(r.cas)), t(r.tep), t(r.tlakS), t(r.tlakD), t(r.spo2), t(r.teplota), t(r.stres), t(r.hrv), t(r.unava), t(r.kroky)]) },
     { nazev: 'Info', hlavicka: ['Poskytovatel', 'Kamera', 'Náramek', 'Měření', 'Vytvořeno'], radky: [[poskytovatel, kamera, naramek, radky.length, fmtDT.format(new Date())]] },
   ]);
 }

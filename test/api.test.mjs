@@ -1148,14 +1148,20 @@ test('prsten přes API: měření z historie do A_KAM_Mereni bez zdvojení, posl
   const ted = Date.now();
   const telo = { kamera: 'tapoc2020', prsten: { id: 'Ab:Cd-12/34xyZ99', nazev: 'R02_1A2B', baterie: 81 },
     zaznamy: [{ cas: ted - 600_000, tep: 64 }, { cas: ted - 300_000, tep: 66 }, { cas: ted - 60_000, spo2: 97 },
-      { cas: ted - 120_000, tep: 400 }, { cas: ted + 3_600_000, tep: 70 }, { cas: ted - 10 * 86_400_000, tep: 70 }, { cas: 'x', tep: 70 }] };
+      { cas: ted - 120_000, tep: 400 }, { cas: ted + 3_600_000, tep: 70 }, { cas: ted - 10 * 86_400_000, tep: 70 }, { cas: 'x', tep: 70 },
+      // od 3.52: tlak (jen horní + dolní dohromady), stres, HRV, únava, kroky; mimo rozsah se zahodí
+      { cas: ted - 50_000, tlakS: 128, tlakD: 82 }, { cas: ted - 49_000, tlakS: 128 }, { cas: ted - 48_000, tlakS: 80, tlakD: 90 },
+      { cas: ted - 40_000, stres: 35, hrv: 48, unava: 20, kroky: 4321 }, { cas: ted - 30_000, stres: 0, hrv: 999, kroky: -1 }] };
   let r = await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: telo }));
   assert.equal(r.status, 200); let j = await r.json();
-  assert.equal(j.prijato, 3, 'nesmyslný tep, budoucnost a stará data se zahodí'); assert.equal(j.ulozeno, 3);
+  assert.equal(j.prijato, 8, 'nesmyslný tep, budoucnost, stará data, tlak bez dolní hodnoty a hodnoty mimo rozsah se zahodí'); assert.equal(j.ulozeno, 8);
   r = await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: telo }));
-  assert.equal((await r.json()).ulozeno, 3);
+  assert.equal((await r.json()).ulozeno, 8);
   const radky = await tabulky.vyber(T, 'A_KAM_Mereni', { kde: { KameraID: 'tapoc2020' } });
-  assert.equal(radky.length, 3, 'opakované nahrání historie řádky nezdvojí');
+  assert.equal(radky.length, 8, 'opakované nahrání historie řádky nezdvojí');
+  assert.ok(radky.some((x) => x.TlakS === 128 && x.TlakD === 82) && radky.some((x) => x.Stres === 35) && radky.some((x) => x.Hrv === 48) && radky.some((x) => x.Unava === 20) && radky.some((x) => x.Kroky === 4321), 'nové veličiny v A_KAM_Mereni');
+  { const sv = await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json(); const z = sv.state.patients.find((x) => x.id === 'tapoc2020').prsten.zdravi;
+    assert.equal(z.tlakS, 128); assert.equal(z.tlakD, 82); assert.equal(z.stres, 35); assert.equal(z.hrv, 48); assert.equal(z.unava, 20); assert.equal(z.kroky, 4321); assert.equal(z.spo2, 97); }
   assert.ok(radky.every((x) => x.NaramekId === 'prsten-AbCd1234xyZ9'), 'ID prstenu očištěné a zkrácené');
   // záložky Náramek a Prsten se nemíchají: zdroj=prsten jen řádky prstenu, zdroj=naramek žádný z nich, bez zdroje vše
   const jen = async (z) => (await (await h(req('GET', `/api/naramek/mereni?kamera=tapoc2020${z ? '&zdroj=' + z : ''}`, { cookies: cookie() }))).json()).mereni;

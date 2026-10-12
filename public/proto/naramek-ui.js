@@ -61,7 +61,7 @@ export function popisVypnuti(n) {
 
 /** Jako slucMereni na serveru (src/log-udalosti.mjs): hodnoty jedné sady (do 2 minut, bez překryvu) v jednom řádku. */
 export function slucMereni(radky, oknoMs = 120_000) {
-  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota']; const out = [];
+  const POLE = ['tep', 'tlakS', 'tlakD', 'spo2', 'teplota', 'stres', 'hrv', 'unava', 'kroky']; const out = [];
   for (const r of radky) {
     const g = out[out.length - 1];
     if (g && g.cas - r.cas <= oknoMs && r.cas <= g.cas && !POLE.some((k) => r[k] != null && g[k] != null)) { for (const k of POLE) if (r[k] != null) g[k] = r[k]; }
@@ -91,8 +91,9 @@ export function tabulkaMereni(radky, sloupce = ['tep', 'tlak', 'spo2', 'teplota'
   if (!radky.length) return '<p class="small muted">Zatím žádné měření.</p>';
   const bunka = (k, v, text) => { const u = urovenHodnoty(k, v); const m = MEZE_ZDRAVI[k]; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ` title="mimo běžné rozmezí ${m.ok[0]}–${m.ok[1]} ${m.jednotka}"` : ''}>${text}</td>`; };
   const bunkaTlak = (z) => { if (!(z.tlakS && z.tlakD)) return '<td></td>'; const u = ['bad', 'warn', 'ok'].find((x) => [urovenHodnoty('tlakS', z.tlakS), urovenHodnoty('tlakD', z.tlakD)].includes(x)) || ''; return `<td class="hod ${u}"${u === 'warn' || u === 'bad' ? ' title="mimo běžné rozmezí 90–139 / 60–89 mmHg"' : ''}>${z.tlakS}/${z.tlakD}</td>`; };
-  const HLAVICKA = { tep: 'Tep', tlak: 'Tlak', spo2: 'Kyslík', teplota: 'Teplota' };
-  const BUNKA = { tep: (z) => bunka('tep', z.tep, z.tep ?? ''), tlak: bunkaTlak, spo2: (z) => bunka('spo2', z.spo2, z.spo2 ? z.spo2 + ' %' : ''), teplota: (z) => bunka('teplota', z.teplota, z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : '') };
+  const HLAVICKA = { tep: 'Tep', tlak: 'Tlak', spo2: 'Kyslík', teplota: 'Teplota', stres: 'Stres', hrv: 'HRV', unava: 'Únava', kroky: 'Kroky' };
+  const BUNKA = { tep: (z) => bunka('tep', z.tep, z.tep ?? ''), tlak: bunkaTlak, spo2: (z) => bunka('spo2', z.spo2, z.spo2 ? z.spo2 + ' %' : ''), teplota: (z) => bunka('teplota', z.teplota, z.teplota ? String(z.teplota).replace('.', ',') + ' °C' : ''),
+    stres: (z) => bunka('stres', z.stres, z.stres ?? ''), hrv: (z) => bunka('hrv', z.hrv, z.hrv != null ? z.hrv + ' ms' : ''), unava: (z) => bunka('unava', z.unava, z.unava ?? ''), kroky: (z) => bunka('kroky', z.kroky, z.kroky ?? '') };
   return `<table class="mereni"><thead><tr><th>Čas</th>${sloupce.map((k) => `<th>${HLAVICKA[k]}</th>`).join('')}</tr></thead><tbody>${radky.map((z) => `<tr><td>${esc(fmtDT(z.cas))}</td>${sloupce.map((k) => BUNKA[k](z)).join('')}</tr>`).join('')}</tbody></table>`;
 }
 /** Stránka měření do `el` a text stránkování (vrátí ho); tlačítka novější/starší zapne či vypne podle stránky. */
@@ -114,7 +115,14 @@ const GRAFY = [
   { k: 'tlak', nazev: 'Krevní tlak', jednotka: 'mmHg', serie: [['tlakS', 'horní', 's1'], ['tlakD', 'dolní', 's2']] },
   { k: 'spo2', nazev: 'Kyslík v krvi', jednotka: '%', serie: [['spo2', 'kyslík', 's1']] },
   { k: 'teplota', nazev: 'Teplota', jednotka: '°C', serie: [['teplota', 'teplota', 's1']] },
+  // prsten (orientační odhady z pulsní vlny) a kroky za den
+  { k: 'stres', nazev: 'Stres', jednotka: '1–100', serie: [['stres', 'stres', 's1']] },
+  { k: 'hrv', nazev: 'HRV', jednotka: 'ms', serie: [['hrv', 'HRV', 's1']] },
+  { k: 'unava', nazev: 'Únava', jednotka: '1–100', serie: [['unava', 'únava', 's1']] },
+  { k: 'kroky', nazev: 'Kroky za den', jednotka: 'kroky', serie: [['kroky', 'kroky', 's1']] },
 ];
+/** Sloupce a grafy záložky Prsten (v tomto pořadí). */
+export const SLOUPCE_PRSTENU = ['tep', 'spo2', 'tlak', 'stres', 'hrv', 'unava', 'kroky'];
 export function kresliGrafy(el, radky, pocet = GRAF_MERENI, jen = null) {
   if (!el) return;
   const grafy = jen ? GRAFY.filter((g) => jen.includes(g.k)) : GRAFY;

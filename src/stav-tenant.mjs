@@ -341,17 +341,20 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
         const p = data.state.patients.find((x) => x.id === kameraId); if (!p) return { v: data.v, ulozeno: 0 };
         const naramekId = ('prsten-' + prstenId).slice(0, 20);
         let ulozeno = 0;
+        // druh v Id: t tep, s kyslík, b tlak, r stres, h HRV, u únava, k kroky (jedna veličina = jeden řádek)
+        const DRUH = { tep: 't', spo2: 's', tlakS: 'b', stres: 'r', hrv: 'h', unava: 'u', kroky: 'k' };
         for (const z of zaznamy) {
-          const druh = z.tep != null ? 't' : 's';
+          const druh = Object.keys(DRUH).map((k) => (z[k] != null ? DRUH[k] : '')).join('') || 'x';
           try {
             await tabulky.ulozit(tenant, 'A_KAM_Mereni', { Id: `r${prstenId}${z.cas}${druh}`.slice(0, 40), KameraID: kameraId, NaramekId: naramekId, Cas: z.cas,
-              Tep: z.tep ?? null, TlakS: null, TlakD: null, Spo2: z.spo2 ?? null, Teplota: null });
+              Tep: z.tep ?? null, TlakS: z.tlakS ?? null, TlakD: z.tlakD ?? null, Spo2: z.spo2 ?? null, Teplota: null,
+              Stres: z.stres ?? null, Hrv: z.hrv ?? null, Unava: z.unava ?? null, Kroky: z.kroky ?? null });
             ulozeno++;
           } catch (e) { log.error('[stav] zápis měření prstenu:', e.message); }
         }
         // poslední známé hodnoty: novější měření přepíše starší, starší historie poslední hodnotu nepřepíše
         const zdravi = { ...(p.prsten?.id === prstenId ? p.prsten.zdravi || {} : {}) };
-        for (const k of ['tep', 'spo2']) {
+        for (const k of ['tep', 'spo2', 'tlakS', 'tlakD', 'stres', 'hrv', 'unava', 'kroky']) {
           const z = zaznamy.filter((x) => x[k] != null).sort((a, b) => b.cas - a.cas)[0];
           if (z && !(zdravi[k + 'Cas'] > z.cas)) { zdravi[k] = z[k]; zdravi[k + 'Cas'] = z.cas; }
         }
@@ -365,7 +368,8 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
     vypisMereni({ kameraId, limit = 2000 } = {}) {
       return serializovane(async () => {
         const r = await tabulky.vyber(tenant, 'A_KAM_Mereni', { kde: { KameraID: kameraId }, razeni: [['Cas', 'DESC']], limit: Math.min(10000, Math.max(1, limit)) });
-        return r.map((x) => ({ cas: x.Cas, naramek: x.NaramekId || '', tep: x.Tep ?? null, tlakS: x.TlakS ?? null, tlakD: x.TlakD ?? null, spo2: x.Spo2 ?? null, teplota: x.Teplota != null && x.Teplota !== '' ? Number(x.Teplota) : null, naramek: x.NaramekId || '' }));
+        return r.map((x) => ({ cas: x.Cas, naramek: x.NaramekId || '', tep: x.Tep ?? null, tlakS: x.TlakS ?? null, tlakD: x.TlakD ?? null, spo2: x.Spo2 ?? null, teplota: x.Teplota != null && x.Teplota !== '' ? Number(x.Teplota) : null,
+          stres: x.Stres ?? null, hrv: x.Hrv ?? null, unava: x.Unava ?? null, kroky: x.Kroky ?? null }));
       });
     },
     odemknutiNahravky({ id, kameraId, cas, delkaS, kdo }) {

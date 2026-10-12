@@ -1,5 +1,5 @@
 import { createSource } from '/proto/zdroj.js';
-import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho } from '/proto/naramek-ui.js';
+import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho, SLOUPCE_PRSTENU } from '/proto/naramek-ui.js';
 import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1164,8 +1164,8 @@ const MERENI_NA_KEY = 'famicura.mereniNa';
 function nactiMereni(d, p, n) { nactiMereniNaramku(d.__mereni, p.id, n, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereni(d), zdroj: 'naramek' }); }
 function kresliMereniPrstenu(d) {
   const m = d.__mereniPrsten; const el = d.querySelector('#dprstenMereni'); if (!m || !el) return;
-  const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dprstenStrana'), prev: d.querySelector('#dprstenPrev'), next: d.querySelector('#dprstenNext'), sloupce: ['tep', 'spo2'] });
-  kresliGrafy(d.querySelector('#dprstenGraf'), radky, undefined, ['tep', 'spo2']);
+  const radky = kresliStranuMereni(m, { el, strana: d.querySelector('#dprstenStrana'), prev: d.querySelector('#dprstenPrev'), next: d.querySelector('#dprstenNext'), sloupce: SLOUPCE_PRSTENU });
+  kresliGrafy(d.querySelector('#dprstenGraf'), radky, undefined, SLOUPCE_PRSTENU);
 }
 /** Záložka Prsten: stav (poslední ozvání, baterie, poslední hodnoty), měření jen z prstenu (zdroj=prsten). */
 function kresliPrsten(d, p) {
@@ -1174,7 +1174,11 @@ function kresliPrsten(d, p) {
   d.querySelector('#dtabPrstenNeni').classList.toggle('hide', je);
   const ban = d.querySelector('#dprstenBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
   const z = r?.zdravi || {};
-  const hodnoty = [z.tep != null ? `tep ${z.tep} /min (${fmtDT(z.tepCas)})` : '', z.spo2 != null ? `kyslík ${z.spo2} % (${fmtDT(z.spo2Cas)})` : ''].filter(Boolean).join(' · ');
+  const hodnoty = [
+    z.tep != null ? `tep ${z.tep} /min (${fmtDT(z.tepCas)})` : '', z.spo2 != null ? `kyslík ${z.spo2} % (${fmtDT(z.spo2Cas)})` : '',
+    z.tlakS != null && z.tlakD != null ? `tlak ${z.tlakS}/${z.tlakD} mmHg (${fmtDT(z.tlakSCas)})` : '', z.stres != null ? `stres ${z.stres} (${fmtDT(z.stresCas)})` : '',
+    z.hrv != null ? `HRV ${z.hrv} ms (${fmtDT(z.hrvCas)})` : '', z.unava != null ? `únava ${z.unava} (${fmtDT(z.unavaCas)})` : '', z.kroky != null ? `kroky ${z.kroky} (${fmtDT(z.krokyCas)})` : '',
+  ].filter(Boolean).join(' · ');
   setHtml(ban, je
     ? `<span class="ic">💍</span><span><b>Prsten ${esc(r.nazev || r.id)} posílá měření</b><br><span class="small">${esc(r.posledni ? `naposledy se ozval ${fmtDT(r.posledni)}` : 'zatím se neozval')}${Number.isFinite(r.baterie) ? ` · baterie ${esc(String(r.baterie))} %` : ''}${jeTicho(r) ? ' · <b>přes 2 hodiny nic – je telefon u klienta zapnutý se stránkou Prsten?</b>' : ''}</span></span>`
     : '<span class="ic">💍</span><span><b>Prsten zatím nic neposlal</b><br><span class="small">Připojte prsten přes telefon u klienta (postup níže). Stav a měření se ukážou, jakmile přijde první měření.</span></span>');

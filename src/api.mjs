@@ -147,9 +147,17 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
     for (const r of zaznamy) {
       const cas = Math.round(Number(r?.cas));
       if (!Number.isFinite(cas) || cas > ted + 10 * 60_000 || cas < ted - 8 * 86_400_000) continue;
-      const tep = Number(r.tep), spo2 = Number(r.spo2);
-      if (Number.isInteger(tep) && tep >= 25 && tep <= 230) z.push({ cas, tep });
-      if (Number.isInteger(spo2) && spo2 >= 70 && spo2 <= 100) z.push({ cas, spo2 });
+      // každá veličina zvlášť (vlastní řádek i Id), mimo rozsah se zahodí; tlak jen horní + dolní dohromady
+      const c = (k, lo, hi) => { const v = Number(r[k]); return Number.isInteger(v) && v >= lo && v <= hi ? v : null; };
+      const tep = c('tep', 25, 230), spo2 = c('spo2', 70, 100), stres = c('stres', 1, 100), hrv = c('hrv', 1, 250), unava = c('unava', 1, 100), kroky = c('kroky', 0, 100000);
+      const tlakS = c('tlakS', 60, 250), tlakD = c('tlakD', 30, 150);
+      if (tep != null) z.push({ cas, tep });
+      if (spo2 != null) z.push({ cas, spo2 });
+      if (tlakS != null && tlakD != null && tlakD < tlakS) z.push({ cas, tlakS, tlakD });
+      if (stres != null) z.push({ cas, stres });
+      if (hrv != null) z.push({ cas, hrv });
+      if (unava != null) z.push({ cas, unava });
+      if (kroky != null) z.push({ cas, kroky });
     }
     const bat = Number(prsten?.baterie);
     const v = await st.prsten({ kameraId: kamera, prstenId, nazev: String(prsten?.nazev || ''), baterie: Number.isInteger(bat) && bat >= 0 && bat <= 100 ? bat : null, zaznamy: z });

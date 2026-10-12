@@ -351,6 +351,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.52 (12. 10. 2026)**: záložka Prsten ukazuje kromě tepu a kyslíku i tlak, stres, HRV, únavu a kroky za den (tabulka, grafy posledních 10 měření, Excel). Tlak, stres, HRV a únavu prsten jen odhaduje – hodnoty jsou orientační; tep a kyslík měří.
 - **Verze 3.51 (11. 10. 2026)**: server nabízí instalaci aplikace klienta PéčeDoma pro iPhone (odkaz …/ios/ pro registrované telefony, bez App Storu).
 - **Verze 3.50 (11. 10. 2026)**: o prsten se stará aplikace klienta PéčeDoma na telefonu u klienta – v záložce Prsten vytvoříte párovací kód kamery a pošlete klientovi SMS s odkazem; aplikace pak měření posílá sama (bez přihlášení k Famicuře). Kód jde zrušit nebo nahradit novým.
 - **Verze 3.49 (11. 10. 2026)**: prsten má v detailu kamery vlastní záložku 💍 Prsten (vedle Náramku): stav prstenu (poslední ozvání, baterie, poslední hodnoty), grafy tepu a kyslíku, tabulka měření se stránkováním a export do Excelu; měření prstenu a náramku se už nemíchají. V záložce je i postup připojení přes telefon u klienta; nové téma nápovědy Prsten.

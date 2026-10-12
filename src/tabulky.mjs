@@ -61,7 +61,8 @@ export const SCHEMA = {
   // Měření zdraví z náramku (src/naramky.mjs → stav-tenant.naramek): jeden řádek na každé hlášení; teplota jako text („36.6“).
   A_KAM_Mereni: {
     klic: ['Id'],
-    sloupce: { Id: ['c', 40], KameraID: ['c', 40], NaramekId: ['c', 20], Cas: ['i'], Tep: ['i'], TlakS: ['i'], TlakD: ['i'], Spo2: ['i'], Teplota: ['s', 10] },
+    sloupce: { Id: ['c', 40], KameraID: ['c', 40], NaramekId: ['c', 20], Cas: ['i'], Tep: ['i'], TlakS: ['i'], TlakD: ['i'], Spo2: ['i'], Teplota: ['s', 10],
+      Stres: ['i'], Hrv: ['i'], Unava: ['i'], Kroky: ['i'] },   // od 3.52 prsten: stres a únava 1–100, HRV ms, kroky za den (sloupce se doplní přes ALTER, když chybí)
     indexy: [['KameraID', 'Cas']],
   },
   A_KAM_UzivatelRodiny: {

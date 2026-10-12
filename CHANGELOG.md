@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.52 · 12. 10. 2026 · prsten: tlak, stres, HRV, únava a kroky
+
+- `A_KAM_Mereni` má nové sloupce `Stres`, `Hrv`, `Unava`, `Kroky` (DDL je
+  přidá přes `ALTER TABLE`, když chybí). `POST /api/prsten/mereni` přijímá
+  v záznamech `tlakS`+`tlakD` (60–250 / 30–150, dolní < horní), `stres` a
+  `unava` (1–100), `hrv` (1–250 ms), `kroky` (0–100000); každá veličina je
+  vlastní řádek s druhem v Id (t, s, b, r, h, u, k). Poslední hodnoty u
+  kamery (`p.prsten.zdravi`) pro všechny veličiny.
+- Dispečink, záložka Prsten: banner s posledními hodnotami, tabulka a grafy
+  posledních 10 měření pro tep, kyslík, tlak, stres, HRV, únavu a kroky
+  (`SLOUPCE_PRSTENU` v naramek-ui.js), Excel má nové sloupce.
+- Aplikace klienta PéčeDoma 3.3.0 tyto veličiny měří (tlačítka Změřit tlak /
+  stres / HRV / únavu, Kroky dnes; kroky i s každou synchronizací) a ukazuje
+  u každé dlaždice graf posledních 10 hodnot.
+
 ## 3.51 · 11. 10. 2026 · instalace aplikace PéčeDoma pro iPhone ze serveru
 
 - Server vydává soubory v `public/ios/` (`.ipa` jako `application/octet-stream`,
