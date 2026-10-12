@@ -1173,6 +1173,12 @@ test('prsten přes API: měření z historie do A_KAM_Mereni bez zdvojení, posl
   assert.equal(xl.status, 200); assert.match(xl.headers.get('content-disposition'), /famicura-mereni-prsten_/);
   const p = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020');
   assert.equal(p.prsten.zdravi.tep, 66); assert.equal(p.prsten.zdravi.spo2, 97); assert.equal(p.prsten.baterie, 81); assert.equal(p.prsten.nazev, 'R02_1A2B');
+  // od 3.54: stav prstenu je v A_KAM_Kamera.Prsten – nový server (restart) ho načte z tabulky, ne z paměti
+  { const [kam] = await tabulky.vyber(T, 'A_KAM_Kamera', { kde: { KameraID: 'tapoc2020' } });
+    assert.ok(kam && kam.Prsten && (typeof kam.Prsten === 'string' ? JSON.parse(kam.Prsten) : kam.Prsten).id === 'AbCd1234xyZ9', 'prsten uložený v řádku kamery');
+    const { h: h2 } = handler({ tabulky });
+    const p2b = (await (await h2(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020');
+    assert.equal(p2b.prsten?.zdravi?.tep, 66, 'po restartu serveru prsten zůstal'); assert.equal(p2b.prsten?.baterie, 81); }
   // starší historie poslední hodnotu nepřepíše
   await h(req('POST', '/api/prsten/mereni', { cookies: cookie(), body: { ...telo, zaznamy: [{ cas: ted - 3_600_000, tep: 90 }] } }));
   const p2 = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020');

@@ -271,10 +271,13 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const t = await telo(req);
         const klic = req.headers.get('x-prsten-klic') || t.klic || '';
         const z = klic ? await prstenKlice.najdi(klic) : null;
-        if (!z) return json({ ok: false, error: klic ? 'Párovací kód neplatí. Požádejte dispečink o nový (záložka Prsten u kamery).' : 'Chybí párovací kód prstenu.' }, 401, CORS_PRSTEN);
+        if (!z) { console.warn('[famicura-tapo] [prsten] měření s neplatným kódem', klic ? klic.slice(0, 4) + '…' : '(bez kódu)'); return json({ ok: false, error: klic ? 'Párovací kód neplatí. Požádejte dispečink o nový (záložka Prsten u kamery).' : 'Chybí párovací kód prstenu.' }, 401, CORS_PRSTEN); }
         if (t.kamera && t.kamera !== z.kamera) return json({ ok: false, error: 'Kód patří jiné kameře.' }, 403, CORS_PRSTEN);
-        try { return json({ ok: true, kamera: z.kamera, ...(await prstenMereni(await najemci.pro(z.tenant), z.kamera, t)) }, 200, CORS_PRSTEN); }
-        catch (e) { return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
+        try {
+          const v = await prstenMereni(await najemci.pro(z.tenant), z.kamera, t);
+          console.log(`[famicura-tapo] [prsten] ${z.tenant} ${z.kamera}: prsten ${String(t.prsten?.id || '?').slice(0, 12)}, přijato ${v.prijato}, uloženo ${v.ulozeno}${v.ulozeno === 0 && v.prijato > 0 ? ' – KAMERA VE STAVU TENANTA NENÍ' : ''}`);
+          return json({ ok: true, kamera: z.kamera, ...v }, 200, CORS_PRSTEN);
+        } catch (e) { console.warn('[famicura-tapo] [prsten] měření se neuložilo:', e.message); return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
       }
 
       // tenant, který stránka míní (?tenant= v adrese dispečinku / aplikace rodiny, přes Referer nebo hlavičku): vybere se jeho cookie

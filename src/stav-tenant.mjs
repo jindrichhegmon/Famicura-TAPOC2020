@@ -32,7 +32,7 @@ const otisk = (o) => JSON.stringify(o);
 /* ---------- řádky ↔ objekty stavu ---------- */
 function radekKamery(p, s) {
   return { KameraID: p.id, Nazev: p.name, Misto: p.place || '', Poznamka: p.note || '', Souhlas: p.consent, Sledovani: p.watch, Kontakty: p.kontakty || null,
-    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null, Naramek: p.naramek || null };
+    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null, Naramek: p.naramek || null, Prsten: p.prsten || null };
 }
 function pacientZRadku(r, nazevPoskytovatele) {
   const consent = { den: 'skeleton', noc: 'skeleton', nouze: true, denOd: DEN_OD, nocOd: NOC_OD, ...(json(r.Souhlas) || {}) };
@@ -42,6 +42,7 @@ function pacientZRadku(r, nazevPoskytovatele) {
   const d = json(r.Docasne); if (d) p.docasne = d;
   const dz = json(r.Deaktivace); if (dz && dz.od) p.deaktivace = dz;
   const nr = json(r.Naramek); if (nr && nr.id) p.naramek = nr;
+  const pr = json(r.Prsten); if (pr && pr.id) p.prsten = pr;
   return p;
 }
 function radekUdalosti(e, notif) {

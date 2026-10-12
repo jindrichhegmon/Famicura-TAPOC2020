@@ -22,7 +22,7 @@ export const SCHEMA = {
   A_KAM_Kamera: {
     klic: ['KameraID'],
     sloupce: { KameraID: ['c', 40], Nazev: ['s', 80], Misto: ['s', 120], Poznamka: ['s', 300], Souhlas: ['s', 0], Sledovani: ['s', 0], Kontakty: ['s', 0],
-      Docasne: ['s', 0], KlidDo: ['i'], Offline: ['b'], Aktivni: ['b'], Zmeneno: ['i'], Deaktivace: ['s', 0], Naramek: ['s', 0] },
+      Docasne: ['s', 0], KlidDo: ['i'], Offline: ['b'], Aktivni: ['b'], Zmeneno: ['i'], Deaktivace: ['s', 0], Naramek: ['s', 0], Prsten: ['s', 0] },   // Prsten od 3.54: { id, nazev, posledni, baterie, zdravi } (dřív jen v paměti – po restartu serveru zmizel)
   },
   A_KAM_Udalost: {
     klic: ['Id'],

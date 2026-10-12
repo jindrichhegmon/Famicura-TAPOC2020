@@ -352,6 +352,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.54 (12. 10. 2026)**: stav prstenu (kdo posílá, baterie, poslední hodnoty) se ukládá do databáze – dřív po restartu serveru zmizel a záložka hlásila „zatím nic neposlal“, i když měření v tabulce byla. Záložka Prsten teď uložená měření ukáže vždy; odznak u dlaždice je „bez měření“ (ne „nepřipojen“ – dispečink nevidí živé spojení, jen co telefon poslal).
 - **Verze 3.53 (12. 10. 2026)**: nová navigace detailu kamery – pod seznamem kamer jsou jen dlaždice agend (Monitoring, Náramek, Prsten, Komunikace a kontakty, Nastavení alertů); po klepnutí zůstane na obrazovce jen zvolená agenda a zpět vede výrazné tlačítko „Zpět na výběr agend“.
 - **Verze 3.52 (12. 10. 2026)**: telefon pro SMS s odkazem na prsten je předvyplněný z prvního telefonu rodiny (Komunikace a kontakty) a přepsané číslo si dispečink pamatuje. Záložka Prsten ukazuje kromě tepu a kyslíku i tlak, stres, HRV, únavu a kroky za den (tabulka, grafy posledních 10 měření, Excel). Tlak, stres, HRV a únavu prsten jen odhaduje – hodnoty jsou orientační; tep a kyslík měří.
 - **Verze 3.51 (11. 10. 2026)**: server nabízí instalaci aplikace klienta PéčeDoma pro iPhone (odkaz …/ios/ pro registrované telefony, bez App Storu).

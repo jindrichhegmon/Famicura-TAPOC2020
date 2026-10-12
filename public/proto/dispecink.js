@@ -543,7 +543,7 @@ function renderDetail(rebuild = false) {
         <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="agendy-mriz">
           <button type="button" class="agenda" data-t="monitoring" role="tab"><span class="ic">👁</span><span class="nz">Monitoring</span><span class="po">obraz z kamery, poznámky, historie, nahrávky</span></button>
           <button type="button" class="agenda" data-t="naramek" role="tab"><span class="ic">⌚</span><span class="nz">Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></span><span class="po">SOS, poloha, měření zdraví</span></button>
-          <button type="button" class="agenda" data-t="prsten" role="tab"><span class="ic">💍</span><span class="nz">Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">nepřipojen</span></span><span class="po">tep, kyslík a další hodnoty z prstenu</span></button>
+          <button type="button" class="agenda" data-t="prsten" role="tab"><span class="ic">💍</span><span class="nz">Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">bez měření</span></span><span class="po">tep, kyslík a další hodnoty z prstenu</span></button>
         </div></div>
         <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="agendy-mriz">
           <button type="button" class="agenda" data-t="komunikace" role="tab"><span class="ic">💬</span><span class="nz">Komunikace a kontakty</span><span class="po">uživatelé rodiny, kontakty pro upozornění</span></button>
@@ -1202,8 +1202,10 @@ function kresliMereniPrstenu(d) {
 /** Záložka Prsten: stav (poslední ozvání, baterie, poslední hodnoty), měření jen z prstenu (zdroj=prsten). */
 function kresliPrsten(d, p) {
   const r = p.prsten; const je = !!r?.id;
-  d.querySelector('#dprstenAgenda').classList.toggle('hide', !je);
-  d.querySelector('#dtabPrstenNeni').classList.toggle('hide', je);
+  // i bez živého záznamu prstenu (starší server ho po restartu zapomněl) ukázat uložená měření z databáze
+  const m = d.__mereniPrsten; const ulozena = !je && m?.kamera === p.id && !!(m.radky?.length);
+  d.querySelector('#dprstenAgenda').classList.toggle('hide', !je && !ulozena);
+  d.querySelector('#dtabPrstenNeni').classList.toggle('hide', je || ulozena);
   const ban = d.querySelector('#dprstenBanner'); ban.classList.toggle('je', je); ban.classList.toggle('neni', !je);
   const z = r?.zdravi || {};
   // dlaždice posledních hodnot jako v aplikaci klienta: hodnota, veličina s jednotkou, čas; tep, kyslík a tlak barevně podle mezí (MEZE_ZDRAVI)
@@ -1217,11 +1219,15 @@ function kresliPrsten(d, p) {
     return `<div class="dlaz${je ? '' : ' prazdna'}"><b class="hod ${u}">${esc(hod)}</b><span>${esc(nazev)}${jed ? ' ' + esc(jed) : ''}</span><span class="small muted">${esc(cas) || 'zatím neměřeno'}</span></div>`;
   }).join('');
   const hodnoty = Object.keys(z).some((k) => !/Cas$/.test(k) && z[k] != null) ? `<div class="prsten-dlazdice">${DLAZDICE}</div>` : '';
+  const posl = ulozena ? m.radky[0] : null;
   setHtml(ban, je
     ? `<span class="ic">💍</span><span><b>Prsten ${esc(r.nazev || r.id)} posílá měření</b><br><span class="small">${esc(r.posledni ? `naposledy se ozval ${fmtDT(r.posledni)}` : 'zatím se neozval')}${Number.isFinite(r.baterie) ? ` · baterie ${esc(String(r.baterie))} %` : ''}${jeTicho(r) ? ' · <b>přes 2 hodiny nic – je telefon u klienta zapnutý se stránkou Prsten?</b>' : ''}</span></span>`
-    : '<span class="ic">💍</span><span><b>Prsten zatím nic neposlal</b><br><span class="small">Připojte prsten přes telefon u klienta (postup níže). Stav a měření se ukážou, jakmile přijde první měření.</span></span>');
-  setHtml(d.querySelector('#dprstenInfo'), je ? (hodnoty || '<span class="muted">Zatím bez hodnot.</span>') : '');
-  if (je) nactiMereniNaramku(d.__mereniPrsten, p.id, r, { naServeru: sim.naServeru, apiJson, hotovo: () => kresliMereniPrstenu(d), zdroj: 'prsten' });
+    : ulozena
+      ? `<span class="ic">💍</span><span><b>Prsten teď neposílá, uložená měření jsou níže</b><br><span class="small">poslední měření ${esc(fmtDT(posl.cas))}${posl.naramek ? ` (${esc(String(posl.naramek).replace(/^prsten-/, 'prsten '))})` : ''}. Stav a nové hodnoty se ukážou, jakmile telefon u klienta zase něco pošle.</span></span>`
+      : '<span class="ic">💍</span><span><b>Prsten zatím nic neposlal</b><br><span class="small">Připojte prsten přes telefon u klienta (postup níže). Stav a měření se ukážou, jakmile přijde první měření.</span></span>');
+  setHtml(d.querySelector('#dprstenInfo'), je ? (hodnoty || '<span class="muted">Zatím bez hodnot.</span>') : ulozena ? '<span class="muted">Poslední hodnoty jsou v tabulce a grafech níže.</span>' : '');
+  // měření z databáze se načtou vždy (i bez živého záznamu); po načtení bez živého záznamu překreslit pruh podle toho, zda něco je
+  nactiMereniNaramku(d.__mereniPrsten, p.id, r || null, { naServeru: sim.naServeru, apiJson, hotovo: () => { kresliMereniPrstenu(d); if (!p.prsten?.id) kresliPrsten(d, p); }, zdroj: 'prsten' });
 }
 function kresliMereni(d) {
   const m = d.__mereni; const el = d.querySelector('#dnaramekMereni'); if (!m || !el) return;

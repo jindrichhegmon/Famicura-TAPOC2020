@@ -5,6 +5,20 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.54 · 12. 10. 2026 · prsten: stav přežije restart serveru
+
+- `A_KAM_Kamera` má sloupec `Prsten` (JSON `{ id, nazev, posledni, baterie,
+  zdravi }`), zapisuje se v `radekKamery` a čte v `pacientZRadku` – stejně
+  jako `Naramek`. Dřív žil `p.prsten` jen v paměti a po restartu serveru
+  (každé nasazení) záložka Prsten hlásila „zatím nic neposlal“, přestože
+  měření v `A_KAM_Mereni` zůstala.
+- Dispečink, záložka Prsten: měření z databáze se načítají vždy; bez živého
+  záznamu prstenu se ukáže pruh „Prsten teď neposílá, uložená měření jsou
+  níže“ s časem posledního měření. Odznak dlaždice je „bez měření“.
+- Server loguje každé měření z aplikace klienta (`[prsten] tenant kamera:
+  prsten …, přijato N, uloženo M`; neplatný kód jako varování) – diagnostika
+  přes `pm2 logs famicura-tapo | grep prsten`.
+
 ## 3.53 · 12. 10. 2026 · dispečink: dlaždice agend v detailu kamery
 
 - Detail kamery: místo záložek jsou pod seznamem kamer jen dlaždice agend
