@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.76 · 13. 10. 2026 · ‹ PéčeDoma předá kameru
+
+- `public/proto/z-aplikace.js`: tlačítko „‹ PéčeDoma“ vrací do PéčeDoma s `?kamera=ID&tenant=…` (u schématu
+  `pecedoma://` jako `pecedoma://otevrit?…`); `rodina.js` drží `window.__famicura = { kamera, tenant }`
+  (po přihlášení i po přepnutí kamery). PéčeDoma (od 3.6.2) si `kamera` z adresy uloží a příště otevře
+  aplikaci rodiny rovnou na ní – propojení bez dispečinku i bez prstenu; přiřazení klienta v dispečinku
+  (3.75) a kamera podle párovacího kódu (3.74) zůstávají.
+
 ## 3.75 · 13. 10. 2026 · klient Péče doma plus přiřazený ke kameře
 
 - Ke kameře jde přiřadit **klient Péče doma plus** (KLIENTID z odkazu na aplikaci PéčeDoma): sloupec

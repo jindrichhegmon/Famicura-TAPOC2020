@@ -31,7 +31,13 @@
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'zpetPecedoma'; b.textContent = '‹ PéčeDoma';
     b.title = 'Zpět do aplikace PéčeDoma';
-    b.addEventListener('click', () => { location.href = zpet; });
+    // zpět s kamerou a poskytovatelem: PéčeDoma si je uloží a příště otevře rovnou tuhle kameru (propojení bez dispečinku)
+    b.addEventListener('click', () => {
+      const f = window.__famicura || {};
+      const q = new URLSearchParams(); if (f.kamera) q.set('kamera', f.kamera); if (f.tenant) q.set('tenant', f.tenant);
+      const s = q.toString();
+      location.href = s ? zpet + (/^[a-z]+:\/\/$/.test(zpet) ? 'otevrit?' : zpet.includes('?') ? '&' : '?') + s : zpet;
+    });
     return b;
   };
   const vloz = () => {

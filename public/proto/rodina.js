@@ -134,6 +134,7 @@ function boot(ja) {
   kameraZOdkazu = null;
   if (chtena !== FAMILY[0]) { patientId = chtena; $('patient').value = chtena; panel.select(chtena); render(); kresliKamVyber(); }
   startSource(chtena);
+  window.__famicura = { kamera: chtena, tenant: ja.tenant?.id || '' };   // pro tlačítko ‹ PéčeDoma: vrátí PéčeDoma, kterou kameru rodina používá
 }
 
 function startDemo() {
@@ -254,6 +255,7 @@ function vyberKameru(id) {
   // obraz: odpojit kameru, která běžela, a připojit vybranou (texty i obraz patří k téže kameře)
   if (src) { try { src.stop(); src.video?.remove(); } catch { /* nic */ } }
   startSource(id);
+  window.__famicura = { kamera: id, tenant: JA.tenant?.id || '' };
   render(); kresliKamVyber();
 }
 function kresliKamVyber() {
