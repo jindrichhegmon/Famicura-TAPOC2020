@@ -422,7 +422,7 @@ test('rodina: aktivace odkazem nastaví heslo a přihlásí; pak přihlášení 
   const { h, go2rtc } = handler({ go2rtc: fakeGo2rtc({ streams: ['tapoc2020', 'druha'] }) });
   const b = await (await h(req('POST', '/api/rodina/uzivatele', { cookies: cookie(), body: { jmeno: 'Petr', telefon: '777123456', kamery: ['tapoc2020'] } }))).json();
   const token = b.odkaz.split('/r/')[1];
-  assert.deepEqual(await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json(), { ok: true, platna: true, jmeno: 'Petr', tenant: T, role: 'rodina' });
+  assert.deepEqual(await (await h(req('GET', `/api/rodina/pozvanka?token=${token}`))).json(), { ok: true, platna: true, jmeno: 'Petr', tenant: T, role: 'rodina', kamery: ['tapoc2020'] });
   assert.equal((await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'kratke' } }))).status, 400);
   const a = await h(req('POST', '/api/rodina/aktivace', { body: { token, heslo: 'Famicura2026' } }));
   assert.equal(a.status, 200);

@@ -18,7 +18,7 @@ test('pozvánka → aktivace → přihlášení; nová pozvánka staré heslo zr
   assert.equal(uzivatel.telefon, '777123456');
   assert.ok(token.length >= 20);
   assert.equal(await vsichni.prihlas('777123456', 'cokoli-heslo'), null, 'před aktivací se nepřihlásí');
-  assert.deepEqual(await vsichni.pozvanka(token), { platna: true, jmeno: 'Petr Novák', tenant: T, role: 'rodina' });
+  assert.deepEqual(await vsichni.pozvanka(token), { platna: true, jmeno: 'Petr Novák', tenant: T, role: 'rodina', kamery: ['tapoc2020'] }, 'pozvánka nese kamery: aplikace po aktivaci otevře tu správnou');
   assert.deepEqual(await vsichni.pozvanka('jiny'), { platna: false });
   await assert.rejects(vsichni.aktivuj(token, 'kratke'), /aspoň 8/);
   await assert.rejects(vsichni.aktivuj('jiny-token', 'Famicura2026'), /neplatí/);
@@ -130,7 +130,7 @@ test('mobilní dispečer: role dispecer bez kamer, pozvánka s jasným textem, d
   await assert.rejects(u.vytvor({ jmeno: 'X', telefon: '777000333', role: 'rodina' }), /aspoň jednu kameru/);
   const r = await u.vytvor({ jmeno: 'Petr', telefon: '777000444', kamery: ['k1'] });
   assert.equal(r.uzivatel.role, 'rodina', 'výchozí role je rodina');
-  assert.deepEqual(await vsichni.pozvanka(d.token), { platna: true, jmeno: 'Jana Dispečerka', tenant: T, role: 'dispecer' });
+  assert.deepEqual(await vsichni.pozvanka(d.token), { platna: true, jmeno: 'Jana Dispečerka', tenant: T, role: 'dispecer', kamery: [] });
   const text = textPozvanky({ jmeno: 'Jana Dispečerka', odkaz: 'https://x/r/abc', role: 'dispecer', poskytovatel: 'FamiCura s.r.o.' });
   assert.match(text, /pristup DISPECERA k dohledu \(FamiCura s.r.o.\): https:\/\/x\/r\/abc/); assert.match(text, /vsechny kamery poskytovatele, nic v nich nenastavujete/); assert.ok(!/[^\x00-\x7f]/.test(text), 'bez diakritiky');
   await vsichni.aktivuj(d.token, 'DispecerHeslo1');
