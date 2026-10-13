@@ -1,0 +1,15 @@
+{
+  "appId": "cz.famicura.kamera",
+  "appName": "Famicura Kamera",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "automatic",
+    "scheme": "FamicuraKamera"
+  },
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "famicuratapo.95-216-201-2.sslip.io"
+    ]
+  }
+}

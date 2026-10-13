@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Famicura Kamera</title>
+<style>
+  :root{color-scheme:light}
+  html,body{height:100%;margin:0;background:#0d4a75;color:#fff;font-family:-apple-system,"Helvetica Neue",sans-serif;-webkit-text-size-adjust:100%}
+  main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;box-sizing:border-box;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom))}
+  img{width:96px;height:96px;border-radius:22px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  h1{font-size:22px;margin:18px 0 6px}
+  p{margin:0;opacity:.85;font-size:16px;line-height:1.45;max-width:320px}
+  .chyba p{opacity:1}
+  button{margin-top:22px;border:0;border-radius:999px;padding:12px 26px;font:inherit;font-weight:700;font-size:16px;background:#fff;color:#0d4a75}
+  .hide{display:none}
+  .tecky::after{content:"…";animation:t 1.2s steps(4) infinite}
+  @keyframes t{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+</style>
+</head>
+<body>
+<main id="m">
+  <img src="ikona.png" alt="">
+  <h1>Famicura Kamera</h1>
+  <p id="stav" class="tecky">Připojuji k serveru</p>
+  <button id="znovu" class="hide" type="button">Zkusit znovu</button>
+</main>
+<script>
+/* Aplikace je jen obal: po startu přejde na aplikaci rodiny na serveru Famicura (stejné okno, přihlášení WKWebView drží
+ * mezi spuštěními). Odkaz famicurakamera://otevrit?tenant=…&kamera=… z aplikace PéčeDoma otevře rovnou danou kameru;
+ * ?zpet=pecedoma:// dá do hlavičky tlačítko „‹ PéčeDoma“ zpět do aplikace PéčeDoma. Bez spojení se serverem to
+ * stránka řekne a nabídne další pokus (web by jen zůstal bílý). */
+(function () {
+  var SERVER = 'https://famicuratapo.95-216-201-2.sslip.io';
+  var stav = document.getElementById('stav'), znovu = document.getElementById('znovu'), m = document.getElementById('m');
+  var cil = SERVER + '/proto/rodina.html';
+  function parametry(u) {   // z famicurakamera://otevrit?… jen tenant a kamera (nic jiného se na server nepřenáší)
+    var q = new URLSearchParams();
+    try { var p = new URL(u).searchParams; ['tenant', 'kamera'].forEach(function (k) { var v = p.get(k); if (v && /^[A-Za-z0-9_-]{1,40}$/.test(v)) q.set(k, v); }); } catch (e) { /* bez parametrů */ }
+    q.set('zpet', 'pecedoma://');
+    return cil + '?' + q.toString();
+  }
+  function prejdi(u) {
+    stav.textContent = 'Připojuji k serveru'; stav.classList.add('tecky'); znovu.classList.add('hide'); m.classList.remove('chyba');
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null, t = setTimeout(function () { if (ctrl) ctrl.abort(); }, 12000);
+    fetch(SERVER + '/verze.js', { mode: 'no-cors', cache: 'no-store', signal: ctrl && ctrl.signal }).then(function () { clearTimeout(t); location.replace(u); })
+      .catch(function () { clearTimeout(t); chyba(u); });
+  }
+  function chyba(u) {
+    stav.classList.remove('tecky'); m.classList.add('chyba');
+    stav.textContent = 'Server Famicura teď není dostupný (zkontrolujte připojení k internetu).';
+    znovu.classList.remove('hide'); znovu.onclick = function () { prejdi(u); };
+  }
+  var App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  var start = function (u) { prejdi(parametry(u || '')); };
+  if (App && App.getLaunchUrl) {
+    App.getLaunchUrl().then(function (r) { start(r && r.url); }).catch(function () { start(''); });
+    try { App.addListener('appUrlOpen', function (e) { start(e && e.url); }); } catch (e) { /* bez odkazu */ }
+  } else start('');
+})();
+</script>
+</body>
+</html>

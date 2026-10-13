@@ -1,0 +1,14 @@
+{
+  "name": "famicura-kamera-ios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Famicura Kamera pro iPhone: aplikace rodiny a mobilního dispečera (obraz, soukromí, náramek, prsten) jako nativní aplikace nad serverem Famicura",
+  "dependencies": {
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

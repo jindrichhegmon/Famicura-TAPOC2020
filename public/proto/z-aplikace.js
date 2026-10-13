@@ -6,7 +6,8 @@
  * Zpět se smí jen do PéčeDoma (pevný seznam adres), jinak by odkaz šel zneužít k přesměrování na cizí stránku. */
 (() => {
   const KLIC = 'famicura.zpet';
-  const POVOLENE = [/^capacitor:\/\/localhost(\/|$)/, /^https:\/\/(pecedomamobil|pecedomapacient)\.netlify\.app(\/|$)/, /^http:\/\/(127\.0\.0\.1|localhost):8792(\/|$)/];
+  // pecedoma:// = nativní aplikace PéčeDoma (z aplikace Famicura Kamera, kde je rodina samostatnou aplikací)
+  const POVOLENE = [/^capacitor:\/\/localhost(\/|$)/, /^https:\/\/(pecedomamobil|pecedomapacient)\.netlify\.app(\/|$)/, /^http:\/\/(127\.0\.0\.1|localhost):8792(\/|$)/, /^pecedoma:\/\/$/];
   const povolena = (u) => typeof u === 'string' && u.length < 500 && POVOLENE.some((r) => r.test(u));
   let zpet = null;
   try {

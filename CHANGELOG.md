@@ -5,6 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.73 · 13. 10. 2026 · Famicura Kamera jako aplikace pro iPhone
+
+- Nová složka `kamera-ios/`: aplikace **Famicura Kamera** (Capacitor, Bundle ID `cz.famicura.kamera`) –
+  obal nad `/proto/rodina.html` na serveru: `www/index.html` ověří spojení se serverem a přejde na
+  aplikaci rodiny (přihlášení drží WKWebView), bez spojení ukáže důvod a Zkusit znovu. Schéma
+  `famicurakamera://otevrit?tenant=…&kamera=…` (aplikace PéčeDoma jím otevře Kameru místo webu),
+  do odkazu dává `?zpet=pecedoma://`. `pripravit-ios.sh` (projekt Xcode, název, ikona, schémata),
+  `vydat-testflight.sh` (archiv + nahrání na App Store Connect), README.
+- `public/proto/z-aplikace.js`: `pecedoma://` je povolená adresa pro tlačítko „‹ PéčeDoma“.
+
 ## 3.72 · 13. 10. 2026 · oprava: mobilní dispečer v režimu Rodina vyřídí žádost o plný obraz
 
 - `src/api.mjs`, `/api/proto/akce`: kontrola mobilního dispečera (`smiJakoRodina(args[0])`) brala
