@@ -53,6 +53,14 @@ test('stejný telefon u dvou tenantů: přihlášení vybere účet, ke kterému
   assert.equal((await vsichni.prihlas('777123456', 'HesloProA-1')).tenant, T);
   assert.equal((await vsichni.prihlas('777123456', 'HesloProB-2')).tenant, T2);
   assert.equal(await vsichni.prihlas('777123456', 'HesloProC-3'), null);
+  // stejné heslo u obou: bez tenanta první nalezený, s tenantem z odkazu účet u něj (jinak by stránka ukázala cizí kamery)
+  const c = await vsichni.pro(T).vytvor({ jmeno: 'Dcera', telefon: '777555666', kamery: ['k1'] });
+  const d = await vsichni.pro(T2).vytvor({ jmeno: 'Dcera', telefon: '777555666', kamery: ['k2'] });
+  await vsichni.aktivuj(c.token, 'StejneHeslo-9'); await vsichni.aktivuj(d.token, 'StejneHeslo-9');
+  assert.equal((await vsichni.prihlas('777555666', 'StejneHeslo-9', T2)).tenant, T2, 'tenant z odkazu má přednost');
+  assert.equal((await vsichni.prihlas('777555666', 'StejneHeslo-9', T)).tenant, T);
+  assert.equal((await vsichni.prihlas('777555666', 'StejneHeslo-9', 'ZZZZ')).tenant, T, 'neznámý tenant: první, ke kterému heslo sedí');
+  assert.equal((await vsichni.prihlas('777123456', 'HesloProB-2', T)).tenant, T2, 'heslo sedí jen u druhého – vrátí ho, API řekne proč nepřihlásí');
 });
 
 test('kontroly při zakládání a uložené řádky bez tajemství', async () => {

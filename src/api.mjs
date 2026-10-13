@@ -257,10 +257,17 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const cekat = limiter.blokovano(ip);
         if (cekat) return json({ ok: false, error: `Příliš mnoho pokusů. Zkuste to za ${Math.ceil(cekat / 60)} min.` }, 429);
         const { telefon, heslo } = await telo(req);
-        const u = await uzivatele.prihlas(telefon, heslo);
+        const hint = tenantHint(req.headers, req.url);   // poskytovatel z odkazu: jeho účet má přednost
+        const u = await uzivatele.prihlas(telefon, heslo, hint);
         if (!u) { limiter.chyba(ip); return json({ ok: false, error: 'Telefon nebo heslo nesedí.' }, 401); }
         limiter.uspech(ip);
         if (u.deaktivovan) return json({ ok: false, error: 'Účet je deaktivovaný. Obraťte se na poskytovatele.' }, 403);
+        // heslo sedí jen k účtu u jiného poskytovatele, než ke kterému vede odkaz: nepřihlásit (stránka by hlásila
+        // „nepřihlášen“ nebo ukázala cizí kamery), ale říct, čí heslo je potřeba
+        if (hint && u.tenant && u.tenant !== hint) {
+          const tn = await najemci.tenant(hint).catch(() => null);
+          return json({ ok: false, error: `Tímto heslem jste přihlášen(a) u jiného poskytovatele. Tato kamera patří poskytovateli ${tn?.nazev || hint} – použijte heslo z jeho pozvánky (dispečink → Uživatelé rodiny → Nová pozvánka).` }, 403);
+        }
         return json({ ok: true, uzivatel: u }, 200, { 'Set-Cookie': cookieRodina(u.tenant, u.id) });
       }
       if (m === 'POST' && path === '/api/rodina/odhlaseni') { const hint = tenantHint(req.headers, req.url); return json({ ok: true }, 200, { 'Set-Cookie': odhlaseni(hint || kdoSession(req.headers)?.tenant || '') }); }

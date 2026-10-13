@@ -574,6 +574,24 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   assert.equal(go2rtc.calls.length, 1);
 });
 
+test('rodina: stejné číslo u dvou poskytovatelů – přihlášení z odkazu s ?tenant= vybere účet u něj; heslo jen od jiného poskytovatele řekne proč', async () => {
+  const { h, vsichni } = handler();
+  const a = await vsichni.pro(T).vytvor({ jmeno: 'Dcera', telefon: '777555666', kamery: ['tapoc2020'] });
+  const b = await vsichni.pro(T2).vytvor({ jmeno: 'Dcera', telefon: '777555666', kamery: ['cizi'] });
+  await vsichni.aktivuj(a.token, 'StejneHeslo-9'); await vsichni.aktivuj(b.token, 'StejneHeslo-9');
+  // stejné heslo u obou: bez tenanta první nalezený (T), s tenantem v adrese (jako hlavička x-famicura-tenant ze stránky) účet u něj
+  let l = await h(req('POST', '/api/rodina/login?tenant=' + T2, { body: { telefon: '777555666', heslo: 'StejneHeslo-9' } }));
+  assert.equal(l.status, 200); assert.equal((await l.json()).uzivatel.tenant, T2);
+  assert.match(l.headers.get('set-cookie') || '', new RegExp('_' + T2 + '='), 'cookie pro tenant z odkazu');
+  l = await h(req('POST', '/api/rodina/login?tenant=' + T, { body: { telefon: '777555666', heslo: 'StejneHeslo-9' } }));
+  assert.equal(l.status, 200); assert.equal((await l.json()).uzivatel.tenant, T);
+  // u T2 jiné heslo: z odkazu na T2 s heslem od T se nepřihlásí a dozví se, čí heslo je potřeba
+  const nova = await vsichni.pro(T2).novaPozvanka(b.uzivatel.id); await vsichni.aktivuj(nova.token, 'JineHeslo-2');
+  l = await h(req('POST', '/api/rodina/login?tenant=' + T2, { body: { telefon: '777555666', heslo: 'StejneHeslo-9' } }));
+  assert.equal(l.status, 403); assert.match((await l.json()).error, /jiného poskytovatele.*Centrum LB/);
+  assert.equal((await h(req('POST', '/api/rodina/login?tenant=' + T2, { body: { telefon: '777555666', heslo: 'JineHeslo-2' } }))).status, 200);
+});
+
 test('rodina: po deseti chybných přihlášeních z jedné adresy se čeká', async () => {
   const { h } = handler();
   for (let i = 0; i < 10; i++) await h(req('POST', '/api/rodina/login', { ip: '1.2.3.4', body: { telefon: '777123456', heslo: 'x' } }));

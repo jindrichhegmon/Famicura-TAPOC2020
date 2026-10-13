@@ -20,6 +20,7 @@
  */
 import crypto from 'node:crypto';
 import { isDeviceId } from './plan-pravidla.mjs';
+import { normTenant } from './tabulky.mjs';
 
 export const POZVANKA_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const HESLO_MIN = 8;
@@ -192,9 +193,14 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
       return verejne({ ...r, ...zmeny });
     },
     /** Telefon + heslo → uživatel (s tenantem), nebo null (stejná odpověď pro neznámý telefon i špatné heslo). Deaktivovaný se vrátí s deaktivovan – přihlášení ho odmítne srozumitelně. */
-    async prihlas(telefon, heslo) {
+    /** Přihlášení telefonem a heslem. `tenant` = poskytovatel z odkazu (?tenant= / hlavička): účet u něj má přednost,
+     *  když má stejné číslo účet u více poskytovatelů se stejným heslem – jinak by se přihlásil první nalezený
+     *  a stránka ukázala kamery jiného poskytovatele. Bez tenanta vyhraje první účet, ke kterému heslo sedí. */
+    async prihlas(telefon, heslo, tenant = '') {
       const tel = normalizeTelefon(telefon);
-      const kandidati = tel ? await tabulky.vyber('*', TAB, { kde: { Telefon: tel } }) : [];
+      const t = normTenant(tenant);
+      const vsichni = tel ? await tabulky.vyber('*', TAB, { kde: { Telefon: tel } }) : [];
+      const kandidati = t ? [...vsichni.filter((r) => r.IDTENANT === t), ...vsichni.filter((r) => r.IDTENANT !== t)] : vsichni;
       // I pro neznámé číslo hash běží, aby čas nic neprozradil; při víc tenantech se stejným číslem vyhraje správné heslo.
       let u = null;
       for (const r of kandidati) if (r.HesloHash && hesloOdpovida(heslo, r.HesloHash)) { u = r; break; }

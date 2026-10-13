@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.79 · 13. 10. 2026 · přihlášení rodiny podle poskytovatele z odkazu
+
+- Přihlášení rodiny (`POST /api/rodina/login`) bere ohled na poskytovatele z odkazu (`?tenant=`, hlavička
+  `x-famicura-tenant`): když má stejné telefonní číslo účet u více poskytovatelů se stejným heslem, přihlásí
+  účet u poskytovatele z odkazu – dřív vyhrál první nalezený a stránka pak ukázala kamery jiného poskytovatele
+  (nebo hlásila nepřihlášen). Heslo, které sedí jen k účtu u jiného poskytovatele, se odmítne s vysvětlením,
+  čí heslo z pozvánky je potřeba.
+
 ## 3.78 · 13. 10. 2026 · bez pole Klient v Péče doma plus
 
 - Dispečink už nemá pole „Klient v Péče doma plus“ a server veřejný dotaz `GET /api/klient/kamera` (3.75):

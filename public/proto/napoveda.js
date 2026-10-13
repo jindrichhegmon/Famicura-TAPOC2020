@@ -364,6 +364,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.79 (13. 10. 2026)**: přihlášení rodiny bere ohled na poskytovatele z odkazu (?tenant=) – stejné číslo se stejným heslem u více poskytovatelů se přihlásí k tomu z odkazu, ne k prvnímu nalezenému; heslo jen od jiného poskytovatele se odmítne s vysvětlením.
 - **Verze 3.78 (13. 10. 2026)**: pole Klient v Péče doma plus v dispečinku je pryč – kamery klienta se zapisují na centrále PéčeDoma (odkaz na kameru z Uživatelů rodiny), aplikace klienta si je bere odtud.
 - **Verze 3.77 (13. 10. 2026)**: v Komunikaci → Uživatelé rodiny je **Odkaz na kameru pro PéčeDoma** (Kopírovat): kamera má svůj odkaz, jde otevřít i bez PéčeDoma; v aplikaci PéčeDoma klienta (3.7.0) se odkazy kamer zapisují v Kamera a náramek → Upravit kamery (heslo hlavní aplikace) – klient může mít kamer víc a vybere si ze seznamu.
 - **Verze 3.76 (13. 10. 2026)**: tlačítko ‹ PéčeDoma v aplikaci rodiny předá aplikaci PéčeDoma kameru, kterou rodina právě používá (a poskytovatele) – PéčeDoma si ji uloží a příště otevře rovnou ji. Propojení tak funguje jen mezi PéčeDoma a aplikací rodiny, bez zadávání v dispečinku (to zůstává jako další možnost).
