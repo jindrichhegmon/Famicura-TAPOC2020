@@ -373,14 +373,16 @@ export function createStavTenantu({ tenant, tabulky, kamery = async () => [], ud
           stres: x.Stres ?? null, hrv: x.Hrv ?? null, unava: x.Unava ?? null, kroky: x.Kroky ?? null }));
       });
     },
-    odemknutiNahravky({ id, kameraId, cas, delkaS, kdo }) {
+    odemknutiNahravky({ id, kameraId, cas, delkaS, kdo, spravce = false }) {
       return serializovane(async () => {
         await nacti();
         const s = data.state;
         for (const e of s.events) if (e.nahravka && e.nahravka.id === id) { e.nahravka = { ...e.nahravka, zamek: false, odemklKdo: kdo || 'rodina' }; }
         const t = now();
         const kdy = new Date(cas || t).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
-        s.events.unshift({ id: 'n' + (s.seq++) + t.toString(36), at: t, patientId: kameraId, kind: 'consent', state: 'uzavřen', by: 'rodina', text: `Rodina (${kdo || 'rodina'}) odemkla poskytovateli nahrávku z ${kdy}${delkaS ? ` (${delkaS} s)` : ''}.` });
+        const co = `poskytovateli nahrávku z ${kdy}${delkaS ? ` (${delkaS} s)` : ''}`;
+        // správce serveru: rodina to v historii vidí jako odemknutí mimo ni (ne jejím jménem)
+        s.events.unshift({ id: 'n' + (s.seq++) + t.toString(36), at: t, patientId: kameraId, kind: 'consent', state: 'uzavřen', by: spravce ? 'správce' : 'rodina', text: spravce ? `Správce serveru odemkl ${co} (bez rodiny).` : `Rodina (${kdo || 'rodina'}) odemkla ${co}.` });
         if (s.events.length > 400) s.events.length = 400;
         data.v++; await uloz();
         return { v: data.v };

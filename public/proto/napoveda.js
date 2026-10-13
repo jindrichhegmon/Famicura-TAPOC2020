@@ -291,8 +291,8 @@ Nahrává server, ne prohlížeč. Úložiště se volí v ⚙ Nastavení → Ú
 
 ### Soukromí
 - Nahrává se jen při plném obrazu povoleném rodinou, nebo při kritické události (pád, SOS) s povoleným nouzovým přístupem.
-- Při rozostření nebo drátěném modelu se nahrávka pořídí jen jako drátěný model: server z klipu vytáhne souřadnice postavy a obraz zahodí. V Nahrávkách je „🦴 přehrát drátěný model“ (animace kostry, klepnutím pauza), stažení dá soubor .json.
-- Nahrávka pořízená v době, kdy měla rodina rozostřený obraz nebo drátěný model, je uzamčená (🔒): přehrát a stáhnout ji půjde, až ji rodina ve své aplikaci odemkne; odemknutí je v historii.
+- Při rozostření nebo drátěném modelu se nahrávka pořídí v plném obrazu, ale **uzamčená** (🔒) – viz další bod. Starší záznamy drátěného modelu z verzí 2.8–2.9 jdou v Nahrávkách už jen stáhnout.
+- Nahrávka pořízená v době, kdy měla rodina rozostřený obraz nebo drátěný model, je uzamčená (🔒): přehrát a stáhnout ji půjde, až ji rodina ve své aplikaci odemkne; odemknutí je v historii. Správce serveru (přihlášený heslem hlavní aplikace) ji může odemknout i sám tlačítkem **Odemknout (správce)** v seznamu Nahrávky – do historie kamery jde řádek „Správce serveru odemkl … (bez rodiny)“, rodina ho ve své aplikaci vidí. Dispečer poskytovatele tu možnost nemá.
 - Když se nahrávka nepořídí (žádný obraz), je důvod u události v historii (🎞 nenahráno: …) i v seznamu Nahrávky: nejčastěji rodina nepovolila plný obraz, nebo kamera v tu chvíli neposlala obraz. Podrobnosti má správce serveru v logu (pm2 logs famicura-tapo, řádky [nahravky]).
 
 ### Úložiště na serveru (doporučeno)
@@ -364,6 +364,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.67 (13. 10. 2026)**: uzamčenou nahrávku může odemknout i správce serveru (tlačítko Odemknout (správce) v Nahrávkách; do historie kamery jde, že to byl správce, ne rodina). Mobilní dispečer u cizí kamery už nevidí ▶ u uzamčené nahrávky (server ji nevydá) a místo obecné chyby přehrávání se ukáže skutečný důvod (uzamčeno, smazáno, nebo formát videa).
 - **Verze 3.66 (13. 10. 2026)**: detail kamery v dispečinku na počítači používá přesnější model postavy (heavy); vedle tlačítka 🦴 je vidět, který model běží a jak rychle; když počítač nestíhá, detail se sám vrátí k běžnému modelu. Drátěný model se při krátkém výpadku detekce (do 0,3 s) podrží, aby neblikal – ve všech aplikacích.
 - **Verze 3.65 (13. 10. 2026)**: drátěný model ve všech aplikacích (dispečink, rodina, mobilní dispečer, hlavní aplikace) se kreslí jen u skutečně rozpoznané postavy – při „postava nerozpoznána“, nedostupné kameře nebo zamrzlém obraze se žádná kostra nekreslí (ukázková postava zůstává jen v ukázce bez serveru). Přelud na prázdné místnosti se nepočítá za postavu ani v analýze. Kostra je přesnější (model „full“) a vyhlazená, v klidu se netřese.
 - **Verze 3.64 (12. 10. 2026)**: nápověda doplněná o poslední novinky (prsten přes aplikaci PéčeDoma Prsten na iPhonu, náramek jen s naměřenými hodnotami, mobilní dispečer a režim Rodina). SMS s párovacím kódem prstenu obsahuje kód pro aplikaci PéčeDoma Prsten.

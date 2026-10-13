@@ -19,7 +19,8 @@
  *   GET  /api/nahravky?kamera=&limit=   seznam nahrávek (tabulka A_KAM_Nahravka); rodina jen své kamery
  *   GET  /api/nahravky/:id/soubor   přehrání nahrávky ze serveru (Range), každé přehrání do auditu A_KAM_Prehrani; z Disku přesměruje;
  *                                   uzamčenou (pořízenou při rozostření rodiny) poskytovatel nedostane (423), dokud ji rodina neodemkne
- *   POST /api/nahravky/:id/odemknout  rodina odemkne uzamčenou nahrávku své kamery poskytovateli (zapíše se kdo a kdy, řádek v historii)
+ *   POST /api/nahravky/:id/odemknout  rodina odemkne uzamčenou nahrávku své kamery poskytovateli (zapíše se kdo a kdy, řádek v historii);
+ *                                   smí i správce serveru (heslo hlavní aplikace) – řádek v historii říká, že to byl správce, ne rodina
  *                                   ?stahnout=1 = stažení celého souboru (poskytovatel), v auditu jako „stažení“
  *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
  *   DELETE /api/nahravky/:id        smazání (poskytovatel)
@@ -718,17 +719,19 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           }
           return new Response(data, { status: 200, headers: { ...hl, 'Content-Length': String(data.length) } });
         }
-        // Odemknutí uzamčené nahrávky: jen rodina u své kamery (poskytovatel si ji odemknout nemůže).
+        // Odemknutí uzamčené nahrávky: rodina u své kamery, nebo správce serveru (dispečer poskytovatele si ji odemknout nemůže).
         const mOdemkni = path.match(/^\/api\/nahravky\/([A-Za-z0-9_-]{4,40})\/odemknout$/);
         if (m === 'POST' && mOdemkni) {
           if (!nahravky) return nejsou();
-          if (!rodina) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci.' }, 403);
+          const spravce = !rodina && ja.role === 'admin';
+          if (!rodina && !spravce) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci, nebo správce serveru.' }, 403);
           const n = await nahravky.podleId(tenant, mOdemkni[1]);
           if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
-          if (!smiJakoRodina(n.kameraId)) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina té kamery (dispečer v režimu Rodina); dispečer jen sleduje.' }, 403);
+          if (rodina && !smiJakoRodina(n.kameraId)) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina té kamery (dispečer v režimu Rodina); dispečer jen sleduje.' }, 403);
           if (!n.zamek) return json({ ok: true, nahravka: n, zmena: false });
-          const out = await nahravky.odemkni(tenant, n, { kdo: rodina.jmeno });
-          await (await stavTenanta()).odemknutiNahravky({ id: n.id, kameraId: n.kameraId, cas: n.cas, delkaS: n.delkaS, kdo: rodina.jmeno }).catch((e) => console.error('[famicura-tapo] odemknutí nahrávky v historii:', e.message));
+          const kdo = spravce ? 'Správce serveru' : rodina.jmeno;
+          const out = await nahravky.odemkni(tenant, n, { kdo });
+          await (await stavTenanta()).odemknutiNahravky({ id: n.id, kameraId: n.kameraId, cas: n.cas, delkaS: n.delkaS, kdo, spravce }).catch((e) => console.error('[famicura-tapo] odemknutí nahrávky v historii:', e.message));
           return json({ ok: true, nahravka: out, zmena: true });
         }
         if (m === 'GET' && path === '/api/nahravky') {

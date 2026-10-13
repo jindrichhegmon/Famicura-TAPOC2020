@@ -5,6 +5,22 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.67 · 13. 10. 2026 · odemknutí uzamčené nahrávky správcem, důvod, proč nahrávka nejde přehrát
+
+- **Správce serveru odemkne uzamčenou nahrávku** (`POST /api/nahravky/:id/odemknout` i pro `role: 'admin'`):
+  dřív ji mohla odemknout jen rodina (nebo dispečer v režimu Rodina, když je u kamery i rodinou), takže
+  bez rodinného účtu nešla nahrávka pořízená při rozostření/drátěném modelu nikdy přehrát. Správce
+  (heslo hlavní aplikace) má v dispečinku u 🔒 tlačítko **Odemknout (správce)**; `OdemklKdo` je
+  „Správce serveru“ a v historii kamery je řádek „Správce serveru odemkl poskytovateli nahrávku z …
+  (bez rodiny)“ (`by: 'správce'`), rodina ho vidí. Dispečer poskytovatele dál 403.
+- **Aplikace na telefonu**: mobilní dispečer u kamery, kde není rodinou, nevidí ▶ u uzamčené nahrávky
+  (server by odpověděl 423) – místo toho „přehrát až po odemknutí“ a kdo ji může odemknout.
+- **Proč nahrávka nejde přehrát**: místo „soubor už na serveru není, nebo telefon formát neumí“ se
+  aplikace (telefon i dispečink) zeptá serveru (`Range: bytes=1-1`, nejde do auditu) a ukáže jeho
+  důvod (uzamčeno, smazáno po době uchování, neexistuje); když server soubor vydá, je to formát
+  videa (klip se nepřevedl na obyčejný MP4 – ffmpeg).
+- Nápověda Nahrávky: pryč zastaralý odstavec o nahrávce jako drátěném modelu (2.8–2.9).
+
 ## 3.66 · 13. 10. 2026 · přesnější model postavy v detailu na počítači, kostra bez blikání
 
 - **Model „heavy“ v detailu dispečinku na počítači** (`public/proto/zdroj.js`: `MODELY`, `setModel()`,

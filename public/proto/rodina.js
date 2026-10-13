@@ -592,9 +592,12 @@ async function nactiNahravky(vynutit = false) {
     const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
     html = j.nahravky.filter((n) => !n.chyba && n.typ !== 'kostra').map((n) => {
       const co = n.druh && KINDS[n.druh] ? KINDS[n.druh].label : n.zdroj === 'rucni' ? 'ruční' : n.zdroj === 'plan' ? 'plán' : 'událost';
-      const kde = n.uloziste === 'server' ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
+      // mobilní dispečer (ne rodina téhle kamery): uzamčenou nahrávku server nevydá (423), tak se ▶ ani nenabízí
+      const cizi = n.zamek && jakoPoskytovatel();
+      const kde = n.uloziste === 'server' && !cizi ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.uloziste === 'server' ? '<span class="muted">přehrát až po odemknutí</span>' : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
       // uzamčená = pořízená, když jste měli nastavený rozostřený obraz: vy ji vidíte, poskytovatel až po odemknutí
-      const zamek = n.zamek ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">poskytovatel ji neuvidí, dokud ji neodemknete</span><button type="button" class="sm" data-odemknout="${esc(n.id)}">Odemknout</button></div>` : n.odemklKdo ? `<div class="small muted">odemčeno pro poskytovatele${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}</div>` : '';
+      const zamek = cizi ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">odemkne ji rodina ve své aplikaci (nebo dispečer v režimu Rodina, když je u kamery i rodinou); správce serveru ji odemkne v dispečinku</span></div>`
+        : n.zamek ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">poskytovatel ji neuvidí, dokud ji neodemknete</span><button type="button" class="sm" data-odemknout="${esc(n.id)}">Odemknout</button></div>` : n.odemklKdo ? `<div class="small muted">odemčeno pro poskytovatele${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}${n.odemklKdo === 'Správce serveru' ? ' (správce serveru)' : ''}</div>` : '';
       return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}${zamek}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka.</li>';
   } catch (e) { html = `<li class="muted">Nahrávky se nepodařilo načíst: ${esc(e.message)}</li>`; }
@@ -617,7 +620,11 @@ function prehravaniOvladani(el) {
     document.querySelectorAll('.prehravac').forEach((v) => { v.pause(); v.remove(); });
     // nahrávka je bez zvuku; muted je nutné, aby iPhone spustil přehrávání sám (jinak jen černý obraz)
     const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.preload = 'auto'; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
-    v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo telefon formát neumí).', 'crit');
+    v.onerror = async () => {   // server řekne proč (uzamčeno, smazáno); jinak je to formát videa. Range mimo začátek nejde do auditu.
+      let proc = 'telefon tenhle formát videa neumí (soubor na serveru je; klip se nejspíš nepřevedl na obyčejný MP4 – chybí ffmpeg?)';
+      try { const r = await fetch(v.src, { credentials: 'same-origin', headers: { range: 'bytes=1-1' } }); if (!(r.ok || r.status === 206)) { const j = await r.json().catch(() => ({})); proc = j.error || `server odpověděl HTTP ${r.status}`; } } catch { proc = 'server neodpovídá'; }
+      toast(`Nahrávku se nepodařilo přehrát: ${proc}`, 'crit');
+    };
     li.append(v);
   }; });
   el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {

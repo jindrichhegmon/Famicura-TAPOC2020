@@ -64,7 +64,8 @@ async function nactiNahravky(pid) {
       const vel = n.velikost ? ` · ${(n.velikost / 1048576).toFixed(1)} MB` : '';
       const stary = n.typ === 'kostra';   // záznam drátěného modelu z verzí 2.8–2.9 (jen ke stažení)
       const odemceno = n.odemklKdo ? ` · <span class="muted" title="rodina nahrávku odemkla${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}">odemkla rodina (${esc(n.odemklKdo)})</span>` : '';
-      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>`
+      // správce serveru (heslo hlavní aplikace) smí uzamčenou nahrávku odemknout sám – do historie kamery jde řádek „Správce serveru odemkl … (bez rodiny)“
+      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>${JA?.role === 'admin' ? ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" title="odemknout jako správce serveru (rodina to uvidí v historii)">Odemknout (správce)</button>` : ''}`
         : n.uloziste === 'server' ? `${stary ? '' : `<a href="#" data-prehrat="${esc(n.id)}" title="přehrát v aplikaci (přehrání jde do auditu)">▶ přehrát</a> · `}<a href="/api/nahravky/${encodeURIComponent(n.id)}/soubor?stahnout=1" download title="stáhnout soubor ${esc(n.nazev || '')} do počítače (stažení jde do auditu)">⬇ stáhnout</a> · <span class="muted">na serveru${stary ? ', starší záznam drátěného modelu' : ''}</span>${odemceno}` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`;
       return `<li data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${kde}${n.chyba ? '' : ` · <a href="#" class="muted" data-smazat="${esc(n.id)}" title="smazat nahrávku">smazat</a>`}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka. Nahrává se po události se zatrženým Nahrávat (sekce Nastavení) nebo tlačítkem Nahrát teď.</li>';
@@ -104,6 +105,15 @@ function ptzOvladani(box, pid) {
   }; });
 }
 
+/* Proč video nejde přehrát: server to řekne (uzamčeno 423, smazáno 410, 404), jinak je to formát. Range mimo začátek nejde do auditu. */
+async function procNejdePrehrat(src) {
+  try {
+    const r = await fetch(src, { credentials: 'same-origin', headers: { range: 'bytes=1-1' } });
+    if (r.ok || r.status === 206) return 'prohlížeč tenhle formát videa neumí (soubor na serveru je; klip se nejspíš nepřevedl na obyčejný MP4 – chybí ffmpeg?)';
+    const j = await r.json().catch(() => ({}));
+    return j.error || `server odpověděl HTTP ${r.status}`;
+  } catch { return 'server neodpovídá'; }
+}
 /* Přehrání nahrávky ze serveru přímo v seznamu (video pod řádkem) a smazání. */
 function prehravaniOvladani(el, pid) {
   el.querySelectorAll('[data-prehrat]').forEach((a) => { a.onclick = async (ev) => {
@@ -112,8 +122,17 @@ function prehravaniOvladani(el, pid) {
     if (stare) { stare.pause(); stare.remove(); return; }
     el.querySelectorAll('video').forEach((v) => { v.pause(); v.remove(); });
     const v = document.createElement('video'); v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true; v.className = 'prehravac'; v.src = `/api/nahravky/${encodeURIComponent(a.dataset.prehrat)}/soubor`;
-    v.onerror = () => toast('Nahrávku se nepodařilo přehrát (soubor už na serveru není, nebo prohlížeč formát neumí).', 'crit');
+    v.onerror = () => procNejdePrehrat(v.src).then((proc) => toast(`Nahrávku se nepodařilo přehrát: ${proc}`, 'crit'));
     li.append(v);
+  }; });
+  el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
+    if (!confirm('Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.')) return;
+    b.disabled = true;
+    try {
+      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      toast('Nahrávka je odemčená.'); nahravkyCache.delete(pid); nactiNahravky(pid);
+    } catch (e) { toast(`Odemknutí se nepodařilo: ${e.message}`, 'crit'); b.disabled = false; }
   }; });
   el.querySelectorAll('[data-smazat]').forEach((a) => { a.onclick = async (ev) => {
     ev.preventDefault();
