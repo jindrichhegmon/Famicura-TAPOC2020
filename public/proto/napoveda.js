@@ -364,6 +364,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.74 (13. 10. 2026)**: aplikace PéčeDoma se podle párovacího kódu prstenu dozví kameru klienta a otevře Famicura Kameru (nebo web rodiny) rovnou na ní; klientovi bez prstenu stačí do odkazu PéčeDoma přidat &kamera=ID_KAMERY.
 - **Verze 3.73 (13. 10. 2026)**: aplikace rodiny a mobilního dispečera jako samostatná aplikace pro iPhone **Famicura Kamera** (složka kamera-ios, TestFlight); aplikace PéčeDoma ji otevře místo webu, když je nainstalovaná, a tlačítko ‹ PéčeDoma vede zpět do PéčeDoma.
 - **Verze 3.72 (13. 10. 2026)**: oprava: dispečer, který je u kamery zároveň rodinou, v režimu Rodina nemohl vyřídit žádost poskytovatele o plný obraz (tlačítka Povolit na 15 min / Natrvalo / Odmítnout server odmítal). Teď žádost u své kamery vyřídí, u cizí kamery dál ne.
 - **Verze 3.71 (13. 10. 2026)**: odkaz z pozvánky otevře po nastavení hesla kameru, ke které pozvánka patří (dřív první kameru poskytovatele – u dispečera, který je zároveň rodinou, tak byla v aplikaci rodiny jiná kamera než v dispečinku). Aplikaci rodiny jde otevřít rovnou na kameře odkazem „/proto/rodina.html?kamera=ID_KAMERY“.

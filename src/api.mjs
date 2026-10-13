@@ -299,7 +299,8 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
           const vse = (await st.vypisMereni({ kameraId: z.kamera, limit: limit * 4 })).filter((r) => /^prsten-/.test(String(r.naramek || '')));
           const p = (await st.stav()).state.patients.find((x) => x.id === z.kamera);
           const pr = p?.prsten ? { nazev: p.prsten.nazev || '', posledni: p.prsten.posledni || null, baterie: p.prsten.baterie ?? null } : null;
-          return json({ ok: true, prsten: pr, mereni: slucMereni(vse).slice(0, limit).map(({ naramek, ...r }) => r) }, 200, { ...CORS_PRSTEN, 'Cache-Control': 'no-store' });
+          // kamera a poskytovatel: aplikace PéčeDoma si je zapamatuje a otevře Famicura Kameru rovnou na kameře klienta
+          return json({ ok: true, kamera: z.kamera, tenant: z.tenant, prsten: pr, mereni: slucMereni(vse).slice(0, limit).map(({ naramek, ...r }) => r) }, 200, { ...CORS_PRSTEN, 'Cache-Control': 'no-store' });
         } catch (e) { return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
       }
 

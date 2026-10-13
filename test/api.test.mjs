@@ -1295,6 +1295,7 @@ test('prsten z aplikace klienta: párovací kód (dispečink vytvoří, pošle S
   b = await r.json(); assert.equal(r.status, 200, JSON.stringify(b)); assert.equal(r.headers.get('access-control-allow-origin'), '*');
   assert.ok(b.mereni.some((x) => x.tep === 71) && b.mereni.some((x) => x.spo2 === 96)); assert.ok(b.mereni.every((x) => !('naramek' in x)));
   assert.equal(b.prsten.nazev, 'R06_AB12'); assert.equal(b.prsten.baterie, 70); assert.ok(b.prsten.posledni > 0);
+  assert.equal(b.kamera, 'tapoc2020'); assert.equal(b.tenant, T, 'PéčeDoma se podle kódu dozví kameru i poskytovatele');
   assert.equal((await h(new Request('http://x/api/prsten/mereni'))).status, 401, 'bez kódu nic');
   assert.equal((await h(new Request('http://x/api/prsten/mereni', { headers: { 'x-prsten-klic': 'ABCD-EFGH-JKL2' } }))).status, 401, 'cizí kód nic');
   // rodina kód nespravuje; zrušení kódu → měření kódem končí

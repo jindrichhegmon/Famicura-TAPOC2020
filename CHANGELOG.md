@@ -5,6 +5,12 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.74 · 13. 10. 2026 · PéčeDoma zná kameru klienta
+
+- `GET /api/prsten/mereni` (párovací kód) vrací i `kamera` a `tenant`: PéčeDoma (3.6.2) si je uloží a
+  do odkazu na aplikaci rodiny i do `famicurakamera://otevrit` dává `kamera=ID`, takže se otevře kamera
+  klienta, ne první kamera účtu. Klient bez prstenu: odkaz PéčeDoma s `&kamera=ID_KAMERY` (a `&tenant=`).
+
 ## 3.73 · 13. 10. 2026 · Famicura Kamera jako aplikace pro iPhone
 
 - Nová složka `kamera-ios/`: aplikace **Famicura Kamera** (Capacitor, Bundle ID `cz.famicura.kamera`) –
