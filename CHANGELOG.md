@@ -5,6 +5,13 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.77 · 13. 10. 2026 · odkaz na kameru pro PéčeDoma
+
+- Dispečink, Komunikace → Uživatelé rodiny: **Odkaz na kameru pro PéčeDoma** (`…/proto/rodina.html?tenant=…&kamera=ID`)
+  s tlačítkem Kopírovat. Kamera má svůj odkaz a jde otevřít i bez PéčeDoma; v aplikaci PéčeDoma (3.7.0) se odkazy
+  kamer klienta zapisují ručně (Kamera a náramek → Upravit kamery, heslo hlavní aplikace), víc kamer = výběr ze seznamu.
+  Rodinu určuje telefon: v odkazu se přihlásí telefonem a heslem účtu rodiny, který k té kameře je.
+
 ## 3.76 · 13. 10. 2026 · ‹ PéčeDoma předá kameru
 
 - `public/proto/z-aplikace.js`: tlačítko „‹ PéčeDoma“ vrací do PéčeDoma s `?kamera=ID&tenant=…` (u schématu
