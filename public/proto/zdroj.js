@@ -3,10 +3,16 @@
  * ve svém režimu (bez obrazu, drátěný model, rozostření, plný obraz, kombinace).
  * Obraz se sjednává jednou (WebRTC přes /api/stream), drátěný model se počítá
  * jednou (MediaPipe) a sdílí se. Když kamera není k dispozici (bez přihlášení,
- * kamera offline), kreslí se náhradní scéna s animovanou postavou, aby šlo
- * prostředí předvést i bez ní.
+ * kamera offline), kreslí se náhradní scéna; animovaná ukázková postava v ní
+ * je jen v ukázce bez serveru (`ukazka: true`), u skutečné kamery se bez obrazu
+ * žádná postava nekreslí.
+ *
+ * Drátěný model přes skutečný obraz: jen postava, kterou model skutečně
+ * rozpoznal (jePostava – vidět trup a dost bodů), vyhlazená filtrem One Euro,
+ * a jen z čerstvého snímku; zamrzlý obraz, nerozpoznaná postava nebo přepnutí
+ * režimu kostru smažou a plátno napíše „postava nerozpoznána“.
  */
-import { drawBackground, drawSkeleton } from '/analyzer.js';
+import { drawBackground, drawSkeleton, jePostava, Vyhlazovac } from '/analyzer.js';
 
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest';
 const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -70,7 +76,7 @@ async function waitForIce(pc) {
   });
 }
 
-export function createSource({ deviceId = 'tapoc2020' } = {}) {
+export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
   const video = document.createElement('video');
   video.muted = true; video.playsInline = true; video.autoplay = true;
   video.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:-10px;top:-10px';
@@ -80,6 +86,9 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
   const tiles = new Set();          // { canvas, ctx, small, sctx, getMode }
   const listeners = new Set();
   let pc = null, landmarker = null, connections = SYN_CONNECTIONS, poseTried = false, lastDetect = 0, raf = null;
+  const filtr = new Vyhlazovac();
+  let lastCT = -1, lastFrameAt = 0;     // čerstvost obrazu: zamrzlý snímek není postava
+  const zrusKostru = () => { if (st.landmarks) st.landmarks = null; st.landmarksSynthetic = false; filtr.reset(); };
 
   const notify = () => listeners.forEach((f) => f(st));
 
@@ -178,8 +187,9 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
       const mod = await import(MP);
       const vision = await mod.FilesetResolver.forVisionTasks(MP + '/wasm');
       landmarker = await mod.PoseLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'GPU' },
-        runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5 });
+        // model „full“ (jako hlavní aplikace): přesnější body než „lite“, na telefonu i notebooku s GPU stále stíhá 12 snímků/s
+        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate: 'GPU' },
+        runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .6, minTrackingConfidence: .6 });
       connections = mod.PoseLandmarker.POSE_CONNECTIONS;
       st.poseState = 'ready';
     } catch (e) {
@@ -204,21 +214,25 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
   function render(now) {
     raf = requestAnimationFrame(render);
     const live = !st.synthetic && video.readyState >= 2;
-    if (live) st.frames++;
+    if (live) { st.frames++; if (video.currentTime !== lastCT) { lastCT = video.currentTime; lastFrameAt = now; } }
     if (needsPose()) {
       if (live) {
         ensurePose();
         // Přes skutečný obraz jen skutečná postava z MediaPipe: ukázková postava z náhradní scény se sem nikdy nepřenese
         // (dokud se model načítá nebo není k dispozici, kostra se nekreslí a plátno to napíše).
-        if (st.landmarksSynthetic) { st.landmarks = null; st.landmarksSynthetic = false; }
-        if (landmarker && now - lastDetect > 80) {
+        if (st.landmarksSynthetic) zrusKostru();
+        if (now - lastFrameAt > 2000) zrusKostru();   // obraz stojí (síť, zamrzlý přehrávač): stará kostra by lhala
+        else if (landmarker && now - lastDetect > 80) {
           lastDetect = now;
-          try { const r = landmarker.detectForVideo(video, now); st.landmarks = r.landmarks?.[0] || null; } catch { /* a frame lost */ }
+          try {
+            const r = landmarker.detectForVideo(video, now), lm = r.landmarks?.[0];
+            if (lm && jePostava(lm)) st.landmarks = filtr.push(lm, now); else zrusKostru();
+          } catch { /* a frame lost */ }
         }
-      } else {
+      } else if (ukazka) {
         st.landmarks = syntheticPose(now, st.syntheticPose); st.landmarksSynthetic = true; connections = SYN_CONNECTIONS;
-      }
-    } else if (st.landmarks) st.landmarks = null;
+      } else zrusKostru();   // skutečná kamera bez obrazu: žádná postava, žádný model
+    } else if (st.landmarks) zrusKostru();
     for (const t of tiles) {
       const mode = t.getMode();
       const cv = t.canvas;
@@ -242,12 +256,12 @@ export function createSource({ deviceId = 'tapoc2020' } = {}) {
         if (st.landmarks) drawSkeleton(ctx, cv, st.landmarks, connections);
         else {
           ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = `${Math.round(w / 34)}px sans-serif`; ctx.textAlign = 'center';
-          ctx.fillText(st.poseState === 'unavailable' ? 'drátěný model není k dispozici (model postavy se nenačetl)' : st.poseState === 'loading' ? 'načítám model postavy…' : 'postava nerozpoznána', w / 2, h - w / 30);
+          ctx.fillText(!live ? 'kamera nedostupná – drátěný model se nekreslí' : st.poseState === 'unavailable' ? 'drátěný model není k dispozici (model postavy se nenačetl)' : st.poseState === 'loading' ? 'načítám model postavy…' : 'postava nerozpoznána', w / 2, h - w / 30);
         }
       }
       if (!live && base !== 'black') {
         ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `${Math.round(w / 44)}px sans-serif`; ctx.textAlign = 'left';
-        ctx.fillText('náhradní scéna – kamera nedostupná' + (mode === 'blurskel' || mode === 'fullskel' || mode === 'skeleton' ? ' (postava je jen ukázková)' : ''), 10, h - 10);
+        ctx.fillText('náhradní scéna – kamera nedostupná' + (ukazka && wantSkel ? ' (postava je jen ukázková)' : ''), 10, h - 10);
       }
     }
   }

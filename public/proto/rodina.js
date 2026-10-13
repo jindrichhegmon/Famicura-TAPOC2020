@@ -58,7 +58,7 @@ function showGate(co) {
 function hideGate() { $('gate').classList.add('hide'); document.body.classList.remove('gated'); document.body.classList.remove('pending'); }
 
 function startSource(deviceId) {
-  src = createSource({ deviceId });
+  src = createSource({ deviceId, ukazka: !sim.naServeru });   // ukázková postava jen v ukázce bez serveru
   window.__zdroj = src;
   src.register($('cv'), viewMode);
   src.connect();

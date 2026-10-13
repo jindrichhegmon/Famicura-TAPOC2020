@@ -22,6 +22,7 @@ Každá dlaždice ukazuje kameru v režimu, který povolila rodina. Štítek na 
 - **Rozostření** – obraz je rozmazaný, postava je rozeznatelná jen podle obrysu.
 - **Drátěný model** – jen kostra postavy, bez obrazu.
 - Tlačítkem **🦴 Drátěný model** v liště nad dlaždicemi si dispečer sám přidá kostru postavy přes plný nebo rozostřený obraz ve všech dlaždicích i v detailu (u „bez obrazu“ se nekreslí). Volba se pamatuje v prohlížeči.
+- Kostra se kreslí **jen když model postavu skutečně rozpoznal** (vidí trup a dost bodů). Když nikoho nevidí, plátno píše „postava nerozpoznána“ a žádná kostra se nekreslí – ani stará, ani ukázková. Stejně tak při nedostupné kameře („kamera nedostupná – drátěný model se nekreslí“) a při zamrzlém obrazu. Kostra je vyhlazená, aby se v klidu netřásla.
 - **Bez obrazu** – obraz se nekreslí, chodí jen události.
 
 ### Kdo režim nastavuje
@@ -362,6 +363,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.65 (13. 10. 2026)**: drátěný model ve všech aplikacích (dispečink, rodina, mobilní dispečer, hlavní aplikace) se kreslí jen u skutečně rozpoznané postavy – při „postava nerozpoznána“, nedostupné kameře nebo zamrzlém obraze se žádná kostra nekreslí (ukázková postava zůstává jen v ukázce bez serveru). Přelud na prázdné místnosti se nepočítá za postavu ani v analýze. Kostra je přesnější (model „full“) a vyhlazená, v klidu se netřese.
 - **Verze 3.64 (12. 10. 2026)**: nápověda doplněná o poslední novinky (prsten přes aplikaci PéčeDoma Prsten na iPhonu, náramek jen s naměřenými hodnotami, mobilní dispečer a režim Rodina). SMS s párovacím kódem prstenu obsahuje kód pro aplikaci PéčeDoma Prsten.
 - **Verze 3.63 (12. 10. 2026)**: rodina i klient mají jedinou aplikaci PéčeDoma: kamera a náramek se otevírají přímo v ní (dlaždice Kamera a náramek), nahoře je tlačítko ‹ PéčeDoma zpět. Rodina se přihlašuje stejně jako dřív telefonem a heslem.
 - **Verze 3.62 (12. 10. 2026)**: u náramku jsou v tabulce, grafech i v Excelu jen hodnoty, které náramek opravdu naměřil – bez prázdných sloupců a grafů.

@@ -37,6 +37,60 @@ function fmtDuration(sec) {
 }
 
 function at(lm, i) { return lm?.[i] || null; }
+
+/*
+ * Postava, ne přelud. MediaPipe při sledování videa umí na prázdnou místnost (stín, záclona,
+ * polštář) vrátit „postavu“ s body o nízké viditelnosti. Taková se nekreslí ani nevyhodnocuje:
+ * postava je uznána, jen když je vidět trup (obě ramena nebo oba boky) a dost bodů celkem.
+ * Stejné pravidlo platí v hlavní aplikaci, v dispečinku i u rodiny.
+ */
+export const VIDITELNOST_MIN = 0.5;
+const POSTAVA_BODU_MIN = 8;      // z 33 bodů modelu
+const vis = (q) => (q?.visibility ?? 1);
+export function jePostava(lm) {
+  if (!Array.isArray(lm) || lm.length < 29) return false;
+  const trup = (vis(lm[L_SHOULDER]) >= VIDITELNOST_MIN && vis(lm[R_SHOULDER]) >= VIDITELNOST_MIN)
+            || (vis(lm[L_HIP]) >= VIDITELNOST_MIN && vis(lm[R_HIP]) >= VIDITELNOST_MIN);
+  if (!trup) return false;
+  let n = 0;
+  for (const q of lm) if (vis(q) >= VIDITELNOST_MIN && q.x > -0.2 && q.x < 1.2 && q.y > -0.2 && q.y < 1.2) n++;
+  return n >= POSTAVA_BODU_MIN;
+}
+
+/*
+ * Vyhlazení drátěného modelu (filtr „One Euro“, Casiez 2012): v klidu se body třesou o pár
+ * pixelů, při pohybu nesmí model zaostávat. Mezní kmitočet proto roste s rychlostí bodu:
+ * pomalý bod se vyhladí silně, rychlý se kreslí skoro tak, jak přišel. Souřadnice jsou
+ * v podílu obrazu (0–1), čas v ms. Po ztrátě postavy se filtr nuluje, aby stará poloha
+ * nepřitahovala novou.
+ */
+export class Vyhlazovac {
+  constructor({ minCutoff = 1.5, beta = 5, dCutoff = 1 } = {}) {
+    this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff;
+    this.reset();
+  }
+  reset() { this.prev = null; this.dprev = null; this.t = 0; }
+  push(lm, tMs) {
+    if (!lm) { this.reset(); return null; }
+    const dt = this.prev && tMs > this.t ? Math.min(0.5, (tMs - this.t) / 1000) : 0;
+    const alpha = (cutoff) => { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); };
+    const out = new Array(lm.length), dnow = new Array(lm.length);
+    for (let i = 0; i < lm.length; i++) {
+      const q = lm[i];
+      if (!q) { out[i] = q; dnow[i] = null; continue; }
+      const p = this.prev?.[i], d0 = this.dprev?.[i];
+      if (!p || !dt) { out[i] = { ...q }; dnow[i] = { x: 0, y: 0 }; continue; }
+      const ad = alpha(this.dCutoff);
+      const dx = (q.x - p.x) / dt, dy = (q.y - p.y) / dt;
+      const dxh = d0 ? d0.x + ad * (dx - d0.x) : dx, dyh = d0 ? d0.y + ad * (dy - d0.y) : dy;
+      const ax = alpha(this.minCutoff + this.beta * Math.abs(dxh)), ay = alpha(this.minCutoff + this.beta * Math.abs(dyh));
+      out[i] = { ...q, x: p.x + ax * (q.x - p.x), y: p.y + ay * (q.y - p.y) };
+      dnow[i] = { x: dxh, y: dyh };
+    }
+    this.prev = out; this.dprev = dnow; this.t = tMs;
+    return out;
+  }
+}
 function mid(a, b) { return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null; }
 
 export function features(lm) {

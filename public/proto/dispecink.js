@@ -356,7 +356,7 @@ $('odhlasit').onclick = async () => { await fetch('/api/rodina/odhlaseni', { met
 const zdroje = new Map();
 function zdrojPro(deviceId) {
   let z = zdroje.get(deviceId);
-  if (!z) { z = createSource({ deviceId }); zdroje.set(deviceId, z); z.connect(); }
+  if (!z) { z = createSource({ deviceId, ukazka: !sim.naServeru }); zdroje.set(deviceId, z); z.connect(); }   // ukázková postava jen v ukázce bez serveru
   return z;
 }
 const prvniKamera = () => (JA?.kamery?.[0]?.id) || (sim.naServeru ? null : (sim.state.patients.find((p) => p.real)?.id || 'tapoc2020'));

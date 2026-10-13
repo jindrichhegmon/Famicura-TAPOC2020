@@ -5,7 +5,7 @@
  * Everything shared - the analysis log, the recordings list, CLB1, the folder
  * and the scheduler - stays in index.html and is reached through callbacks.
  */
-import { LiveAnalyzer, fmtTime, fmtClock, fmtSize, drawBackground, drawSkeleton } from '/analyzer.js';
+import { LiveAnalyzer, fmtTime, fmtClock, fmtSize, drawBackground, drawSkeleton, jePostava, Vyhlazovac } from '/analyzer.js';
 import { WATCH_EVENTS, WatchFilter, defaultWatch, describeWatch, recordSeconds, preRollSeconds } from '/watch.js';
 
 const ICE = [{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
@@ -118,7 +118,7 @@ async function createLandmarker() {
         delegate: 'GPU'
       },
       runningMode: 'VIDEO', numPoses: 1,
-      minPoseDetectionConfidence: .55, minPosePresenceConfidence: .55, minTrackingConfidence: .55
+      minPoseDetectionConfidence: .55, minPosePresenceConfidence: .6, minTrackingConfidence: .6
     });
     return { landmarker, connections: mod.PoseLandmarker.POSE_CONNECTIONS };
   } catch (e) {
@@ -202,6 +202,7 @@ export class CameraView {
     this.analysisStarting = false;
     this.analysisBroken = false;          // failed on this machine: do not keep retrying on every reconnect
     this.skeleton = loadSkeletonPref();   // draw the pose over the picture
+    this.filtr = new Vyhlazovac();        // vyhlazení kreslené kostry (analýza dostává body nevyhlazené)
     this.detectFailures = 0;
     this.detectOff = false;               // set when the pose model keeps failing
     this.landmarker = null;
@@ -1138,8 +1139,12 @@ export class CameraView {
       return;
     }
 
-    const lm = result.landmarks?.[0] || null;
-    if (lm && this.showSkeleton()) drawSkeleton(this.cctx, this.el.canvas, lm, this.connections);
+    // Jen rozpoznaná postava (vidět trup a dost bodů): přelud na prázdné místnosti se nekreslí
+    // a pro analýzu platí jako „nikdo v obraze“.
+    let lm = result.landmarks?.[0] || null;
+    if (lm && !jePostava(lm)) lm = null;
+    const hladke = this.filtr.push(lm, performance.now());
+    if (hladke && this.showSkeleton()) drawSkeleton(this.cctx, this.el.canvas, hladke, this.connections);
     if (this.analyzing) this.analyzer.push((Date.now() - this.analysisStartedAt) / 1000, lm);
   }
 

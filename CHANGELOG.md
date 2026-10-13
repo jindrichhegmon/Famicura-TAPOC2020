@@ -5,6 +5,25 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.65 · 13. 10. 2026 · drátěný model jen u rozpoznané postavy, přesnější a vyhlazený
+
+- **Žádná kostra bez postavy** – ve všech aplikacích s obrazem (dispečink, rodina a mobilní
+  dispečer přes `public/proto/zdroj.js`, hlavní aplikace přes `public/camera-view.js`):
+  - `jePostava(lm)` v `public/analyzer.js`: postava je uznána, jen když model vidí trup
+    (obě ramena nebo oba boky s viditelností ≥ 0,5) a aspoň 8 bodů v obraze. Přelud, který
+    MediaPipe při sledování vrací na prázdnou místnost (stín, záclona), se nekreslí a v hlavní
+    aplikaci platí pro analýzu jako „nikdo v obraze“ (po 2 s „Ztráta detekce postavy“).
+  - Zamrzlý obraz (přes 2 s žádný nový snímek) kostru smaže – stará poloha by lhala.
+  - **Skutečná kamera bez obrazu nekreslí ukázkovou postavu.** Animovaná postava náhradní scény
+    je jen v ukázce bez serveru (`createSource({ ukazka: true })`, dispečink i rodina předávají
+    `!sim.naServeru`). Na serveru plátno píše „kamera nedostupná – drátěný model se nekreslí“.
+  - Prahy modelu: `minPosePresenceConfidence` a `minTrackingConfidence` 0,6 (dřív 0,5/0,55).
+- **Kvalita kostry**: dispečink a rodina používají model `pose_landmarker_full` jako hlavní
+  aplikace (dřív `lite`); kreslené body vyhlazuje filtr One Euro (`Vyhlazovac` v
+  `analyzer.js`: v klidu tlumí třes, při rychlém pohybu nezaostává; po ztrátě postavy se
+  nuluje). Analýza pádu v hlavní aplikaci dostává body nevyhlazené.
+- Nápověda: téma Dlaždice a režimy obrazu + Co je nové. Testy: `test/postava.test.mjs`.
+
 ## 3.64 · 12. 10. 2026 · nápověda podle posledních novinek, SMS s kódem pro aplikaci PéčeDoma Prsten
 
 - Nápověda dispečinku: téma Prsten přepsané (aplikace PéčeDoma Prsten na iPhonu, sběr
