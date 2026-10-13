@@ -321,6 +321,9 @@ let dtab = null;                    // otevřená agenda detailu: monitoring | n
 const seen = new Set(sim.state.events.map((e) => e.id));
 const tileRegs = new Map();          // patientId → unregister
 let detailUnreg = null;
+// Počítač (myš, ne telefon ani tablet): detail smí použít přesnější model postavy „heavy“; zdroj se sám vrátí k „full“, když nestíhá.
+const POCITAC = !!(window.matchMedia?.('(pointer: fine)').matches && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+const popisModelu = (s) => s.modelPozn || (s.model === 'heavy' ? `přesný model postavy (heavy${s.modelDoba ? `, ${s.modelDoba} ms na snímek` : ''})` : `běžný model postavy (full${s.modelDoba ? `, ${s.modelDoba} ms na snímek` : ''})`);
 
 /* Bez přihlášení se přihlašuje rovnou tady (heslo Famicura), ne oklikou přes
  * hlavní aplikaci. Po přihlášení se stránka načte znovu: obraz, stav ze
@@ -543,10 +546,10 @@ function renderQueue() {
 function renderDetail(rebuild = false) {
   if (!zobrazuj) return;
   const d = $('detail');
-  if (!selected) { d.classList.add('hide'); document.body.classList.remove('agenda-otevrena'); delete d.dataset.kamera; return; }
+  if (!selected) { d.classList.add('hide'); document.body.classList.remove('agenda-otevrena'); delete d.dataset.kamera; detailUnreg?.(); detailUnreg = null; return; }   // zavřený detail nekreslí a vrací běžný model
   const p = sim.patient(selected); if (!p) return;
   d.classList.remove('hide');
-  if (rebuild || !d.querySelector('canvas')) {
+  if (rebuild || !d.querySelector('canvas') || !detailUnreg) {
     detailUnreg?.(); 
     if (d.dataset.kamera !== p.id) dtab = null;   // jiná kamera: začít výběrem agend
     d.dataset.kamera = p.id;
@@ -569,7 +572,7 @@ function renderDetail(rebuild = false) {
       <section class="dsec" data-sec="monitoring">
         <div class="blok"><h3>Obraz z kamery</h3>
         <div class="stage"><canvas id="dcv"></canvas><span class="tag" id="dtag"></span>${p.real && sim.naServeru ? `<div class="ptz" id="dptz" title="otočení kamery (Tapo pan/tilt)"><button type="button" data-ptz="up" aria-label="nahoru">▲</button><button type="button" data-ptz="left" aria-label="doleva">◀</button><button type="button" data-ptz="home" aria-label="výchozí poloha">⌂</button><button type="button" data-ptz="right" aria-label="doprava">▶</button><button type="button" data-ptz="down" aria-label="dolů">▼</button></div><button type="button" class="svetlo hide" id="dsvetlo" title="světlo kamery (reflektor): rozsvítit / zhasnout">💡 <span>Světlo</span></button>` : ''}</div>
-        <div class="modebar"><span class="small" id="dmode"></span><button type="button" class="sm" id="ovl" aria-pressed="true" title="kostra postavy spočítaná v prohlížeči přes plný nebo rozostřený obraz (model MediaPipe); nezapisuje se, jen zobrazení">🦴 Drátěný model přes obraz: zapnuto</button></div>
+        <div class="modebar"><span class="small" id="dmode"></span><button type="button" class="sm" id="ovl" aria-pressed="true" title="kostra postavy spočítaná v prohlížeči přes plný nebo rozostřený obraz (model MediaPipe); nezapisuje se, jen zobrazení">🦴 Drátěný model přes obraz: zapnuto</button><span class="small muted" id="dmodel" title="na počítači používá detail přesnější model postavy (heavy); když nestíhá, vrátí se k běžnému (full)"></span></div>
         <div class="akce" id="dbtn"></div>
         </div><div class="blok"><h3>Přidat poznámku</h3><p class="small muted">– datum, čas a jméno se doplní samy; jde do logu kamery, rodina ji nevidí</p>
         <div class="notes"><textarea id="dnote" maxlength="1000" placeholder="Např. Volala dcera, klient v pořádku, kontrola zítra ráno."></textarea><div class="akce"><button class="sm" id="dnoteAdd">Přidat poznámku</button><span class="small muted" id="dnoteKdo"></span></div></div>
@@ -658,7 +661,12 @@ function renderDetail(rebuild = false) {
         <table class="watch"><thead><tr><th>Událost</th><th>Hlídat</th><th>Jen v hodinách</th><th>Nahrávat</th><th>SMS komu</th><th>E-mail komu</th></tr></thead><tbody id="dwatch"><tr class="vychozi" id="dwatchVychozi" title="Výchozí hodnoty: nastavte je tady a výběrem Vše je dosadíte do všech událostí (každý sloupec zvlášť); Bez u všech událostí zruší"><td><b>Výchozí</b><br><span class="small muted">šablona pro Vše / Bez</span></td><td><select class="vychozi-sel" data-col="on" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><input type="checkbox" class="on"></td><td class="hod"><select class="vychozi-sel" data-col="hod" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><div class="okno">${casSelect('from')} – ${casSelect('to')} <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide">${casSelect('from2')} – ${casSelect('to2')}</div><div class="okno hide">${casSelect('from3')} – ${casSelect('to3')}</div></td><td><select class="vychozi-sel" data-col="rec" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><input type="checkbox" class="rec"></td><td><select class="vychozi-sel" data-col="sms" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><div class="prij" data-t="sms"></div></td><td><select class="vychozi-sel" data-col="mail" title="Vše = dosadit výchozí hodnotu do všech událostí, Bez = u všech událostí zrušit"><option value="">Vše / Bez…</option><option value="vse">Vše – dosadit všude</option><option value="bez">Bez – zrušit všude</option></select><div class="prij" data-t="mail"></div></td></tr>${WATCH_KINDS.map((k) => `<tr data-k="${k}"><td>${esc(KINDS[k].label)} <span class="badge ${KINDS[k].level}">${esc(KINDS[k].source)}</span></td><td><input type="checkbox" class="on"></td><td class="hod"><div class="okno">${casSelect('from')} – ${casSelect('to')} <button type="button" class="sm sec okno-dalsi" title="přidat další časové okno (až tři, např. 07:00–08:00, 12:00–13:00, 19:00–20:00)">+</button></div><div class="okno hide">${casSelect('from2')} – ${casSelect('to2')}</div><div class="okno hide">${casSelect('from3')} – ${casSelect('to3')}</div></td><td><input type="checkbox" class="rec"></td><td class="prij" data-t="sms"></td><td class="prij" data-t="mail"></td></tr>`).join('')}</tbody></table>
         <p class="small muted" id="dwatchPozn"></p>
       </div></section>`;
-    detailUnreg = zdrojPro(p.id).register(d.querySelector('#dcv'), () => detailMode(selected));
+    {
+      const z = zdrojPro(p.id), unreg = z.register(d.querySelector('#dcv'), () => detailMode(selected));
+      const unChange = z.onChange((s) => { const el = d.querySelector('#dmodel'); if (el) el.textContent = popisModelu(s); });
+      if (POCITAC) z.setModel('heavy');
+      detailUnreg = () => { unreg(); unChange(); z.setModel('full'); };   // zavřený detail: dlaždice zase běžným modelem
+    }
     const tabs = d.querySelector('#dtabs');
     const NAZVY_AGEND = { monitoring: '👁 Monitoring', naramek: '⌚ Náramek', prsten: '💍 Prsten', komunikace: '💬 Komunikace a kontakty', nastaveni: '⚙ Nastavení alertů' };
     const ukazTab = (t, posun = true) => {

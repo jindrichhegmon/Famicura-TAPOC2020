@@ -203,6 +203,7 @@ export class CameraView {
     this.analysisBroken = false;          // failed on this machine: do not keep retrying on every reconnect
     this.skeleton = loadSkeletonPref();   // draw the pose over the picture
     this.filtr = new Vyhlazovac();        // vyhlazení kreslené kostry (analýza dostává body nevyhlazené)
+    this.kostra = null; this.kostraDo = 0; // poslední kostra se podrží 300 ms přes krátký výpadek detekce (méně blikání)
     this.detectFailures = 0;
     this.detectOff = false;               // set when the pose model keeps failing
     this.landmarker = null;
@@ -1143,8 +1144,10 @@ export class CameraView {
     // a pro analýzu platí jako „nikdo v obraze“.
     let lm = result.landmarks?.[0] || null;
     if (lm && !jePostava(lm)) lm = null;
-    const hladke = this.filtr.push(lm, performance.now());
-    if (hladke && this.showSkeleton()) drawSkeleton(this.cctx, this.el.canvas, hladke, this.connections);
+    const ted = performance.now(), hladke = this.filtr.push(lm, ted);
+    if (hladke) { this.kostra = hladke; this.kostraDo = ted + 300; }
+    else if (ted > this.kostraDo) this.kostra = null;
+    if (this.kostra && this.showSkeleton()) drawSkeleton(this.cctx, this.el.canvas, this.kostra, this.connections);
     if (this.analyzing) this.analyzer.push((Date.now() - this.analysisStartedAt) / 1000, lm);
   }
 

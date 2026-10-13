@@ -15,6 +15,14 @@
 import { drawBackground, drawSkeleton, jePostava, Vyhlazovac } from '/analyzer.js';
 
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest';
+/* Modely postavy: „full“ je výchozí všude (jako hlavní aplikace); „heavy“ je přesnější, ale 2–3× pomalejší,
+ * proto ho dispečink zapíná jen v detailu na počítači – a když ani tam nestíhá, zdroj se sám vrátí k „full“. */
+const MODELY = {
+  full:  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+  heavy: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task',
+};
+const HEAVY_POMALY_MS = 150;     // průměr na snímek, nad který se heavy vzdá
+const PODRZENI_MS = 300;         // krátký výpadek detekce kostru nesmaže (méně blikání)
 const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 export const MODES = {
@@ -82,12 +90,15 @@ export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
   video.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:-10px;top:-10px';
   document.body.appendChild(video);
 
-  const st = { status: 'idle', error: null, landmarks: null, landmarksSynthetic: false, poseState: 'none', synthetic: true, syntheticPose: null, frames: 0, path: null, auth: null, zpozdeni: 0 };
+  const st = { status: 'idle', error: null, landmarks: null, landmarksSynthetic: false, poseState: 'none', synthetic: true, syntheticPose: null, frames: 0, path: null, auth: null, zpozdeni: 0,
+    model: 'full', modelDoba: 0, modelPozn: null };   // model postavy, průměrná doba výpočtu na snímek (ms), poznámka (heavy se vzdal)
   const tiles = new Set();          // { canvas, ctx, small, sctx, getMode }
   const listeners = new Set();
   let pc = null, landmarker = null, connections = SYN_CONNECTIONS, poseTried = false, lastDetect = 0, raf = null;
   const filtr = new Vyhlazovac();
   let lastCT = -1, lastFrameAt = 0;     // čerstvost obrazu: zamrzlý snímek není postava
+  let lastPostavaAt = 0;                // poslední rozpoznaná postava: do PODRZENI_MS se kostra podrží
+  let dobaPrumer = 0, detekci = 0, heavyPomaly = false, nactenyModel = null;   // nactenyModel: který model se načítá/načetl
   const zrusKostru = () => { if (st.landmarks) st.landmarks = null; st.landmarksSynthetic = false; filtr.reset(); };
 
   const notify = () => listeners.forEach((f) => f(st));
@@ -181,14 +192,14 @@ export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
 
   async function ensurePose() {
     if (landmarker || poseTried) return;
-    poseTried = true;
+    poseTried = true; nactenyModel = st.model;
     st.poseState = 'loading'; notify();
     try {
       const mod = await import(MP);
       const vision = await mod.FilesetResolver.forVisionTasks(MP + '/wasm');
       landmarker = await mod.PoseLandmarker.createFromOptions(vision, {
         // model „full“ (jako hlavní aplikace): přesnější body než „lite“, na telefonu i notebooku s GPU stále stíhá 12 snímků/s
-        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate: 'GPU' },
+        baseOptions: { modelAssetPath: MODELY[st.model], delegate: 'GPU' },
         runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .6, minTrackingConfidence: .6 });
       connections = mod.PoseLandmarker.POSE_CONNECTIONS;
       st.poseState = 'ready';
@@ -196,6 +207,18 @@ export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
       st.poseState = 'unavailable'; st.error = st.error || ('Drátěný model nejde spočítat: ' + e.message);
     }
     notify();
+  }
+
+  /** Přepne model postavy (full / heavy). Načte se až při příštím snímku, takže full→heavy→full v jednom
+   *  překreslení (detail se jen znovu staví) nic nenačítá. Heavy, který se už jednou ukázal pomalý, se znovu nezapne. */
+  function setModel(m) {
+    if (!MODELY[m] || m === st.model || (m === 'heavy' && heavyPomaly)) return;
+    st.model = m; st.modelDoba = 0; notify();
+  }
+  function prepniModelKdyzTreba() {
+    if (!nactenyModel || nactenyModel === st.model) return;
+    try { landmarker?.close?.(); } catch { /* model už zavřený */ }
+    landmarker = null; poseTried = false; nactenyModel = null; dobaPrumer = 0; detekci = 0; zrusKostru();
   }
 
   function needsPose() { for (const t of tiles) { const m = t.getMode(); if (m === 'skeleton' || m === 'blurskel' || m === 'fullskel') return true; } return false; }
@@ -217,6 +240,7 @@ export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
     if (live) { st.frames++; if (video.currentTime !== lastCT) { lastCT = video.currentTime; lastFrameAt = now; } }
     if (needsPose()) {
       if (live) {
+        prepniModelKdyzTreba();
         ensurePose();
         // Přes skutečný obraz jen skutečná postava z MediaPipe: ukázková postava z náhradní scény se sem nikdy nepřenese
         // (dokud se model načítá nebo není k dispozici, kostra se nekreslí a plátno to napíše).
@@ -225,8 +249,18 @@ export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
         else if (landmarker && now - lastDetect > 80) {
           lastDetect = now;
           try {
+            const t0 = performance.now();
             const r = landmarker.detectForVideo(video, now), lm = r.landmarks?.[0];
-            if (lm && jePostava(lm)) st.landmarks = filtr.push(lm, now); else zrusKostru();
+            const doba = performance.now() - t0;
+            dobaPrumer = dobaPrumer ? dobaPrumer * 0.9 + doba * 0.1 : doba;
+            if (++detekci % 10 === 0) { st.modelDoba = Math.round(dobaPrumer); notify(); }
+            if (lm && jePostava(lm)) { st.landmarks = filtr.push(lm, now); lastPostavaAt = now; }
+            else if (now - lastPostavaAt > PODRZENI_MS) zrusKostru();   // krátký výpadek detekce kostru podrží, delší ji smaže
+            // heavy, který na tomhle počítači nestíhá, by zasekl celou stránku: zpátky na full
+            if (st.model === 'heavy' && detekci >= 20 && dobaPrumer > HEAVY_POMALY_MS) {
+              heavyPomaly = true; st.modelPozn = `přesný model (heavy) je na tomto počítači pomalý (${Math.round(dobaPrumer)} ms na snímek), používám běžný`;
+              setModel('full');
+            }
           } catch { /* a frame lost */ }
         }
       } else if (ukazka) {
@@ -278,6 +312,7 @@ export function createSource({ deviceId = 'tapoc2020', ukazka = false } = {}) {
       return () => tiles.delete(t);
     },
     onChange(f) { listeners.add(f); f(st); return () => listeners.delete(f); },
+    setModel,
     /** Synthetic scene only: force the figure's pose (standing, seated, lying) or null for its own rhythm. */
     setSyntheticPose(p) { st.syntheticPose = p; },
     stop() { if (raf !== null) cancelAnimationFrame(raf); raf = null; clearInterval(lagTimer); lagTimer = null; pc?.close(); pc = null; video.srcObject = null; video.removeAttribute('src'); },

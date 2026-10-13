@@ -5,6 +5,21 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.66 · 13. 10. 2026 · přesnější model postavy v detailu na počítači, kostra bez blikání
+
+- **Model „heavy“ v detailu dispečinku na počítači** (`public/proto/zdroj.js`: `MODELY`, `setModel()`,
+  `st.model`, `st.modelDoba`, `st.modelPozn`; `public/proto/dispecink.js`: `POCITAC` = jemný ukazatel
+  a ne mobilní prohlížeč). Otevřený detail přepne zdroj kamery na `pose_landmarker_heavy`, zavřený
+  ho vrátí na `full`; přepnutí se provede až při příštím snímku, takže znovupostavení detailu nic
+  nenačítá. Vedle tlačítka 🦴 je `#dmodel`: který model běží a průměrná doba na snímek. Když heavy
+  po 20 detekcích přesahuje 150 ms na snímek, zdroj se sám vrátí k full, napíše proč a heavy už
+  na té stránce nezapne. Dlaždice, telefony a hlavní aplikace zůstávají u full.
+- **Kostra se při krátkém výpadku detekce podrží 0,3 s** (`PODRZENI_MS` v `zdroj.js`,
+  `kostra`/`kostraDo` v `camera-view.js`): jeden ztracený snímek už neblikne; delší ztráta kostru
+  smaže jako dřív. Analýza pádu v hlavní aplikaci dostává stále skutečný stav (bez podržení).
+- Zavřený detail dispečinku se odhlásí od kreslení (dřív kreslil do schovaného plátna) a při
+  dalším otevření se znovu postaví.
+
 ## 3.65 · 13. 10. 2026 · drátěný model jen u rozpoznané postavy, přesnější a vyhlazený
 
 - **Žádná kostra bez postavy** – ve všech aplikacích s obrazem (dispečink, rodina a mobilní
