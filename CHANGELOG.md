@@ -5,6 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.68 · 13. 10. 2026 · dispečer v aplikaci rodiny je poskytovatel, ne rodina
+
+- `public/proto/rodina.js`: dispečer přihlášený v dispečinku účtem Péče doma plus (`ja.role === 'dispecer'`,
+  bez účtu rodiny) byl v aplikaci rodiny brán jako rodina: `jakoPoskytovatel()` hlídalo jen mobilního
+  dispečera (`ucet === 'dispecer'`), takže viděl plný obraz bez ohledu na souhlas rodiny, měl nastavení
+  a u uzamčené nahrávky tlačítko Odemknout, které server odmítl (403). Teď `jakoPoskytovatel()` i
+  `jsemRodina()` počítají s rolí `dispecer`: obraz podle `sim.effectiveMode`, `body.jenSleduje`,
+  žádost o plný obraz skrytá, u 🔒 jen text, kdo odemyká.
+- Správce serveru má i v aplikaci rodiny tlačítko **Odemknout (správce)** se svým potvrzením.
+
 ## 3.67 · 13. 10. 2026 · odemknutí uzamčené nahrávky správcem, důvod, proč nahrávka nejde přehrát
 
 - **Správce serveru odemkne uzamčenou nahrávku** (`POST /api/nahravky/:id/odemknout` i pro `role: 'admin'`):

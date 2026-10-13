@@ -19,7 +19,8 @@ let skel = zRezimu ? zRezimu[1] : localStorage.getItem(SKEL_KEY) !== '0';
 /** Mobilní dispečer u cizí kamery (ne své rodiny) vidí jen to, co rodina povolila poskytovateli – stejně jako
  *  dispečink na počítači: režim podle nastavení rodiny (den/noc, rychlé přepnutí, povolení na žádost);
  *  drátěný model si může přidat jen k plnému nebo rozostřenému obrazu. Rodina si u své kamery volí zobrazení sama. */
-const jakoPoskytovatel = () => JA.ucet === 'dispecer' && !jsemRodina(patientId);
+// poskytovatel v aplikaci rodiny: mobilní dispečer (účet rodiny s rolí dispecer) i dispečer přihlášený v dispečinku (účet Péče doma plus)
+const jakoPoskytovatel = () => (JA.ucet === 'dispecer' || JA.role === 'dispecer') && !jsemRodina(patientId);
 function rezimPoskytovatele() {
   const m = sim.effectiveMode(patientId);
   return m === 'full' || m === 'blur' || m === 'skeleton' ? m : 'none';
@@ -99,7 +100,7 @@ function boot(ja) {
   const dispecerMobil = ja.role === 'rodina' && ja.ucet === 'dispecer' && JA.rezim === 'dispecer';
   if (obeRole && JA.rezim === 'rodina') FAMILY = (ja.rodinaKamery || []).filter((id) => FAMILY.includes(id));   // režim Rodina: jen kamery, kde je rodina
   document.body.classList.toggle('dispecer', dispecerMobil);
-  document.body.classList.toggle('jenSleduje', dispecerMobil);
+  document.body.classList.toggle('jenSleduje', dispecerMobil || ja.role === 'dispecer');   // dispečer (mobilní i z dispečinku) jen sleduje
   $('dispecerPruh').classList.toggle('hide', !dispecerMobil);
   $('schemaCard').classList.toggle('hide', !dispecerMobil);
   $('rezimBox').classList.toggle('hide', !obeRole);
@@ -117,7 +118,7 @@ function boot(ja) {
     $('ucetInfo').textContent = `Přihlášen(a) jako ${ja.jmeno}, telefon ${ja.telefon}${posk ? ', poskytovatel ' + posk : ''}. ${ja.kamery.length ? '' : (ja.zprava || 'Poskytovatel vám zatím nepřiřadil kameru.')}`;
   } else {
     $('whoami').textContent = `${ja.jmeno || 'Poskytovatel'} · ${ja.role === 'dispecer' ? 'dispečink' : 'správce'}${posk ? ' · ' + posk : ''}`;
-    $('ucetInfo').textContent = ja.role === 'dispecer' ? `Jste přihlášeni jako dispečer (${ja.jmeno}). Vidíte aplikaci rodiny pro kamery poskytovatele ${posk}.` : 'Jste přihlášeni jako správce serveru. Vidíte aplikaci rodiny pro kamery zvoleného poskytovatele.';
+    $('ucetInfo').textContent = ja.role === 'dispecer' ? `Jste přihlášeni jako dispečer (${ja.jmeno}). Vidíte aplikaci rodiny pro kamery poskytovatele ${posk} – obraz tak, jak ho rodina povolila poskytovateli; nastavení, nahrávky a uzamčené nahrávky jen sledujete (odemyká rodina nebo správce serveru).` : 'Jste přihlášeni jako správce serveru. Vidíte aplikaci rodiny pro kamery zvoleného poskytovatele.';
     $('pwOpen').classList.add('hide');
   }
   if (!FAMILY.length) {
@@ -423,7 +424,7 @@ function ton() {
 }
 function renderZadost() {
   const el = $('zadost');
-  if (JA.ucet === 'dispecer' && !jsemRodina(patientId)) { el.classList.add('hide'); return; }   // žádost o plný obraz vyřizuje rodina, ne mobilní dispečer
+  if (jakoPoskytovatel()) { el.classList.add('hide'); return; }   // žádost o plný obraz vyřizuje rodina, ne dispečer
   const r = sim.state.requests.find((x) => x.patientId === patientId && !zadostZavrene.has(x.id) && (x.state === 'čeká' || (x.state === 'vypršelo' && zadostZobrazena === x.id)));
   if (!r) { el.classList.add('hide'); zadostZobrazena = null; return; }
   const ceka = r.state === 'čeká';
@@ -465,7 +466,7 @@ function kresliPrepinacRezimu() {
     finally { $('rezimOk').disabled = false; }
   };
 }
-function jsemRodina(id) { return JA.ucet !== 'dispecer' || (JA.rezim === 'rodina' && (JA.rodinaKamery || []).includes(id)); }
+function jsemRodina(id) { if (JA.role === 'dispecer') return false; return JA.ucet !== 'dispecer' || (JA.rezim === 'rodina' && (JA.rodinaKamery || []).includes(id)); }   // dispečer z dispečinku není rodinou nikde
 function render() {
   const s = sim.state;
   const p = sim.patient(patientId); if (!p) return;
@@ -597,6 +598,7 @@ async function nactiNahravky(vynutit = false) {
       const kde = n.uloziste === 'server' && !cizi ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.uloziste === 'server' ? '<span class="muted">přehrát až po odemknutí</span>' : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
       // uzamčená = pořízená, když jste měli nastavený rozostřený obraz: vy ji vidíte, poskytovatel až po odemknutí
       const zamek = cizi ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">odemkne ji rodina ve své aplikaci (nebo dispečer v režimu Rodina, když je u kamery i rodinou); správce serveru ji odemkne v dispečinku</span></div>`
+        : n.zamek && JA.role === 'admin' ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">rodina ji poskytovateli neodemkla; jako správce serveru ji můžete odemknout sám (rodina to uvidí v historii)</span><button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-spravce="1">Odemknout (správce)</button></div>`
         : n.zamek ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">poskytovatel ji neuvidí, dokud ji neodemknete</span><button type="button" class="sm" data-odemknout="${esc(n.id)}">Odemknout</button></div>` : n.odemklKdo ? `<div class="small muted">odemčeno pro poskytovatele${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}${n.odemklKdo === 'Správce serveru' ? ' (správce serveru)' : ''}</div>` : '';
       return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}${zamek}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka.</li>';
@@ -628,7 +630,7 @@ function prehravaniOvladani(el) {
     li.append(v);
   }; });
   el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
-    if (!confirm('Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
+    if (!confirm(b.dataset.spravce ? 'Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.' : 'Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
     b.disabled = true;
     try {
       const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
