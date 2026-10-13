@@ -274,6 +274,20 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
       // Měření z prstenu z aplikace klienta (PéčeDoma mobil na Netlify, jiný původ): prokazuje se párovacím kódem
       // v hlavičce x-prsten-klic nebo v těle (klic), bez přihlášení; kód umí jen poslat měření ke své kameře.
       if (m === 'OPTIONS' && path === '/api/prsten/mereni') return new Response(null, { status: 204, headers: CORS_PRSTEN });
+      // Kamera klienta pro aplikaci PéčeDoma (jiný původ, bez přihlášení): podle KLIENTID z odkazu PéčeDoma a poskytovatele vrátí jen ID
+      // kamery, kterou dispečink ke klientovi přiřadil (Komunikace → Klient a poskytovatel). Obraz dál chce přihlášení rodiny.
+      if (m === 'OPTIONS' && path === '/api/klient/kamera') return new Response(null, { status: 204, headers: CORS_PRSTEN });
+      if (m === 'GET' && path === '/api/klient/kamera') {
+        const t = normTenant(url.searchParams.get('tenant') || ''), klient = String(url.searchParams.get('klient') || '').trim().toLowerCase();
+        if (!t || !/^[0-9a-f-]{8,40}$/.test(klient)) return json({ ok: false, error: 'Zadejte tenant a klient (KLIENTID).' }, 400, CORS_PRSTEN);
+        if (!najemci) return json({ ok: false, error: 'Server nemá databázi poskytovatelů.' }, 503, CORS_PRSTEN);
+        try {
+          const s = await (await najemci.pro(t)).stav();
+          const p = s.state.patients.find((x) => x.klientId === klient);
+          if (!p) return json({ ok: false, error: 'Ke klientovi není přiřazená kamera (dispečink → Komunikace → Klient v Péče doma plus).' }, 404, CORS_PRSTEN);
+          return json({ ok: true, kamera: p.id, tenant: t }, 200, { ...CORS_PRSTEN, 'Cache-Control': 'no-store' });
+        } catch (e) { return json({ ok: false, error: e.message }, e.status || 500, CORS_PRSTEN); }
+      }
       if (m === 'POST' && path === '/api/prsten/mereni' && (req.headers.get('x-prsten-klic') || !kdoSession(req.headers, tenantHint(req.headers, req.url)))) {
         const t = await telo(req);
         const klic = req.headers.get('x-prsten-klic') || t.klic || '';
@@ -505,7 +519,7 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         const telo_ = await telo(req); const akce = telo_.akce; let args = telo_.args;
         if (typeof akce !== 'string' || !Array.isArray(args) || args.length > 6) return json({ ok: false, error: 'Neplatná akce.' }, 400);
         // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
-        if ((akce === 'setNaramek' || akce === 'setNaramekAuto' || akce === 'setNaramekSos') && rodina) return jenPoskytovatel();
+        if ((akce === 'setNaramek' || akce === 'setNaramekAuto' || akce === 'setNaramekSos' || akce === 'setKlient') && rodina) return jenPoskytovatel();
         // Mobilní dispečer jen sleduje: ze stavu smí jen zapsat, že se dívá (setWatching); u kamer, kde je zároveň rodina, nastavuje jako rodina.
         // answerRequest má v args[0] ID žádosti, ne kamery: kamera se dohledá ze žádosti (jinak mobilní dispečer v režimu Rodina žádost o plný obraz nevyřídil – 403)
         const kameraAkce = akce === 'answerRequest' ? ((await (await stavTenanta()).stav()).state.requests.find((x) => x.id === args[0])?.patientId || '') : args[0];

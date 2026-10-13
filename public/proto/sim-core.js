@@ -609,6 +609,19 @@ const akce = {
   setKlid(s, now, patientId, until) { patientId = pid(patientId); until = cas(until, 'until'); if (until) s.klid[patientId] = until; else delete s.klid[patientId]; return {}; },
   setNight(s, now, on) { s.night = bool(on); return {}; },
   /** Trvalá poznámka ke klientovi (zdravotní stav, co dělat při alertu): pod obrazem v detailu; změna se zapíše do logu. */
+  /** Klient v Péče doma plus (KLIENTID z odkazu na aplikaci PéčeDoma): PéčeDoma pak otevírá kameru klienta. Prázdné = zrušit. */
+  setKlient(s, now, patientId, klientId, by) {
+    const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
+    const k = String(klientId || '').trim().toLowerCase();
+    if (k && !/^[0-9a-f-]{8,40}$/.test(k)) throw chyba('ID klienta má tvar z odkazu PéčeDoma (KLIENTID=…), např. fe282bc9-06cb-4449-97ab-07509e07b752.');
+    if ((p.klientId || '') === k) return { zmena: false };
+    const jiny = s.patients.find((x) => x.id !== p.id && x.klientId === k && k);
+    if (jiny) throw chyba(`Tenhle klient už je u kamery ${jiny.name}.`);
+    if (k) p.klientId = k; else delete p.klientId;
+    s.events.unshift({ id: nid(s), at: now, patientId: p.id, kind: 'poznamka', state: 'uzavřen', by: str(by, 80, 'by') || 'dispečink', text: k ? `Klient Péče doma plus přiřazen ke kameře (${k}).` : 'Klient Péče doma plus od kamery odebrán.', note: '' });
+    if (s.events.length > 400) s.events.length = 400;
+    return { vysledek: k };
+  },
   setNote(s, now, patientId, text, by) {
     const p = najdi(s, pid(patientId)); if (!p) return { zmena: false };
     text = str(text, 300, 'text').trim();

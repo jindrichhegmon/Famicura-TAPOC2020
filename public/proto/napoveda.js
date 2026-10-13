@@ -268,8 +268,9 @@ Kontakty jsou v detailu kamery → záložka Komunikace a kontakty → „Kontak
 ` },
   { id: 'poznamky', obrazky: [{ src: '/proto/napoveda/komunikace.png', popis: 'Sekce Komunikace v detailu kamery: poskytovatel, poznámka ke klientovi, dál uživatelé rodiny, kontakty a poznámky' }, { src: '/proto/napoveda/poznamky.png', popis: 'Poznámky dispečinku: pole, tlačítko a seznam s časem a jménem' }], nazev: 'Poznámky dispečinku ke kameře', klicova: ['poznamk', 'zapsat', 'zapis', 'zaznam', 'log', 'co jsem udelal', 'deník', 'denik'],
     obsah: `
-### Poznámka ke klientovi
-- V záložce Komunikace a kontakty je „Poznámka ke klientovi“: trvalá informace (zdravotní stav, na co dát pozor).
+### Klient v Péče doma plus a poznámka ke klientovi
+- V záložce Komunikace a kontakty je **Klient v Péče doma plus**: vložte odkaz na aplikaci PéčeDoma klienta (z Péče doma plus, obsahuje KLIENTID=…) nebo jen KLIENTID a uložte. Aplikace PéčeDoma tohoto klienta pak otevírá Famicura Kameru (nebo web rodiny) rovnou na téhle kameře. Jeden klient může být jen u jedné kamery; přiřazení i odebrání je v historii kamery. Obraz vidí stále jen účet rodiny, který k té kameře je.
+- „Poznámka ke klientovi“: trvalá informace (zdravotní stav, na co dát pozor).
 - Poskytovatel ji upraví tlačítkem Upravit; změna se zapíše do logu.
 
 ### Poznámky dispečinku
@@ -364,6 +365,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.75 (13. 10. 2026)**: v Komunikaci a kontaktech je **Klient v Péče doma plus** – vložením odkazu PéčeDoma (KLIENTID) se klient přiřadí ke kameře a jeho aplikace PéčeDoma pak otevírá Famicura Kameru rovnou na ní (i bez prstenu).
 - **Verze 3.74 (13. 10. 2026)**: aplikace PéčeDoma se podle párovacího kódu prstenu dozví kameru klienta a otevře Famicura Kameru (nebo web rodiny) rovnou na ní; klientovi bez prstenu stačí do odkazu PéčeDoma přidat &kamera=ID_KAMERY.
 - **Verze 3.73 (13. 10. 2026)**: aplikace rodiny a mobilního dispečera jako samostatná aplikace pro iPhone **Famicura Kamera** (složka kamera-ios, TestFlight); aplikace PéčeDoma ji otevře místo webu, když je nainstalovaná, a tlačítko ‹ PéčeDoma vede zpět do PéčeDoma.
 - **Verze 3.72 (13. 10. 2026)**: oprava: dispečer, který je u kamery zároveň rodinou, v režimu Rodina nemohl vyřídit žádost poskytovatele o plný obraz (tlačítka Povolit na 15 min / Natrvalo / Odmítnout server odmítal). Teď žádost u své kamery vyřídí, u cizí kamery dál ne.

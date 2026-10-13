@@ -1296,6 +1296,21 @@ test('prsten z aplikace klienta: párovací kód (dispečink vytvoří, pošle S
   assert.ok(b.mereni.some((x) => x.tep === 71) && b.mereni.some((x) => x.spo2 === 96)); assert.ok(b.mereni.every((x) => !('naramek' in x)));
   assert.equal(b.prsten.nazev, 'R06_AB12'); assert.equal(b.prsten.baterie, 70); assert.ok(b.prsten.posledni > 0);
   assert.equal(b.kamera, 'tapoc2020'); assert.equal(b.tenant, T, 'PéčeDoma se podle kódu dozví kameru i poskytovatele');
+  // klient Péče doma plus přiřazený ke kameře: PéčeDoma se podle KLIENTID dozví kameru (bez přihlášení, CORS), rodina přiřazovat nesmí
+  const KL = 'fe282bc9-06cb-4449-97ab-07509e07b752';
+  assert.equal((await h(new Request(`http://x/api/klient/kamera?tenant=${T}&klient=${KL}`))).status, 404, 'zatím nepřiřazen');
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setKlient', args: ['tapoc2020', 'nesmysl!', 'D'] } }))).status, 400, 'špatný tvar ID');
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setKlient', args: ['tapoc2020', KL.toUpperCase(), 'D'] } }))).status, 200);
+  const kk = await h(new Request(`http://x/api/klient/kamera?tenant=${T}&klient=${KL}`));
+  const kb = await kk.json(); assert.equal(kk.status, 200); assert.equal(kb.kamera, 'tapoc2020'); assert.equal(kb.tenant, T); assert.equal(kk.headers.get('access-control-allow-origin'), '*');
+  assert.equal((await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state.patients.find((x) => x.id === 'tapoc2020').klientId, KL, 'ID se ukládá malými písmeny');
+  await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'ensurePatient', args: [{ id: 'druha', name: 'Druhá' }] } }));
+  const dup = await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setKlient', args: ['druha', KL, 'D'] } }));
+  assert.ok(dup.status === 400 || dup.status === 404, 'jeden klient = jedna kamera (' + dup.status + ')');
+  if (dup.status === 400) assert.match((await dup.json()).error || '', /už je u kamery/);
+  assert.equal((await h(new Request(`http://x/api/klient/kamera?tenant=${T}&klient=zle`))).status, 400);
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'setKlient', args: ['tapoc2020', '', 'D'] } }))).status, 200, 'odebrat');
+  assert.equal((await h(new Request(`http://x/api/klient/kamera?tenant=${T}&klient=${KL}`))).status, 404, 'po odebrání nic');
   assert.equal((await h(new Request('http://x/api/prsten/mereni'))).status, 401, 'bez kódu nic');
   assert.equal((await h(new Request('http://x/api/prsten/mereni', { headers: { 'x-prsten-klic': 'ABCD-EFGH-JKL2' } }))).status, 401, 'cizí kód nic');
   // rodina kód nespravuje; zrušení kódu → měření kódem končí

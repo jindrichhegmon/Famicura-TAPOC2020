@@ -25,14 +25,14 @@ const MAPA = { 'cam-linecross': 'linecross', 'cam-intrusion': 'intrusion', 'cam-
 const UDALOSTI_MAX = 400, ZADOSTI_MAX = 100;
 const ZAKAZANE = new Set(['reset']);   // ostrá data tenanta nikdo nevynuluje z prohlížeče
 // akce, jejichž první argument je kamera: musí patřit tenantovi (jinak by šlo zapsat událost cizí kameře)
-const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace', 'setNaramek', 'setNaramekAuto', 'setNaramekSos']);
+const S_KAMEROU = new Set(['emit', 'setWatch', 'setKontakty', 'setConsent', 'rychle', 'klidDo', 'requestFull', 'emergencyAccess', 'endGrant', 'setWatching', 'setKlid', 'setNote', 'poznamka', 'ackAll', 'deaktivace', 'setNaramek', 'setNaramekAuto', 'setNaramekSos', 'setKlient']);
 const json = (v) => { if (v === null || v === undefined || v === '') return null; try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 const otisk = (o) => JSON.stringify(o);
 
 /* ---------- řádky ↔ objekty stavu ---------- */
 function radekKamery(p, s) {
   return { KameraID: p.id, Nazev: p.name, Misto: p.place || '', Poznamka: p.note || '', Souhlas: p.consent, Sledovani: p.watch, Kontakty: p.kontakty || null,
-    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null, Naramek: p.naramek || null, Prsten: p.prsten || null };
+    Docasne: p.docasne || null, KlidDo: s.klid[p.id] || null, Offline: !!p.offline, Aktivni: true, Deaktivace: p.deaktivace || null, Naramek: p.naramek || null, Prsten: p.prsten || null, KlientID: p.klientId || null };
 }
 function pacientZRadku(r, nazevPoskytovatele) {
   const consent = { den: 'skeleton', noc: 'skeleton', nouze: true, denOd: DEN_OD, nocOd: NOC_OD, ...(json(r.Souhlas) || {}) };
@@ -43,6 +43,7 @@ function pacientZRadku(r, nazevPoskytovatele) {
   const dz = json(r.Deaktivace); if (dz && dz.od) p.deaktivace = dz;
   const nr = json(r.Naramek); if (nr && nr.id) p.naramek = nr;
   const pr = json(r.Prsten); if (pr && pr.id) p.prsten = pr;
+  if (r.KlientID) p.klientId = String(r.KlientID).trim().toLowerCase();
   return p;
 }
 function radekUdalosti(e, notif) {

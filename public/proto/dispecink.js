@@ -114,6 +114,11 @@ function demoHesloForm(b, posli) {
   f.onsubmit = async (ev) => { ev.preventDefault(); const h = f.querySelector('input').value; if (!h) return; f.querySelector('button[type=submit]').disabled = true; const chyba = await posli(h); if (chyba) { f.querySelector('.bad').textContent = chyba; f.querySelector('button[type=submit]').disabled = false; f.querySelector('input').select(); } else f.remove(); };
   b.insertAdjacentElement('afterend', f); f.querySelector('input').focus();
 }
+/** Klient v Péče doma plus přiřazený ke kameře (KLIENTID): PéčeDoma klienta pak otevírá Famicura Kameru na téhle kameře. */
+function kresliKlienta(d, p) {
+  const el = d.querySelector('#dklient'); if (!el) return;
+  el.innerHTML = p?.klientId ? `<code>${esc(p.klientId)}</code>` : '<span class="muted">nepřiřazen – aplikace PéčeDoma klienta otevře první kameru jeho rodinného účtu</span>';
+}
 /* Proč video nejde přehrát: server to řekne (uzamčeno 423, smazáno 410, 404), jinak je to formát. Range mimo začátek nejde do auditu. */
 async function procNejdePrehrat(src) {
   try {
@@ -617,7 +622,9 @@ function renderDetail(rebuild = false) {
       </div></section>
       <section class="dsec hide" data-sec="komunikace">
         <div class="blok"><h3>Klient a poskytovatel</h3>
-        <div class="kv"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
+        <div class="kv"><dt>Poskytovatel</dt><dd>${esc(sim.poskytovatelPro(p))}${p.real && sim.poskytovatel.telefon ? ' · ' + esc(sim.poskytovatel.telefon) : ''}</dd><dt>Klient v Péče doma plus</dt><dd><span id="dklient"></span> <button class="sm sec" id="dklientEdit">Upravit</button>
+          <div class="notes hide" id="dklientForm"><input id="dklientText" maxlength="500" placeholder="vložte odkaz na aplikaci PéčeDoma klienta (…?KLIENTID=…), nebo jen KLIENTID" style="width:100%"><div class="row"><button class="sm" id="dklientSave">Uložit</button><button class="sm sec" id="dklientCancel">Zrušit</button><span class="small muted">Aplikace PéčeDoma tohoto klienta pak otevírá Famicura Kameru rovnou na téhle kameře. Odkaz s KLIENTID je v Péče doma plus u klienta (aplikace pro klienta).</span></div></div></dd>
+          <dt>Poznámka ke klientovi</dt><dd><span id="dtrvala"></span> <button class="sm sec" id="dtrvalaEdit">Upravit</button>
           <div class="notes hide" id="dtrvalaForm"><textarea id="dtrvalaText" maxlength="300" placeholder="Trvalá informace o klientovi: zdravotní stav, na co dát pozor, co dělat při alertu."></textarea><div class="row"><button class="sm" id="dtrvalaSave">Uložit</button><button class="sm sec" id="dtrvalaCancel">Zrušit</button><span class="small muted">Zapisuje poskytovatel, vidí všichni dispečeři, změna jde do logu kamery. Rodina ji nevidí.</span></div></div></dd></div>
         </div><div class="blok"><h3>Uživatelé rodiny</h3><p class="small muted">– kdo smí otevřít aplikaci rodiny k téhle kameře</p>
         <div id="dusers"></div>
@@ -942,6 +949,16 @@ function renderDetail(rebuild = false) {
     const tf = d.querySelector('#dtrvalaForm');
     d.querySelector('#dtrvalaEdit').onclick = () => { d.querySelector('#dtrvalaText').value = sim.patient(p.id)?.note || ''; tf.classList.remove('hide'); d.querySelector('#dtrvalaText').focus(); };
     d.querySelector('#dtrvalaCancel').onclick = () => tf.classList.add('hide');
+    const klf = d.querySelector('#dklientForm');
+    d.querySelector('#dklientEdit').onclick = () => { d.querySelector('#dklientText').value = sim.patient(p.id)?.klientId || ''; klf.classList.remove('hide'); d.querySelector('#dklientText').focus(); };
+    d.querySelector('#dklientCancel').onclick = () => klf.classList.add('hide');
+    d.querySelector('#dklientSave').onclick = async () => {
+      // vložený celý odkaz PéčeDoma: vzít z něj KLIENTID
+      const v = d.querySelector('#dklientText').value.trim(), m = /KLIENTID=([0-9a-fA-F-]{8,40})/.exec(v);
+      const k = m ? m[1] : v;
+      try { const r = await sim.setKlient(p.id, k, ME()); if (r === undefined && sim.naServeru) throw new Error('uložení se nepodařilo'); klf.classList.add('hide'); toast(k ? 'Klient přiřazen ke kameře.' : 'Klient od kamery odebrán.'); kresliKlienta(d, sim.patient(p.id)); }
+      catch (e) { toast(`Klient: ${e.message}`, 'crit'); }
+    };
     d.querySelector('#dtrvalaSave').onclick = async () => { await sim.setNote(p.id, d.querySelector('#dtrvalaText').value, ME()); tf.classList.add('hide'); toast('Poznámka ke klientovi uložena.'); };
     const pridej = async () => { const ta = d.querySelector('#dnote'); const t = ta.value.trim(); if (!t) { ta.focus(); return; } ta.disabled = true; await sim.poznamka(p.id, t, ME()); ta.value = ''; ta.disabled = false; ta.focus(); toast('Poznámka zapsána.'); };
     d.querySelector('#dnoteAdd').onclick = pridej;
@@ -1054,6 +1071,7 @@ function renderDetail(rebuild = false) {
   }
   if (!d.querySelector('#dkontakty').contains(document.activeElement)) d.__naplnWatch?.();
   d.querySelector('#dtrvala').textContent = p.note || 'zatím žádná (tlačítko Upravit)';
+  kresliKlienta(d, p);
   setHtml(d.querySelector('#dnotes'), s.events.filter((e) => e.patientId === p.id && e.kind === 'poznamka').slice(0, 30).map((e) => `<li><span class="when">${fmtDT(e.at)} · ${esc(e.by)}</span>${esc(e.text)}</li>`).join('') || '<li class="muted">Zatím žádná poznámka.</li>');
   renderHistorie(d, p, s);
 }

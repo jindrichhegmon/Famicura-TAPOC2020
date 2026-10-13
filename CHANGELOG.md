@@ -5,6 +5,16 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.75 · 13. 10. 2026 · klient Péče doma plus přiřazený ke kameře
+
+- Ke kameře jde přiřadit **klient Péče doma plus** (KLIENTID z odkazu na aplikaci PéčeDoma): sloupec
+  `KlientID` v `A_KAM_Kamera` (doplní se sám při startu serveru), `p.klientId` ve stavu, akce `setKlient`
+  (jen poskytovatel; tvar z odkazu, jeden klient = jedna kamera, řádek v historii), v dispečinku
+  Komunikace → Klient a poskytovatel → **Klient v Péče doma plus** (vložit celý odkaz, KLIENTID se vybere).
+- `GET /api/klient/kamera?tenant=&klient=` (CORS, bez přihlášení jako u prstenu): vrátí jen ID kamery
+  přiřazené klientovi; PéčeDoma (3.6.3) se tak po přihlášení klienta dozví jeho kameru i bez prstenu.
+  Testy v `test/api.test.mjs`.
+
 ## 3.74 · 13. 10. 2026 · PéčeDoma zná kameru klienta
 
 - `GET /api/prsten/mereni` (párovací kód) vrací i `kamera` a `tenant`: PéčeDoma (3.6.2) si je uloží a
