@@ -597,7 +597,7 @@ async function nactiNahravky(vynutit = false) {
       const cizi = n.zamek && jakoPoskytovatel();
       const kde = n.uloziste === 'server' && !cizi ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.uloziste === 'server' ? '<span class="muted">přehrát až po odemknutí</span>' : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
       // uzamčená = pořízená, když jste měli nastavený rozostřený obraz: vy ji vidíte, poskytovatel až po odemknutí
-      const zamek = cizi ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">odemkne ji rodina ve své aplikaci; pro prezentaci jde odemknout demo heslem (heslo hlavní aplikace), rodina to uvidí v historii</span><button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-demo="1">🔓 Demo heslo</button></div>`
+      const zamek = cizi ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">odemkne ji rodina ve své aplikaci; pro prezentaci jde odemknout demo heslem (heslo hlavní aplikace), rodina to uvidí v historii</span><button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-demo="1" aria-label="odemknout demo heslem (heslo hlavní aplikace)" title="odemknout demo heslem (heslo hlavní aplikace)">🗝️</button></div>`
         : n.zamek && JA.role === 'admin' ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">rodina ji poskytovateli neodemkla; jako správce serveru ji můžete odemknout sám (rodina to uvidí v historii)</span><button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-spravce="1">Odemknout (správce)</button></div>`
         : n.zamek ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">poskytovatel ji neuvidí, dokud ji neodemknete</span><button type="button" class="sm" data-odemknout="${esc(n.id)}">Odemknout</button></div>` : n.odemklKdo ? `<div class="small muted">odemčeno pro poskytovatele${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}${n.odemklKdo === 'Správce serveru' ? ' (správce serveru)' : ''}</div>` : '';
       return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}${zamek}</span></li>`;
@@ -629,20 +629,31 @@ function prehravaniOvladani(el) {
     };
     li.append(v);
   }; });
-  el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
-    let telo = '{}';
-    if (b.dataset.demo) {   // dispečer: demo heslo = heslo hlavní aplikace, ověří server
-      const heslo = prompt('Demo heslo pro prezentaci (heslo hlavní aplikace). Rodina nahrávku neodemkla; odemknutí se zapíše do historie kamery a rodina ho uvidí.');
-      if (!heslo) return;
-      telo = JSON.stringify({ heslo });
-    } else if (!confirm(b.dataset.spravce ? 'Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.' : 'Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
-    b.disabled = true;
+  const odemkni = async (id, telo) => {   // → null, nebo text chyby
     try {
-      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: telo });
+      const r = await fetch(`/api/nahravky/${encodeURIComponent(id)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: telo });
       const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
-      toast('Nahrávka je odemčená, poskytovatel ji teď může přehrát.'); nactiNahravky(true);
-    } catch (e) { toast(`Odemknutí se nepodařilo: ${e.message}`, 'crit'); b.disabled = false; }
+      toast('Nahrávka je odemčená, poskytovatel ji teď může přehrát.'); nactiNahravky(true); return null;
+    } catch (e) { return e.message; }
+  };
+  el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
+    // dispečer: demo heslo = heslo hlavní aplikace, ověří server; heslo se při psaní nezobrazuje
+    if (b.dataset.demo) { demoHesloForm(b, (heslo) => odemkni(b.dataset.odemknout, JSON.stringify({ heslo }))); return; }
+    if (!confirm(b.dataset.spravce ? 'Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.' : 'Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
+    b.disabled = true;
+    const chyba = await odemkni(b.dataset.odemknout, '{}');
+    if (chyba) { toast(`Odemknutí se nepodařilo: ${chyba}`, 'crit'); b.disabled = false; }
   }; });
+/* Demo heslo (heslo hlavní aplikace) pro odemknutí nahrávky dispečerem: malý formulář pod tlačítkem, heslo se nezobrazuje (type=password). */
+function demoHesloForm(b, posli) {
+  const stary = b.parentElement.querySelector('.demoHeslo'); if (stary) { stary.querySelector('input').focus(); return; }
+  const f = document.createElement('form'); f.className = 'demoHeslo';
+  f.innerHTML = '<input type="password" autocomplete="current-password" placeholder="heslo hlavní aplikace" aria-label="demo heslo (heslo hlavní aplikace)"><button type="submit" class="sm">Odemknout</button><button type="button" class="sm sec">Zrušit</button><span class="small bad"></span>';
+  f.querySelector('button[type=button]').onclick = () => f.remove();
+  f.onsubmit = async (ev) => { ev.preventDefault(); const h = f.querySelector('input').value; if (!h) return; f.querySelector('button[type=submit]').disabled = true; const chyba = await posli(h); if (chyba) { f.querySelector('.bad').textContent = chyba; f.querySelector('button[type=submit]').disabled = false; f.querySelector('input').select(); } else f.remove(); };
+  b.insertAdjacentElement('afterend', f); f.querySelector('input').focus();
+}
+
 }
 
 sim.subscribe((s, info) => {

@@ -65,7 +65,7 @@ async function nactiNahravky(pid) {
       const stary = n.typ === 'kostra';   // záznam drátěného modelu z verzí 2.8–2.9 (jen ke stažení)
       const odemceno = n.odemklKdo ? ` · <span class="muted" title="rodina nahrávku odemkla${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}">odemkla rodina (${esc(n.odemklKdo)})</span>` : '';
       // správce serveru (heslo hlavní aplikace) smí uzamčenou nahrávku odemknout sám – do historie kamery jde řádek „Správce serveru odemkl … (bez rodiny)“
-      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>${JA?.role === 'admin' ? ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" title="odemknout jako správce serveru (rodina to uvidí v historii)">Odemknout (správce)</button>` : ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-demo="1" title="pro prezentaci: odemknout demo heslem (heslo hlavní aplikace); rodina to uvidí v historii">🔓 Demo heslo</button>`}`
+      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>${JA?.role === 'admin' ? ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" title="odemknout jako správce serveru (rodina to uvidí v historii)">Odemknout (správce)</button>` : ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-demo="1" aria-label="odemknout demo heslem (heslo hlavní aplikace)" title="pro prezentaci: odemknout demo heslem (heslo hlavní aplikace); rodina to uvidí v historii">🗝️</button>`}`
         : n.uloziste === 'server' ? `${stary ? '' : `<a href="#" data-prehrat="${esc(n.id)}" title="přehrát v aplikaci (přehrání jde do auditu)">▶ přehrát</a> · `}<a href="/api/nahravky/${encodeURIComponent(n.id)}/soubor?stahnout=1" download title="stáhnout soubor ${esc(n.nazev || '')} do počítače (stažení jde do auditu)">⬇ stáhnout</a> · <span class="muted">na serveru${stary ? ', starší záznam drátěného modelu' : ''}</span>${odemceno}` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`;
       return `<li data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${kde}${n.chyba ? '' : ` · <a href="#" class="muted" data-smazat="${esc(n.id)}" title="smazat nahrávku">smazat</a>`}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka. Nahrává se po události se zatrženým Nahrávat (sekce Nastavení) nebo tlačítkem Nahrát teď.</li>';
@@ -105,6 +105,15 @@ function ptzOvladani(box, pid) {
   }; });
 }
 
+/* Demo heslo (heslo hlavní aplikace) pro odemknutí nahrávky dispečerem: malý formulář pod tlačítkem, heslo se nezobrazuje (type=password). */
+function demoHesloForm(b, posli) {
+  const stary = b.parentElement.querySelector('.demoHeslo'); if (stary) { stary.querySelector('input').focus(); return; }
+  const f = document.createElement('form'); f.className = 'demoHeslo';
+  f.innerHTML = '<input type="password" autocomplete="current-password" placeholder="heslo hlavní aplikace" aria-label="demo heslo (heslo hlavní aplikace)"><button type="submit" class="sm">Odemknout</button><button type="button" class="sm sec">Zrušit</button><span class="small bad"></span>';
+  f.querySelector('button[type=button]').onclick = () => f.remove();
+  f.onsubmit = async (ev) => { ev.preventDefault(); const h = f.querySelector('input').value; if (!h) return; f.querySelector('button[type=submit]').disabled = true; const chyba = await posli(h); if (chyba) { f.querySelector('.bad').textContent = chyba; f.querySelector('button[type=submit]').disabled = false; f.querySelector('input').select(); } else f.remove(); };
+  b.insertAdjacentElement('afterend', f); f.querySelector('input').focus();
+}
 /* Proč video nejde přehrát: server to řekne (uzamčeno 423, smazáno 410, 404), jinak je to formát. Range mimo začátek nejde do auditu. */
 async function procNejdePrehrat(src) {
   try {
@@ -125,19 +134,20 @@ function prehravaniOvladani(el, pid) {
     v.onerror = () => procNejdePrehrat(v.src).then((proc) => toast(`Nahrávku se nepodařilo přehrát: ${proc}`, 'crit'));
     li.append(v);
   }; });
-  el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
-    let telo = '{}';
-    if (b.dataset.demo) {   // dispečer: demo heslo = heslo hlavní aplikace; server ho ověří (brzda pokusů jako u přihlášení)
-      const heslo = prompt('Demo heslo pro prezentaci (heslo hlavní aplikace). Rodina nahrávku neodemkla; odemknutí se zapíše do historie kamery a rodina ho uvidí.');
-      if (!heslo) return;
-      telo = JSON.stringify({ heslo });
-    } else if (!confirm('Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.')) return;
-    b.disabled = true;
+  const odemkni = async (id, telo) => {   // → null, nebo text chyby
     try {
-      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: telo });
+      const r = await fetch(`/api/nahravky/${encodeURIComponent(id)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: telo });
       const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
-      toast('Nahrávka je odemčená.'); nahravkyCache.delete(pid); nactiNahravky(pid);
-    } catch (e) { toast(`Odemknutí se nepodařilo: ${e.message}`, 'crit'); b.disabled = false; }
+      toast('Nahrávka je odemčená.'); nahravkyCache.delete(pid); nactiNahravky(pid); return null;
+    } catch (e) { return e.message; }
+  };
+  el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
+    // dispečer: demo heslo = heslo hlavní aplikace, ověří ho server (brzda pokusů jako u přihlášení); heslo se při psaní nezobrazuje
+    if (b.dataset.demo) { demoHesloForm(b, (heslo) => odemkni(b.dataset.odemknout, JSON.stringify({ heslo }))); return; }
+    if (!confirm('Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.')) return;
+    b.disabled = true;
+    const chyba = await odemkni(b.dataset.odemknout, '{}');
+    if (chyba) { toast(`Odemknutí se nepodařilo: ${chyba}`, 'crit'); b.disabled = false; }
   }; });
   el.querySelectorAll('[data-smazat]').forEach((a) => { a.onclick = async (ev) => {
     ev.preventDefault();

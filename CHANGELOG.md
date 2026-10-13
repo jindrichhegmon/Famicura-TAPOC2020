@@ -5,6 +5,12 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.70 · 13. 10. 2026 · demo heslo skrytě, tlačítko jen 🗝️
+
+- Dispečink i aplikace rodiny: tlačítko u 🔒 je jen **🗝️** (bez textu „Demo heslo“), heslo se zadává
+  do políčka `type=password` pod tlačítkem (`demoHesloForm`, `.demoHeslo` v `proto.css`) místo
+  `prompt()`, které heslo ukazovalo; chyba (špatné heslo, blokace) se píše u políčka.
+
 ## 3.69 · 13. 10. 2026 · uzamčená nahrávka pro prezentaci: dispečer s demo heslem
 
 - `POST /api/nahravky/:id/odemknout` bere od dispečera (dispečink účtem Péče doma plus i mobilní

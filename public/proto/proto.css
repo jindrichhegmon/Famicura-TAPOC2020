@@ -112,6 +112,7 @@ video.prehravac{display:block;width:100%;max-width:640px;margin:8px 0 4px;border
 .list li:has(.prehravac){flex-wrap:wrap}
 .list li .prehravac{flex:0 0 100%;max-width:100%}
 .zamek{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.demoHeslo{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}.demoHeslo input{width:11em;max-width:60vw}
 .list li:has(.prehravac)>.grow{flex:1 1 0;min-width:0}
 /* otočení kamery: kříž šipek vpravo dole na obraze */
 .ptz{position:absolute;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(3,34px);grid-template-rows:repeat(3,34px);gap:3px;opacity:.85}
