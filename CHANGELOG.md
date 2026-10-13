@@ -5,6 +5,15 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.71 · 13. 10. 2026 · pozvánka otevře svou kameru, odkaz ?kamera=
+
+- `uzivatele.pozvanka(token)` vrací i `kamery` účtu; `public/proto/rodina.js` si z pozvánky vezme
+  poslední přidanou kameru (`kameraZOdkazu`) a po aktivaci ji otevře místo první kamery poskytovatele
+  (dispečer, který je u jedné kamery zároveň rodina, dřív dostal v aplikaci rodiny jinou kameru než
+  měl otevřenou v dispečinku).
+- `?kamera=ID` na `rodina.html`: po přihlášení se otevře ta kamera (když k ní uživatel smí); neznámá
+  nebo cizí kamera → první v seznamu jako dřív.
+
 ## 3.70 · 13. 10. 2026 · demo heslo skrytě, tlačítko jen 🗝️
 
 - Dispečink i aplikace rodiny: tlačítko u 🔒 je jen **🗝️** (bez textu „Demo heslo“), heslo se zadává

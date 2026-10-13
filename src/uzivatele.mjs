@@ -177,7 +177,8 @@ export function createUzivatele(tabulky, { now = Date.now, nahoda = (n) => crypt
     async pozvanka(token) {
       if (typeof token !== 'string' || !token) return { platna: false };
       const r = await podleTokenu(token);
-      return r && r.PozvankaDo >= now() && !r.Deaktivovan ? { platna: true, jmeno: r.Jmeno, tenant: r.IDTENANT, role: r.Role === 'dispecer' ? 'dispecer' : 'rodina' } : { platna: false };
+      // kamery: aplikace po aktivaci otevře kameru z pozvánky (poslední přidanou), ne první kameru poskytovatele
+      return r && r.PozvankaDo >= now() && !r.Deaktivovan ? { platna: true, jmeno: r.Jmeno, tenant: r.IDTENANT, role: r.Role === 'dispecer' ? 'dispecer' : 'rodina', kamery: kameryZ(r.Kamery) } : { platna: false };
     },
     /** Odkaz z SMS: token → nastavení hesla. Vrací uživatele (s tenantem) k přihlášení. */
     async aktivuj(token, heslo) {

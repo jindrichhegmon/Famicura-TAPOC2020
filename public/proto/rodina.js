@@ -7,6 +7,7 @@ let FAMILY = ['tapoc2020', 'p2'];       // v ukázce a pro poskytovatele; rodina
 let patientId = FAMILY[0];
 let src = null, panel = null, demo = false, JA = {};
 const params = new URLSearchParams(location.search);
+let kameraZOdkazu = params.get('kamera') || null;   // ?kamera=ID, nebo kamera z pozvánky: po přihlášení se otevře ona, ne první v seznamu
 // Zobrazení = podklad (plný obraz, rozostřený obraz, černé pozadí) + drátěný model přes
 // něj. Model jde zapnout k plnému i rozostřenému obrazu; na černém pozadí je vždy.
 const REZIM = { full: ['full', false], normal: ['full', false], blur: ['blur', false], blurskel: ['blur', true],
@@ -128,7 +129,11 @@ function boot(ja) {
     FAMILY = [sim.state.patients[0]?.id || 'tapoc2020'];
   }
   setupPatients();
-  startSource(FAMILY[0]);
+  // odkaz na konkrétní kameru (?kamera=, nebo kamera z pozvánky): otevřít ji, jinak první v seznamu
+  const chtena = kameraZOdkazu && FAMILY.includes(kameraZOdkazu) ? kameraZOdkazu : FAMILY[0];
+  kameraZOdkazu = null;
+  if (chtena !== FAMILY[0]) { patientId = chtena; $('patient').value = chtena; panel.select(chtena); render(); kresliKamVyber(); }
+  startSource(chtena);
 }
 
 function startDemo() {
@@ -180,7 +185,7 @@ $('pwForm').onsubmit = async (e) => {
   // nový člen si musí zvolit heslo. Aktivace pak přihlásí jeho.
   const token = params.get('pozvanka');
   const pozvanka = token ? await api('/api/rodina/pozvanka?token=' + encodeURIComponent(token)).catch(() => ({ platna: false })) : null;
-  if (pozvanka?.platna) { $('gWelcome').textContent = `Vítejte, ${pozvanka.jmeno}. Heslo není v SMS: zvolte si ho tady, budete se jím přihlašovat spolu s telefonem.`; showGate('aktivace'); return; }
+  if (pozvanka?.platna) { if (!kameraZOdkazu && pozvanka.kamery?.length) kameraZOdkazu = pozvanka.kamery[pozvanka.kamery.length - 1]; $('gWelcome').textContent = `Vítejte, ${pozvanka.jmeno}. Heslo není v SMS: zvolte si ho tady, budete se jím přihlašovat spolu s telefonem.`; showGate('aktivace'); return; }
   // Už přihlášený (třeba druhé klepnutí na odkaz z SMS) jde rovnou dovnitř.
   try { boot(await api('/api/rodina/ja')); return; } catch { /* nepřihlášen */ }
   // Použitý nebo propadlý odkaz: heslo už existuje, stačí se přihlásit.
