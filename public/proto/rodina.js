@@ -597,7 +597,7 @@ async function nactiNahravky(vynutit = false) {
       const cizi = n.zamek && jakoPoskytovatel();
       const kde = n.uloziste === 'server' && !cizi ? `<a href="#" data-prehrat="${esc(n.id)}">▶ přehrát</a>` : n.uloziste === 'server' ? '<span class="muted">přehrát až po odemknutí</span>' : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : '';
       // uzamčená = pořízená, když jste měli nastavený rozostřený obraz: vy ji vidíte, poskytovatel až po odemknutí
-      const zamek = cizi ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">odemkne ji rodina ve své aplikaci (nebo dispečer v režimu Rodina, když je u kamery i rodinou); správce serveru ji odemkne v dispečinku</span></div>`
+      const zamek = cizi ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">odemkne ji rodina ve své aplikaci; pro prezentaci jde odemknout demo heslem (heslo hlavní aplikace), rodina to uvidí v historii</span><button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-demo="1">🔓 Demo heslo</button></div>`
         : n.zamek && JA.role === 'admin' ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">rodina ji poskytovateli neodemkla; jako správce serveru ji můžete odemknout sám (rodina to uvidí v historii)</span><button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-spravce="1">Odemknout (správce)</button></div>`
         : n.zamek ? `<div class="zamek"><span class="badge warn">🔒 nahrávka uzamčena</span><span class="small muted">poskytovatel ji neuvidí, dokud ji neodemknete</span><button type="button" class="sm" data-odemknout="${esc(n.id)}">Odemknout</button></div>` : n.odemklKdo ? `<div class="small muted">odemčeno pro poskytovatele${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}${n.odemklKdo === 'Správce serveru' ? ' (správce serveru)' : ''}</div>` : '';
       return `<li class="info" data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''} · ${kde}${zamek}</span></li>`;
@@ -630,10 +630,15 @@ function prehravaniOvladani(el) {
     li.append(v);
   }; });
   el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
-    if (!confirm(b.dataset.spravce ? 'Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.' : 'Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
+    let telo = '{}';
+    if (b.dataset.demo) {   // dispečer: demo heslo = heslo hlavní aplikace, ověří server
+      const heslo = prompt('Demo heslo pro prezentaci (heslo hlavní aplikace). Rodina nahrávku neodemkla; odemknutí se zapíše do historie kamery a rodina ho uvidí.');
+      if (!heslo) return;
+      telo = JSON.stringify({ heslo });
+    } else if (!confirm(b.dataset.spravce ? 'Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.' : 'Odemknout nahrávku poskytovateli? Dispečink ji pak uvidí v plném obrazu a odemknutí se zapíše do historie.')) return;
     b.disabled = true;
     try {
-      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: telo });
       const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
       toast('Nahrávka je odemčená, poskytovatel ji teď může přehrát.'); nactiNahravky(true);
     } catch (e) { toast(`Odemknutí se nepodařilo: ${e.message}`, 'crit'); b.disabled = false; }

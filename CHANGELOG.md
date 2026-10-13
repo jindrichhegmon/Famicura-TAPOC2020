@@ -5,6 +5,17 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.69 · 13. 10. 2026 · uzamčená nahrávka pro prezentaci: dispečer s demo heslem
+
+- `POST /api/nahravky/:id/odemknout` bere od dispečera (dispečink účtem Péče doma plus i mobilní
+  dispečer bez rodiny u kamery) `{ heslo }` = heslo hlavní aplikace („demo heslo“): ověření přes
+  `hesloSedi` se stejnou brzdou pokusů (`limiter`) jako přihlášení; bez hesla nebo se špatným 401
+  `{ heslo: true }`, aplikace se zeptá. `OdemklKdo` je „Jméno (dispečer, demo heslem)“, v historii
+  kamery řádek „Dispečer Jméno odemkl(a) poskytovateli nahrávku z … demo heslem správce (ukázka,
+  bez rodiny)“ (`by: 'správce'`), rodina ho vidí.
+- Dispečink: u 🔒 tlačítko **🔓 Demo heslo** (správce má dál Odemknout (správce)); aplikace rodiny:
+  totéž pro dispečera u cizí kamery. Test v `test/api.test.mjs`.
+
 ## 3.68 · 13. 10. 2026 · dispečer v aplikaci rodiny je poskytovatel, ne rodina
 
 - `public/proto/rodina.js`: dispečer přihlášený v dispečinku účtem Péče doma plus (`ja.role === 'dispecer'`,

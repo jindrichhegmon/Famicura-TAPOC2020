@@ -65,7 +65,7 @@ async function nactiNahravky(pid) {
       const stary = n.typ === 'kostra';   // záznam drátěného modelu z verzí 2.8–2.9 (jen ke stažení)
       const odemceno = n.odemklKdo ? ` · <span class="muted" title="rodina nahrávku odemkla${n.odemklCas ? ' ' + fmtDT(n.odemklCas) : ''}">odemkla rodina (${esc(n.odemklKdo)})</span>` : '';
       // správce serveru (heslo hlavní aplikace) smí uzamčenou nahrávku odemknout sám – do historie kamery jde řádek „Správce serveru odemkl … (bez rodiny)“
-      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>${JA?.role === 'admin' ? ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" title="odemknout jako správce serveru (rodina to uvidí v historii)">Odemknout (správce)</button>` : ''}`
+      const kde = n.uloziste === 'server' && n.zamek ? `<span class="badge warn" title="pořízeno v době, kdy rodina měla nastavený rozostřený obraz; přehrát ji půjde, až ji rodina ve své aplikaci odemkne">🔒 nahrávka uzamčena</span> <span class="muted">odemkne rodina</span>${JA?.role === 'admin' ? ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" title="odemknout jako správce serveru (rodina to uvidí v historii)">Odemknout (správce)</button>` : ` <button type="button" class="sm sec" data-odemknout="${esc(n.id)}" data-demo="1" title="pro prezentaci: odemknout demo heslem (heslo hlavní aplikace); rodina to uvidí v historii">🔓 Demo heslo</button>`}`
         : n.uloziste === 'server' ? `${stary ? '' : `<a href="#" data-prehrat="${esc(n.id)}" title="přehrát v aplikaci (přehrání jde do auditu)">▶ přehrát</a> · `}<a href="/api/nahravky/${encodeURIComponent(n.id)}/soubor?stahnout=1" download title="stáhnout soubor ${esc(n.nazev || '')} do počítače (stažení jde do auditu)">⬇ stáhnout</a> · <span class="muted">na serveru${stary ? ', starší záznam drátěného modelu' : ''}</span>${odemceno}` : n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">🎞 otevřít na Google Disku</a>` : `<span class="bad" title="${esc(n.chyba || '')}">neuloženo: ${esc((n.chyba || '').slice(0, 80))}</span>`;
       return `<li data-nahravka="${esc(n.id)}"><span class="when">${fmtDT(n.cas)}</span><span class="grow">${esc(co)}${n.delkaS ? ` · ${n.delkaS} s` : ''}${vel}${n.kdo ? ` · <span class="muted">${esc(n.kdo)}</span>` : ''} · ${kde}${n.chyba ? '' : ` · <a href="#" class="muted" data-smazat="${esc(n.id)}" title="smazat nahrávku">smazat</a>`}</span></li>`;
     }).join('') || '<li class="muted">Zatím žádná nahrávka. Nahrává se po události se zatrženým Nahrávat (sekce Nastavení) nebo tlačítkem Nahrát teď.</li>';
@@ -126,10 +126,15 @@ function prehravaniOvladani(el, pid) {
     li.append(v);
   }; });
   el.querySelectorAll('[data-odemknout]').forEach((b) => { b.onclick = async () => {
-    if (!confirm('Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.')) return;
+    let telo = '{}';
+    if (b.dataset.demo) {   // dispečer: demo heslo = heslo hlavní aplikace; server ho ověří (brzda pokusů jako u přihlášení)
+      const heslo = prompt('Demo heslo pro prezentaci (heslo hlavní aplikace). Rodina nahrávku neodemkla; odemknutí se zapíše do historie kamery a rodina ho uvidí.');
+      if (!heslo) return;
+      telo = JSON.stringify({ heslo });
+    } else if (!confirm('Odemknout nahrávku jako správce serveru? Rodina měla v tu chvíli nastavený rozostřený obraz nebo drátěný model a sama ji neodemkla. Odemknutí se zapíše do historie kamery, rodina ho uvidí.')) return;
     b.disabled = true;
     try {
-      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+      const r = await fetch(`/api/nahravky/${encodeURIComponent(b.dataset.odemknout)}/odemknout`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: telo });
       const j = await r.json(); if (!j.ok) throw new Error(j.error || `HTTP ${r.status}`);
       toast('Nahrávka je odemčená.'); nahravkyCache.delete(pid); nactiNahravky(pid);
     } catch (e) { toast(`Odemknutí se nepodařilo: ${e.message}`, 'crit'); b.disabled = false; }

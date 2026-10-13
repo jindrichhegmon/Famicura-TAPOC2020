@@ -20,7 +20,9 @@
  *   GET  /api/nahravky/:id/soubor   přehrání nahrávky ze serveru (Range), každé přehrání do auditu A_KAM_Prehrani; z Disku přesměruje;
  *                                   uzamčenou (pořízenou při rozostření rodiny) poskytovatel nedostane (423), dokud ji rodina neodemkne
  *   POST /api/nahravky/:id/odemknout  rodina odemkne uzamčenou nahrávku své kamery poskytovateli (zapíše se kdo a kdy, řádek v historii);
- *                                   smí i správce serveru (heslo hlavní aplikace) – řádek v historii říká, že to byl správce, ne rodina
+ *                                   smí i správce serveru (heslo hlavní aplikace) – řádek v historii říká, že to byl správce, ne rodina;
+ *                                   dispečer (dispečink i mobilní) jen s { heslo } = heslo hlavní aplikace („demo heslo“ pro prezentaci),
+ *                                   jinak 401 { heslo: true }; v historii „… odemkl(a) heslem správce (ukázka)“
  *                                   ?stahnout=1 = stažení celého souboru (poskytovatel), v auditu jako „stažení“
  *   GET  /api/nahravky/:id/audit    kdo nahrávku přehrál (poskytovatel)
  *   DELETE /api/nahravky/:id        smazání (poskytovatel)
@@ -724,14 +726,28 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         if (m === 'POST' && mOdemkni) {
           if (!nahravky) return nejsou();
           const spravce = !rodina && ja.role === 'admin';
-          if (!rodina && !spravce) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci, nebo správce serveru.' }, 403);
+          const dispecer = ja.role === 'dispecer' || mobilniDispecer;   // dispečink (účet Plus) i mobilní dispečer
+          if (!rodina && !spravce && !dispecer) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina ve své aplikaci, nebo správce serveru.' }, 403);
           const n = await nahravky.podleId(tenant, mOdemkni[1]);
           if (!n || !(await smiKameruId(n.kameraId))) return json({ ok: false, error: 'Nahrávka neexistuje.' }, 404);
-          if (rodina && !smiJakoRodina(n.kameraId)) return json({ ok: false, error: 'Nahrávku může odemknout jen rodina té kamery (dispečer v režimu Rodina); dispečer jen sleduje.' }, 403);
+          const jakoRodina = rodina && smiJakoRodina(n.kameraId);
+          let demo = false;
+          if (!jakoRodina && !spravce) {
+            // dispečer bez rodiny: jen heslem hlavní aplikace (demo heslo pro prezentaci) – stejná brzda pokusů jako přihlášení
+            const { heslo } = await telo(req);
+            const ip = klientIp(req);
+            const cekat = limiter.blokovano(ip);
+            if (cekat) return json({ ok: false, error: `Příliš mnoho pokusů. Zkuste to za ${Math.ceil(cekat / 60)} min.` }, 429);
+            if (typeof heslo !== 'string' || !heslo) return json({ ok: false, heslo: true, error: 'Uzamčenou nahrávku odemkne rodina ve své aplikaci; dispečer jen demo heslem (heslo hlavní aplikace).' }, 401);
+            if (!hesloSedi(heslo)) { limiter.chyba(ip); console.warn(`[famicura-tapo] ${tenant} ${ja.jmeno || rodina?.jmeno || ''}: odemknutí nahrávky ${n.id} – špatné demo heslo`); return json({ ok: false, heslo: true, error: 'Demo heslo nesedí (je to heslo hlavní aplikace).' }, 401); }
+            limiter.uspech(ip);
+            demo = true;
+          }
           if (!n.zamek) return json({ ok: true, nahravka: n, zmena: false });
-          const kdo = spravce ? 'Správce serveru' : rodina.jmeno;
+          const jmeno = rodina ? rodina.jmeno : ja.jmeno || 'Dispečer';
+          const kdo = spravce ? 'Správce serveru' : demo ? `${jmeno} (dispečer, demo heslem)` : jmeno;
           const out = await nahravky.odemkni(tenant, n, { kdo });
-          await (await stavTenanta()).odemknutiNahravky({ id: n.id, kameraId: n.kameraId, cas: n.cas, delkaS: n.delkaS, kdo, spravce }).catch((e) => console.error('[famicura-tapo] odemknutí nahrávky v historii:', e.message));
+          await (await stavTenanta()).odemknutiNahravky({ id: n.id, kameraId: n.kameraId, cas: n.cas, delkaS: n.delkaS, kdo: spravce ? kdo : jmeno, spravce, demo }).catch((e) => console.error('[famicura-tapo] odemknutí nahrávky v historii:', e.message));
           return json({ ok: true, nahravka: out, zmena: true });
         }
         if (m === 'GET' && path === '/api/nahravky') {
