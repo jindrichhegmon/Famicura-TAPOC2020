@@ -268,8 +268,7 @@ Kontakty jsou v detailu kamery → záložka Komunikace a kontakty → „Kontak
 ` },
   { id: 'poznamky', obrazky: [{ src: '/proto/napoveda/komunikace.png', popis: 'Sekce Komunikace v detailu kamery: poskytovatel, poznámka ke klientovi, dál uživatelé rodiny, kontakty a poznámky' }, { src: '/proto/napoveda/poznamky.png', popis: 'Poznámky dispečinku: pole, tlačítko a seznam s časem a jménem' }], nazev: 'Poznámky dispečinku ke kameře', klicova: ['poznamk', 'zapsat', 'zapis', 'zaznam', 'log', 'co jsem udelal', 'deník', 'denik'],
     obsah: `
-### Klient v Péče doma plus a poznámka ke klientovi
-- V záložce Komunikace a kontakty je **Klient v Péče doma plus**: vložte odkaz na aplikaci PéčeDoma klienta (z Péče doma plus, obsahuje KLIENTID=…) nebo jen KLIENTID a uložte. Aplikace PéčeDoma tohoto klienta pak otevírá Famicura Kameru (nebo web rodiny) rovnou na téhle kameře. Jeden klient může být jen u jedné kamery; přiřazení i odebrání je v historii kamery. Obraz vidí stále jen účet rodiny, který k té kameře je.
+### Poznámka ke klientovi
 - „Poznámka ke klientovi“: trvalá informace (zdravotní stav, na co dát pozor).
 - Poskytovatel ji upraví tlačítkem Upravit; změna se zapíše do logu.
 
@@ -365,6 +364,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.78 (13. 10. 2026)**: pole Klient v Péče doma plus v dispečinku je pryč – kamery klienta se zapisují na centrále PéčeDoma (odkaz na kameru z Uživatelů rodiny), aplikace klienta si je bere odtud.
 - **Verze 3.77 (13. 10. 2026)**: v Komunikaci → Uživatelé rodiny je **Odkaz na kameru pro PéčeDoma** (Kopírovat): kamera má svůj odkaz, jde otevřít i bez PéčeDoma; v aplikaci PéčeDoma klienta (3.7.0) se odkazy kamer zapisují v Kamera a náramek → Upravit kamery (heslo hlavní aplikace) – klient může mít kamer víc a vybere si ze seznamu.
 - **Verze 3.76 (13. 10. 2026)**: tlačítko ‹ PéčeDoma v aplikaci rodiny předá aplikaci PéčeDoma kameru, kterou rodina právě používá (a poskytovatele) – PéčeDoma si ji uloží a příště otevře rovnou ji. Propojení tak funguje jen mezi PéčeDoma a aplikací rodiny, bez zadávání v dispečinku (to zůstává jako další možnost).
 - **Verze 3.75 (13. 10. 2026)**: v Komunikaci a kontaktech je **Klient v Péče doma plus** – vložením odkazu PéčeDoma (KLIENTID) se klient přiřadí ke kameře a jeho aplikace PéčeDoma pak otevírá Famicura Kameru rovnou na ní (i bez prstenu).

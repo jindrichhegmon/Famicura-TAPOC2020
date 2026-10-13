@@ -5,6 +5,12 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.78 · 13. 10. 2026 · bez pole Klient v Péče doma plus
+
+- Dispečink už nemá pole „Klient v Péče doma plus“ a server veřejný dotaz `GET /api/klient/kamera` (3.75):
+  kamery klienta zapisuje centrála PéčeDoma do své tabulky (PéčeDoma 3.7.1, `A_MSPPP_KlientKamera`) podle
+  odkazu na kameru z Uživatelů rodiny. Sloupec `KlientID` a akce `setKlient` zůstávají (nepoužívají se).
+
 ## 3.77 · 13. 10. 2026 · odkaz na kameru pro PéčeDoma
 
 - Dispečink, Komunikace → Uživatelé rodiny: **Odkaz na kameru pro PéčeDoma** (`…/proto/rodina.html?tenant=…&kamera=ID`)
