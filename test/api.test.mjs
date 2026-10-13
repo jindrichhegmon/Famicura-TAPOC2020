@@ -542,6 +542,17 @@ test('mobilní dispečer: účet rodiny s rolí dispecer vidí všechny kamery t
   assert.equal((await (await h(req('GET', '/api/rodina/ja', { cookies: c3 }))).json()).rezimRodina, true);
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }))).status, 200, 'v režimu Rodina u své kamery nastavuje');
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'setConsent', args: ['druha', { den: 'full' }] } }))).status, 403, 'u ostatních jen sleduje');
+  // žádost o plný obraz: args[0] je ID žádosti, ne kamery – v režimu Rodina ji u své kamery vyřídí, u cizí ne
+  await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'blur', noc: 'blur' }] } }));
+  const zad = (await (await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'requestFull', args: ['tapoc2020', 'Dispečerka', 'ověření'] } }))).json()).vysledek;
+  assert.ok(zad?.id, 'žádost vznikla');
+  const odp = await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'answerRequest', args: [zad.id, 'minutes', 15] } }));
+  assert.equal(odp.status, 200, 'v režimu Rodina žádost u své kamery povolí');
+  const stavPo = (await (await h(req('GET', '/api/proto/stav', { cookies: cookie() }))).json()).state;
+  assert.equal(stavPo.requests.find((x) => x.id === zad.id)?.state, 'povoleno', 'žádost je povolená');
+  const zad2 = (await (await h(req('POST', '/api/proto/akce', { cookies: cookie(), body: { akce: 'requestFull', args: ['druha', 'Dispečerka', 'ověření'] } }))).json()).vysledek;
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'answerRequest', args: [zad2.id, 'minutes', 15] } }))).status, 403, 'žádost u cizí kamery nevyřídí');
+  assert.equal((await h(req('POST', '/api/proto/akce', { cookies: c3, body: { akce: 'answerRequest', args: ['neexistuje', 'minutes', 15] } }))).status, 403, 'neznámá žádost: ne');
   // podvržené nebo cizí odemčení neplatí
   assert.equal((await h(req('POST', '/api/proto/akce', { cookies: `${c2}; ${rr.replace(/\.[^.]+$/, '.podvrh')}`, body: { akce: 'setConsent', args: ['tapoc2020', { den: 'full' }] } }))).status, 403, 'podvržený podpis');
   // zpět na Dispečer: cookie se smaže

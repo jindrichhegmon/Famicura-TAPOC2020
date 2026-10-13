@@ -5,6 +5,14 @@ aplikací (hlavní aplikace, rodina, dispečink, provoz, přihlášení). Stejn�
 číslo nese značka v gitu (`git tag`) a téma „Co je nové“ v nápovědě
 dispečinku. Postup nové verze je v README, část „Verze“.
 
+## 3.72 · 13. 10. 2026 · oprava: mobilní dispečer v režimu Rodina vyřídí žádost o plný obraz
+
+- `src/api.mjs`, `/api/proto/akce`: kontrola mobilního dispečera (`smiJakoRodina(args[0])`) brala
+  `args[0]` vždy jako ID kamery, ale `answerRequest` má v `args[0]` ID žádosti – dispečer, který je
+  u kamery zároveň rodinou, v režimu Rodina dostal na Povolit / Odmítnout 403 a tlačítka „nereagovala“.
+  Kamera se teď u `answerRequest` dohledá ze žádosti; u cizí kamery a u neznámé žádosti zůstává 403.
+  Test v `test/api.test.mjs` (režim Rodina).
+
 ## 3.71 · 13. 10. 2026 · pozvánka otevře svou kameru, odkaz ?kamera=
 
 - `uzivatele.pozvanka(token)` vrací i `kamery` účtu; `public/proto/rodina.js` si z pozvánky vezme

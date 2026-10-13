@@ -364,6 +364,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.72 (13. 10. 2026)**: oprava: dispečer, který je u kamery zároveň rodinou, v režimu Rodina nemohl vyřídit žádost poskytovatele o plný obraz (tlačítka Povolit na 15 min / Natrvalo / Odmítnout server odmítal). Teď žádost u své kamery vyřídí, u cizí kamery dál ne.
 - **Verze 3.71 (13. 10. 2026)**: odkaz z pozvánky otevře po nastavení hesla kameru, ke které pozvánka patří (dřív první kameru poskytovatele – u dispečera, který je zároveň rodinou, tak byla v aplikaci rodiny jiná kamera než v dispečinku). Aplikaci rodiny jde otevřít rovnou na kameře odkazem „/proto/rodina.html?kamera=ID_KAMERY“.
 - **Verze 3.70 (13. 10. 2026)**: demo heslo pro odemknutí nahrávky dispečerem se zadává do políčka pod tlačítkem 🗝️ a při psaní se nezobrazuje.
 - **Verze 3.69 (13. 10. 2026)**: pro prezentaci: dispečer odemkne uzamčenou nahrávku tlačítkem 🔓 Demo heslo (heslo hlavní aplikace) – v dispečinku u 🔒 i v aplikaci rodiny; do historie kamery jde, že to bylo demo heslem, ne rodinou.

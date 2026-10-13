@@ -506,7 +506,9 @@ export function createHandler({ dbs, go2rtc, store, limiter = createLimiter(), u
         // Náramek/přívěsek ke kameře přiřazuje poskytovatel (jen on ví ID zařízení a odpovídá za jeho poplachy).
         if ((akce === 'setNaramek' || akce === 'setNaramekAuto' || akce === 'setNaramekSos') && rodina) return jenPoskytovatel();
         // Mobilní dispečer jen sleduje: ze stavu smí jen zapsat, že se dívá (setWatching); u kamer, kde je zároveň rodina, nastavuje jako rodina.
-        if (mobilniDispecer && akce !== 'setWatching' && !smiJakoRodina(args[0])) return rodina.kamery.includes(String(args[0])) ? json({ ok: false, error: 'Nastavovat jako rodina jde jen v režimu Rodina (Můj účet → Rodina, heslo hlavní aplikace).' }, 403) : jenSleduje();
+        // answerRequest má v args[0] ID žádosti, ne kamery: kamera se dohledá ze žádosti (jinak mobilní dispečer v režimu Rodina žádost o plný obraz nevyřídil – 403)
+        const kameraAkce = akce === 'answerRequest' ? ((await (await stavTenanta()).stav()).state.requests.find((x) => x.id === args[0])?.patientId || '') : args[0];
+        if (mobilniDispecer && akce !== 'setWatching' && !smiJakoRodina(kameraAkce)) return rodina.kamery.includes(String(kameraAkce)) ? json({ ok: false, error: 'Nastavovat jako rodina jde jen v režimu Rodina (Můj účet → Rodina, heslo hlavní aplikace).' }, 403) : jenSleduje();
         // Deaktivovat a aktivovat kameru smí jen rodina; jméno do historie dosadí server.
         if (akce === 'deaktivace') {
           if (!rodina) return json({ ok: false, error: 'Deaktivovat a aktivovat kameru může jen rodina ve své aplikaci.' }, 403);
