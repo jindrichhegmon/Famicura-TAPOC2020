@@ -290,7 +290,19 @@ const FAKE = [
 
 /* Údaje poskytovatele: zadávají se na jednom místě (dispečink → Upravit) a jsou
  * ve sdíleném stavu, takže je stejně vidí všichni dispečeři, detail kamery i rodina. */
-export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', dispecinkZdroj: 'vlastni', sluzbaTelefon: '', sluzbaZdroj: 'vlastni', administraceTelefon: '', administraceZdroj: 'vlastni', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkaPredS: 5, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2 };
+export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', telefon: '312 123 456', dispecinkZdroj: 'vlastni', sluzbaTelefon: '', sluzbaZdroj: 'vlastni', administraceTelefon: '', administraceZdroj: 'vlastni', email: 'dispecink@pskladno.cz', dispecer: 'Jana Nováková', smena: 'denní směna', zaloha: 'Petr Dvořák', zalohaTelefon: '777 222 333', vedouci: 'Mgr. Hana Veselá', vedouciTelefon: '777 444 555', eskalaceMin: 2, nahravkaS: 15, nahravkaPredS: 5, nahravkyUloziste: 'server', nahravkyDny: 30, nahravkyDisk: false, nahravkyGB: 2, zarizeni: 'naramek,prsten' };
+/** Zařízení u kamer, která dispečink sleduje (nastavení poskytovatele, klíč zarizeni = ID oddělená čárkou; chybí = všechna).
+ *  Nezatržené zařízení dispečink neukazuje (dlaždice agendy v detailu, štítky, jeho události ve frontě); server měření dál
+ *  ukládá a rodina ho vidí. Budoucí zařízení se přidají sem: ID, název, ikona a zdroje událostí (KINDS[kind].source). */
+export const ZARIZENI = {
+  naramek: { nazev: 'Náramek / přívěsek SOS', ic: '⌚', zdroje: ['náramek'] },
+  prsten: { nazev: 'Prsten (QRing / Colmi)', ic: '💍', zdroje: ['prsten'] },
+};
+export const normZarizeni = (v) => [...new Set((Array.isArray(v) ? v : String(v ?? '').split(',')).map((x) => String(x).trim()).filter((id) => ZARIZENI[id]))].join(',');
+/** Zapnutá zařízení podle nastavení poskytovatele (Set ID). Starší nastavení bez klíče = všechna. */
+export function zarizeniZapnuta(s) { const v = s?.poskytovatel?.zarizeni; return new Set((v === undefined || v === null ? POSKYTOVATEL_VYCHOZI.zarizeni : normZarizeni(v)).split(',').filter(Boolean)); }
+/** Ke kterému zařízení událost patří (podle zdroje druhu), null = kamera / analýza / systém. */
+export const udalostZarizeni = (e) => { const z = KINDS[e?.kind]?.source; return Object.keys(ZARIZENI).find((id) => ZARIZENI[id].zdroje.includes(z)) || null; };
 export function poskytovatel(s) { const p = { ...POSKYTOVATEL_VYCHOZI, ...(s?.poskytovatel || {}) }; p.eskalaceMin = Number(p.eskalaceMin) || POSKYTOVATEL_VYCHOZI.eskalaceMin; return p; }
 /** Jméno poskytovatele pro pacienta: u skutečné kamery ze sdílených údajů, u ukázkových pacientů jejich vlastní. */
 export function poskytovatelPro(s, p) { return p?.real ? poskytovatel(s).nazev : (p?.provider || poskytovatel(s).nazev); }
@@ -643,7 +655,8 @@ const akce = {
   setPoskytovatel(s, now, p) {
     if (!p || typeof p !== 'object') throw chyba('Chybí údaje poskytovatele.');
     const n = { ...poskytovatel(s) };
-    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && !['eskalaceMin', 'nahravkaS', 'nahravkaPredS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB'].includes(k)) n[k] = str(p[k], 80, k).trim();
+    for (const k of Object.keys(POSKYTOVATEL_VYCHOZI)) if (k in p && !['eskalaceMin', 'nahravkaS', 'nahravkaPredS', 'nahravkyUloziste', 'nahravkyDny', 'nahravkyDisk', 'nahravkyGB', 'zarizeni'].includes(k)) n[k] = str(p[k], 80, k).trim();
+    if ('zarizeni' in p) n.zarizeni = normZarizeni(p.zarizeni);   // pole nebo text; neznámá ID se zahodí, prázdné = žádné zařízení
     if ('nahravkyGB' in p) { const m = Number(p.nahravkyGB); if (!Number.isFinite(m) || m < 0 || m > 500) throw chyba('Limit místa nahrávek: 0 (bez limitu) až 500 GB.'); n.nahravkyGB = Math.round(m * 10) / 10; }
     if ('nahravkyDisk' in p) n.nahravkyDisk = p.nahravkyDisk === true || p.nahravkyDisk === 'true' || p.nahravkyDisk === 1;
     if ('nahravkyUloziste' in p) { if (!['server', 'disk'].includes(p.nahravkyUloziste)) throw chyba('Úložiště nahrávek: server, nebo disk (Google Disk).'); n.nahravkyUloziste = p.nahravkyUloziste; }

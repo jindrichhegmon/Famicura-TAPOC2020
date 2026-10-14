@@ -57,6 +57,9 @@ test('tenant: kamery ze serveru dostanou řádek, akce zapisují jen změněné 
   await s.proved('setPoskytovatel', [{ nazev: 'FamiCura s.r.o.', telefon: '777 000 111', dispecer: 'Eva Malá', eskalaceMin: 3 }]);
   const nast = Object.fromEntries(tb.data[T].A_KAM_Nastaveni.map((r) => [r.Klic, r.Hodnota]));
   assert.equal(nast['poskytovatel.telefon'], '777 000 111'); assert.equal(nast['poskytovatel.eskalaceMin'], '3');
+  // sledovaná zařízení: pole nebo text, neznámá ID se zahodí; ukládá se jako text oddělený čárkou
+  await s.proved('setPoskytovatel', [{ zarizeni: ['prsten', 'xxx'] }]);
+  assert.equal(Object.fromEntries(tb.data[T].A_KAM_Nastaveni.map((r) => [r.Klic, r.Hodnota]))['poskytovatel.zarizeni'], 'prsten');
   await s.proved('klidDo', ['tapoc2020', '120']);
   assert.ok(tb.data[T].A_KAM_Kamera[0].KlidDo > 1_700_000_000_000);
   await s.proved('setNote', ['tapoc2020', 'Chodí s hůlkou.', 'Eva']);
@@ -74,6 +77,7 @@ test('tenant: kamery ze serveru dostanou řádek, akce zapisují jen změněné 
   assert.equal(st2.state.events[0].at >= st2.state.events[1].at, true, 'nejnovější první');
   assert.equal(st2.state.grants.tapoc2020.kind, 'souhlas rodiny'); assert.equal(st2.state.watching.tapoc2020.who, 'Dispečerka Jana');
   assert.equal(st2.state.poskytovatel.dispecer, 'Eva Malá'); assert.equal(st2.state.poskytovatel.eskalaceMin, 3);
+  assert.equal(st2.state.poskytovatel.zarizeni, 'prsten', 'sledovaná zařízení přežijí restart');
   assert.ok(st2.state.klid.tapoc2020 > 1_700_000_010_000);
   assert.equal(st2.state.requests[0].state, 'povoleno');
   assert.equal(st2.state.notifications.filter((n) => !n.ack).length, 0, 'potvrzené notifikace');

@@ -364,6 +364,7 @@ Celá nápověda i s obrázky obrazovek jde vytisknout nebo uložit jako PDF.
 ` },
   { id: 'novinky', nazev: 'Co je nové', klicova: ['novink', 'co je nove', 'zmeny', 'verze', 'aktualizace'],
     obsah: `
+- **Verze 3.80 (14. 10. 2026)**: v Nastavení (ozubené kolečko) → Dispečink je **Sledovaná zařízení u kamer** – zaškrtnete, která zařízení (⌚ náramek, 💍 prsten) dispečink sleduje; nezatržené zmizí z detailu kamery, štítků i fronty alertů, server i rodina je dál mají.
 - **Verze 3.79 (13. 10. 2026)**: přihlášení rodiny bere ohled na poskytovatele z odkazu (?tenant=) – stejné číslo se stejným heslem u více poskytovatelů se přihlásí k tomu z odkazu, ne k prvnímu nalezenému; heslo jen od jiného poskytovatele se odmítne s vysvětlením.
 - **Verze 3.78 (13. 10. 2026)**: pole Klient v Péče doma plus v dispečinku je pryč – kamery klienta se zapisují na centrále PéčeDoma (odkaz na kameru z Uživatelů rodiny), aplikace klienta si je bere odtud.
 - **Verze 3.77 (13. 10. 2026)**: v Komunikaci → Uživatelé rodiny je **Odkaz na kameru pro PéčeDoma** (Kopírovat): kamera má svůj odkaz, jde otevřít i bez PéčeDoma; v aplikaci PéčeDoma klienta (3.7.0) se odkazy kamer zapisují v Kamera a náramek → Upravit kamery (heslo hlavní aplikace) – klient může mít kamer víc a vybere si ze seznamu.
@@ -474,6 +475,7 @@ Ozubené kolečko vpravo nahoře otevře Nastavení. Ukládá se tlačítkem **U
 ### Co se nastavuje
 - **Poskytovatel**: název služby a e-mail. Telefony dispečinku, služby a administrace se zadávají v detailu kamery → Komunikace a kontakty → Poskytovatel a platí pro všechny kamery.
 - **Dispečink**: dispečer(ka) ve službě, směna, záloha s telefonem, vedoucí s telefonem a po kolika minutách eskaluje nepřevzatý kritický alert. Jméno dispečera se zapisuje k převzetí alertů, k poznámkám a do žádostí o obraz.
+- **Sledovaná zařízení u kamer** (od 3.80): zaškrtněte, která zařízení u klientů dispečink sleduje – ⌚ náramek / přívěsek SOS, 💍 prsten; další přibudou. Nezatržené zařízení se v dispečinku neukazuje: v detailu kamery chybí jeho dlaždice agendy, u kamer jeho štítky a jeho události (např. SOS, pád hlášený náramkem, slabá baterie) nejsou ve frontě alertů ani v kartě Směna. Server měření a události dál ukládá a rodina zařízení ve své aplikaci vidí dál; po zatržení se vše zase objeví. Platí pro všechny dispečery poskytovatele.
 - **Nahrávky**: sekund po události, obraz před událostí, úložiště server / Google Disk, doba uchování, limit místa.
 - **Zobrazení**: barevné schéma dispečinku pro tento počítač.
 - **Zkušební SMS a e-mail** ze serveru.

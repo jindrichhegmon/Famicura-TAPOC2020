@@ -1,6 +1,6 @@
 import { createSource } from '/proto/zdroj.js';
 import { kresliMapu, prekresliMapu, popisStavu, popisVypnuti, popisTelefonu, pametMereni, nactiMereni as nactiMereniNaramku, kresliStranuMereni, kresliGrafy, poplachyNaramku, jeTicho, SLOUPCE_PRSTENU, namereneDruhy, dlazdicePrstenu, popisPrstenu } from '/proto/naramek-ui.js';
-import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
+import { mountAuthBanner, sim, KINDS, LEVEL_LABEL, urovenUdalosti, ZARIZENI, zarizeniZapnuta, udalostZarizeni, mountPanel, toast, fmtT, fmtDT, esc, escOdkazy, eventText, MEZE_ZDRAVI, urovenHodnoty, ago, setHtml, agoSpan, refreshAgo, WATCH_KINDS, kontaktyPro, describeKontakty, upozorneniVychozi, normalizeTelefonCz, jeEmail, KONTAKTY_RODINA_MAX, rodinaSTelefonem, popisPrijemce, smsIdsPro, mailIdsPro, telefonyPoskytovatele, rozdelMaily, formatTelefon, ROLE_POSKYTOVATELE, POPIS_ROLE, ZDROJE_TELEFONU, POPIS_ZDROJE_TELEFONU, POLE_ROLE, cisloSosPro, popisTelefonuRole, formatTelefonMez } from '/proto/sim.js';
 
 const $ = (id) => document.getElementById(id);
 /* Údaje poskytovatele (název, telefon, dispečer, směna, záloha) se zadávají
@@ -24,7 +24,7 @@ function renderHlavicka() {
 function renderSmena() {
   const h = sim.poskytovatel, s = sim.state;
   const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
-  const dnesni = s.events.filter((e) => e.at >= dnes.getTime() && KINDS[e.kind] && urovenUdalosti(e) !== 'info' && e.kind !== 'consent');
+  const dnesni = s.events.filter((e) => e.at >= dnes.getTime() && KINDS[e.kind] && urovenUdalosti(e) !== 'info' && e.kind !== 'consent' && udalostSledovana(e));
   const prevzate = dnesni.filter((e) => e.takenAt);
   const prum = prevzate.length ? Math.round(prevzate.reduce((a, e) => a + (e.takenAt - e.at), 0) / prevzate.length / 1000) : null;
   const uzavrene = dnesni.filter((e) => e.state === 'uzavřen' && e.result);
@@ -33,9 +33,13 @@ function renderSmena() {
   $('smenaInfo').innerHTML = `${esc(h.dispecer)}${h.smena ? ', ' + esc(h.smena) : ''}. Nepřevzatý kritický alert po <strong>${h.eskalaceMin} min</strong> eskaluje na ${esc(kam)}. `
     + `Dnes: alertů <strong>${dnesni.length}</strong>, doba převzetí <strong>${prum === null ? '–' : Math.floor(prum / 60) + ':' + String(prum % 60).padStart(2, '0') + ' min'}</strong>, plané poplachy <strong>${plane === null ? '–' : plane + ' %'}</strong>.`;
 }
+/* Sledovaná zařízení (nastavení poskytovatele): nezatržené se v dispečinku neukazuje – agenda v detailu, štítky, jeho události. */
+const zarizeniOn = (id) => zarizeniZapnuta(sim.state).has(id);
+const udalostSledovana = (e) => { const z = udalostZarizeni(e); return !z || zarizeniOn(z); };
 function otevriNastaveni() {
   const h = sim.poskytovatel;
   for (const k of HL_POLE) { if (k === 'nahravkyDisk') hlPole(k).checked = !!h[k]; else hlPole(k).value = h[k] ?? ''; }
+  setHtml($('hlZarizeni'), Object.entries(ZARIZENI).map(([id, z]) => `<label class="small chip"><input type="checkbox" name="zarizeni" value="${id}"${zarizeniOn(id) ? ' checked' : ''}> ${z.ic} ${esc(z.nazev)}</label>`).join(''));
   $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
   $('hlErr').classList.add('hide');
   $('nastaveni').classList.remove('hide'); $('hlNazev').focus();
@@ -262,11 +266,12 @@ $('zdrojNastaveni').querySelectorAll('button').forEach((b) => { b.onclick = () =
 $('hlForm').onsubmit = async (e) => {
   e.preventDefault();
   const p = {}; for (const k of HL_POLE) p[k] = k === 'nahravkyDisk' ? hlPole(k).checked : (k === 'eskalaceMin' || k === 'nahravkaS' || k === 'nahravkaPredS' || k === 'nahravkyDny' || k === 'nahravkyGB') ? Number(hlPole(k).value) : hlPole(k).value.trim();
+  p.zarizeni = [...$('hlZarizeni').querySelectorAll('input[name="zarizeni"]:checked')].map((i) => i.value);
   try {
     const r = await sim.setPoskytovatel(p);
     if (r === undefined && sim.naServeru) { $('hlErr').textContent = 'Uložení se nepodařilo, zkuste to znovu.'; $('hlErr').classList.remove('hide'); return; }
   } catch (ex) { $('hlErr').textContent = ex.message; $('hlErr').classList.remove('hide'); return; }
-  $('nastaveni').classList.add('hide'); renderHlavicka(); toast('Nastavení uloženo.');
+  $('nastaveni').classList.add('hide'); renderHlavicka(); renderTiles(); renderQueue(); renderDetail(true); toast('Nastavení uloženo.');
 };
 renderHlavicka();
 
@@ -474,7 +479,7 @@ function detailMode(pid) {
   if (overlay && (m === 'full' || m === 'blur')) return m === 'full' ? 'fullskel' : 'blurskel';
   return m;
 }
-function openAlerts(pid) { return sim.state.events.filter((e) => e.patientId === pid && e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info'); }
+function openAlerts(pid) { return sim.state.events.filter((e) => e.patientId === pid && e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && udalostSledovana(e)); }
 function statusOf(p) {
   if (p.offline) return 'off';
   const o = openAlerts(p.id);
@@ -527,11 +532,11 @@ function renderTiles() {
     t.querySelector('.tag').textContent = rezimText;
     t.querySelector('.st').dataset.rezim = rezimText;   // v zobrazení Seznam je štítek schovaný, režim se čte z řádku stavu
     const b = t.querySelector('.st-badge'); b.textContent = { crit: 'kritické', warn: 'varování', off: 'offline', klid: 'klid' }[st]; b.className = 'badge st-badge ' + (st === 'klid' ? 'ok' : st === 'off' ? 'tech' : st);
-    const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent' && e.kind !== 'poznamka');
-    t.querySelector('.st').textContent = (p.naramek?.vypnuto ? '⏻ náramek vypnutý · ' : '') + (last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí');
+    const last = s.events.find((e) => e.patientId === p.id && e.kind !== 'consent' && e.kind !== 'poznamka' && udalostSledovana(e));
+    t.querySelector('.st').textContent = (p.naramek?.vypnuto && zarizeniOn('naramek') ? '⏻ náramek vypnutý · ' : '') + (last ? `${eventText(last)} · před ${ago(last.at)}` : 'bez událostí');
   });
   $('nPat').textContent = s.patients.filter(visible).length;
-  const vis = (e) => visible(sim.patient(e.patientId) || {});
+  const vis = (e) => visible(sim.patient(e.patientId) || {}) && udalostSledovana(e);
   const opens = s.events.filter((e) => e.state === 'nový' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && vis(e));
   $('nNew').textContent = opens.length;
   $('nCrit').textContent = opens.filter((e) => KINDS[e.kind].level === 'crit').length;
@@ -556,11 +561,11 @@ async function uzavritVse(patientId, pocet) {
   const r = await sim.closeAll(patientId || '', ME(), vysledek.trim() || 'hromadně uzavřeno');
   toast(`Uzavřeno ${r?.pocet ?? pocet} alertů.`);
 }
-$('queueVse')?.addEventListener('click', () => { const n = sim.state.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {})).length; uzavritVse('', n); });
+$('queueVse')?.addEventListener('click', () => { const n = sim.state.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {}) && udalostSledovana(e)).length; uzavritVse('', n); });
 function renderQueue() {
   if (!zobrazuj) return;
   const s = sim.state;
-  const items = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {}));
+  const items = s.events.filter((e) => e.state !== 'uzavřen' && KINDS[e.kind] && KINDS[e.kind].level !== 'info' && visible(sim.patient(e.patientId) || {}) && udalostSledovana(e));
   const order = { crit: 0, warn: 1, tech: 2 };
   items.sort((a, b) => order[KINDS[a.kind].level] - order[KINDS[b.kind].level] || a.at - b.at);
   const queueHtml = items.map((e) => {
@@ -595,8 +600,8 @@ function renderDetail(rebuild = false) {
       <div class="agendy" id="dtabs" role="tablist">
         <div class="skupina zobrazeni"><span class="sklabel">Sledování – co se děje</span><div class="agendy-mriz">
           <button type="button" class="agenda" data-t="monitoring" role="tab"><span class="ic">👁</span><span class="nz">Monitoring</span><span class="po">obraz z kamery, poznámky, historie, nahrávky</span></button>
-          <button type="button" class="agenda" data-t="naramek" role="tab"><span class="ic">⌚</span><span class="nz">Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></span><span class="po">SOS, poloha, měření zdraví</span></button>
-          <button type="button" class="agenda" data-t="prsten" role="tab"><span class="ic">💍</span><span class="nz">Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">bez měření</span></span><span class="po">tep, kyslík a další hodnoty z prstenu</span></button>
+          <button type="button" class="agenda${zarizeniOn('naramek') ? '' : ' hide'}" data-t="naramek" role="tab"><span class="ic">⌚</span><span class="nz">Náramek<span class="badge crit hide" id="dtabVyp" title="náramek je vypnutý">⏻ vypnutý</span><span class="badge neni hide" id="dtabNeni" title="ke kameře není přiřazený žádný náramek">nepřiřazen</span></span><span class="po">SOS, poloha, měření zdraví</span></button>
+          <button type="button" class="agenda${zarizeniOn('prsten') ? '' : ' hide'}" data-t="prsten" role="tab"><span class="ic">💍</span><span class="nz">Prsten<span class="badge neni hide" id="dtabPrstenNeni" title="od prstenu zatím nepřišlo žádné měření">bez měření</span></span><span class="po">tep, kyslík a další hodnoty z prstenu</span></button>
         </div></div>
         <div class="skupina chovani"><span class="sklabel">Nastavení – jak se má chovat</span><div class="agendy-mriz">
           <button type="button" class="agenda" data-t="komunikace" role="tab"><span class="ic">💬</span><span class="nz">Komunikace a kontakty</span><span class="po">uživatelé rodiny, kontakty pro upozornění</span></button>
@@ -631,7 +636,7 @@ function renderDetail(rebuild = false) {
           <div class="kgrid kposk">${ROLE_POSKYTOVATELE.map((r) => { const tp = telefonyPoskytovatele(sim.state)[r]; return `<label>Telefon – ${esc(POPIS_ROLE[r])}<select class="kpzdroj" data-r="${r}">${ZDROJE_TELEFONU.map((z) => `<option value="${z}"${tp.zdroj === z ? ' selected' : ''}>${esc(POPIS_ZDROJE_TELEFONU[z])}</option>`).join('')}</select></label><label class="kptelL${tp.zdroj === 'pecedoma' ? ' kneviditelne' : ''}" data-r="${r}">${tp.zdroj === 'pecedomaplus' ? 'číslo v Péče doma plus' : 'vlastní číslo'}<input type="tel" class="kptel" data-r="${r}" maxlength="20" placeholder="777 123 456" value="${esc(tp.telefon ? formatTelefon(tp.telefon) : '')}"></label><span class="small kpnahled" data-r="${r}"></span>`; }).join('')}</div>
           <p class="small muted" id="dkontaktyPosk">– Péče doma = kontaktní telefon poskytovatele v databázi Péče doma (bez tenanta, jedno číslo pro všechny tři); Péče doma plus = telefon v nastavení tohoto tenanta, zadáte ho tady a uloží se do Péče doma plus. Číslo z Péče doma (plus) dosadí server při každé události i do náramku a při změně ho pošle znovu.</p>
           </fieldset>
-          <fieldset class="ksekce" id="dksos"><legend>Telefonní čísla náramku <span class="muted">(SOS: volá 1 → 2 → 3)</span></legend>
+          <fieldset class="ksekce${zarizeniOn('naramek') ? '' : ' hide'}" id="dksos"><legend>Telefonní čísla náramku <span class="muted">(SOS: volá 1 → 2 → 3)</span></legend>
           <p class="small muted hide" id="dksosBez">– náramek není přiřazen; přiřaďte ho v záložce ⌚ Náramek (Přiřazení náramku), pak tu vyberete, koho volá.</p>
           <div class="kgrid ksos">${[0, 1, 2].map((i) => `<label>SOS ${i + 1}. číslo<select class="nsos" data-i="${i}"${p.naramek?.id ? '' : ' disabled'}>${volbySos(p, p.naramek?.sos?.[i] || '')}</select></label>`).join('')}</div>
           <p class="small" id="dnaramekVola"></p>
@@ -705,7 +710,7 @@ function renderDetail(rebuild = false) {
     const tabs = d.querySelector('#dtabs');
     const NAZVY_AGEND = { monitoring: '👁 Monitoring', naramek: '⌚ Náramek', prsten: '💍 Prsten', komunikace: '💬 Komunikace a kontakty', nastaveni: '⚙ Nastavení alertů' };
     const ukazTab = (t, posun = true) => {
-      dtab = t && NAZVY_AGEND[t] ? t : null;
+      dtab = t && NAZVY_AGEND[t] && (!ZARIZENI[t] || zarizeniOn(t)) ? t : null;   // agenda nezatrženého zařízení se neotevře
       tabs.querySelectorAll('button.agenda').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === dtab)));
       d.querySelectorAll('.dsec').forEach((sec) => sec.classList.toggle('hide', sec.dataset.sec !== dtab));
       tabs.classList.toggle('hide', !!dtab);
@@ -1131,7 +1136,7 @@ function renderHistorie(d, p, s) {
     return;
   }
   // živě: posledních 12; s filtrem posledních 40 vyhovujících (starší jsou v období)
-  const zive = s.events.filter((e) => e.patientId === p.id && filtrUdalosti(e)).slice(0, dfiltr === 'all' ? 12 : 40);
+  const zive = s.events.filter((e) => e.patientId === p.id && filtrUdalosti(e) && udalostSledovana(e)).slice(0, dfiltr === 'all' ? 12 : 40);
   setHtml(d.querySelector('#dhist'), zive.map((e) => {
     const k = KINDS[e.kind];
     const nahr = e.nahravka ? (e.nahravka.url ? ` <a href="${esc(e.nahravka.url)}" target="_blank" rel="noopener" title="nahrávka na Google Disku${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}">🎞 nahrávka</a>` : e.nahravka.id && !e.nahravka.chyba && !e.nahravka.smazano ? (e.nahravka.zamek ? ` <a href="#dnahravky" class="muted" title="pořízeno při rozostřeném obrazu rodiny; přehrát půjde, až ji rodina odemkne">🔒 nahrávka uzamčena</a>` : ` <a href="#dnahravky" title="nahrávka na serveru${e.nahravka.delkaS ? ', ' + e.nahravka.delkaS + ' s' : ''}${e.nahravka.odemklKdo ? ', odemkla rodina' : ''} – přehrát v sekci Nahrávky">🎞 nahrávka</a>`) : ` <span class="muted" title="${esc(e.nahravka.chyba ? 'Nahrávka k této události se nepořídila: ' + e.nahravka.chyba + ' Upozornění (SMS, e-mail) se tím neřídí – šla podle události.' : '')}">🎞 ${esc((e.nahravka.chyba ? 'nahrávka se nepořídila: ' + e.nahravka.chyba : e.nahravka.smazano ? 'nahrávka už smazána (doba uchování)' : 'bez nahrávky').slice(0, 80))}</span>`) : '';
