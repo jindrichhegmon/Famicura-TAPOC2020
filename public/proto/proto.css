@@ -443,6 +443,35 @@ body.withAuth .cm.ovl{padding-top:calc(var(--auth-h,56px) + 16px)}
 .cm .fld label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:5px}
 .cm .fld input,.cm .fld select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;color:inherit;min-height:0}
 .cm .fld .help{font-size:12px;color:var(--ink3);margin-top:4px}
+/* Nastavení dispečinku v kartách: ikona, název, jednořádkový popis; místní (neukládané) karty mají tečkovaný okraj */
+.cm .mbody.nastaveni{gap:14px;background:var(--surface)}
+.cm .karta{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 4px;box-shadow:var(--shadow)}
+.cm .karta.mistni{border-style:dashed;background:#FBFBFD}
+.cm .karta>h4{display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;font-size:14px;font-weight:650;text-transform:none;letter-spacing:0;color:var(--ink)}
+.cm .karta>h4 .ik{flex:0 0 auto;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--brand-soft);font-size:17px}
+.cm .karta>h4 small{display:block;font-size:12px;font-weight:450;color:var(--ink3);line-height:1.35;margin-top:1px}
+.cm .karta .pozn{font-size:12px;color:var(--ink3);margin:-4px 0 12px;line-height:1.45}
+.cm .karta .fld{margin-bottom:12px}
+.cm .karta .help{font-size:12px;color:var(--ink3)}
+.cm .karta .row{margin-bottom:12px}
+.cm .karta .prepinac{display:flex;gap:8px;align-items:center;min-height:38px;font-size:13px;font-weight:450;color:var(--ink2);cursor:pointer}
+.cm .karta .prepinac input{width:16px;height:16px;margin:0;flex:0 0 auto}
+.cm .karta .stavy{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:2px 0 12px}
+.cm .karta .stav{background:var(--line2);border-radius:8px;padding:9px 11px;font-size:12.5px}
+.cm .karta .stav>b{display:block;font-weight:600;color:var(--ink2);margin-bottom:2px}
+.cm .karta .stav .row{margin:0}
+/* zařízení jako výběrové karty: zaškrtávátko, ikona, název, co zařízení umí; zatržená má modrý rámeček */
+.cm .zarizeni{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:12px}
+.cm .zarizeni .zar{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-weight:450;color:var(--ink2);transition:border-color .12s,background .12s}
+.cm .zarizeni .zar:hover{border-color:var(--brand-soft2)}
+.cm .zarizeni .zar:has(input:checked){border-color:var(--brand);background:var(--brand-soft)}
+.cm .zarizeni .zar input{width:17px;height:17px;margin:3px 0 0;flex:0 0 auto;accent-color:var(--brand)}
+.cm .zarizeni .zar .zik{font-size:22px;line-height:1;flex:0 0 auto;margin-top:1px}
+.cm .zarizeni .zar b{display:block;font-size:13.5px;font-weight:650;color:var(--ink)}
+.cm .zarizeni .zar small{display:block;font-size:12px;color:var(--ink3);line-height:1.35}
+/* mřížka, kde může být některé pole skryté (přepínač demo kamer na serveru): zbylé pole zabere celou šířku */
+.cm .f2.auto{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+@media(max-width:600px){.cm .karta .stavy{grid-template-columns:1fr}}
 .cm .note{border-left:3px solid var(--info);background:var(--info-soft);padding:10px 13px;border-radius:0 var(--r) var(--r) 0;font-size:13px;color:#0A5A7D}
 .cm .seg{border-color:var(--line)}.cm .seg button{font-size:13px;min-height:34px;color:var(--ink2);background:#fff}.cm .seg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-dark)}
 /* nápověda: témata s obrázky */

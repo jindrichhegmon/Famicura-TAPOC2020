@@ -12,6 +12,9 @@ dispečinku. Postup nové verze je v README, část „Verze“.
   dispečink neukazuje: dlaždice agendy v detailu kamery, SOS čísla náramku v Komunikaci, štítek „náramek vypnutý“, jeho
   události ve frontě alertů, v kritickém pruhu, v historii kamery a v kartě Směna. Server události a měření dál ukládá,
   rodina zařízení vidí dál. Seznam zařízení je na jednom místě (`ZARIZENI` v `sim-core.js`), další se přidají tam.
+- Okno Nastavení je rozdělené do karet s ikonou a popisem: Poskytovatel, Dispečink ve službě, Sledovaná zařízení
+  (výběrové karty zařízení), Eskalace, Nahrávky (včetně stavu úložiště na serveru a na Google Disku), Zobrazení na tomto
+  počítači, SMS a e-mail ze serveru, Hlavní aplikace. Místní (neukládané) karty mají tečkovaný okraj.
 
 ## 3.79 · 13. 10. 2026 · přihlášení rodiny podle poskytovatele z odkazu
 

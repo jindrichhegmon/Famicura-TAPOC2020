@@ -35,48 +35,72 @@
   <div class="cm ovl hide" id="nastaveni" role="dialog" aria-labelledby="nastaveniT">
     <form class="modal" id="hlForm">
       <header><div><h3 id="nastaveniT">Nastavení poskytovatele a dispečinku</h3><div class="sub">Všechno, co se zobrazuje v záhlaví, v detailu kamery, v kartě Směna a v aplikaci rodiny. Ukládá se na server pro všechny dispečery.</div></div><button class="x" type="button" id="nastaveniZavrit" aria-label="Zavřít">✕</button></header>
-      <div class="mbody">
-        <div class="sec">Poskytovatel</div>
-        <div class="f3">
-          <div class="fld"><label for="hlNazev">Název služby</label><input type="text" id="hlNazev" maxlength="80" required><div class="help">záhlaví, detail kamery, aplikace rodiny</div></div>
-          <div class="fld"><div class="help">Telefony poskytovatele (dispečink, služba, administrace) se zadávají v detailu kamery → Komunikace → Kontakty → Poskytovatel (platí pro všechny kamery).</div></div>
-          <div class="fld"><label for="hlEmail">E-mail</label><input type="email" id="hlEmail" maxlength="80"></div>
-        </div>
-        <div class="sec">Dispečink</div>
-        <div class="f2">
-          <div class="fld"><label for="hlDispecer">Dispečer(ka) ve službě</label><input type="text" id="hlDispecer" maxlength="80" required><div class="help">zapisuje se k převzetí alertů a k žádostem o obraz, které vidí rodina</div></div>
-          <div class="fld"><label for="hlSmena">Směna</label><input type="text" id="hlSmena" maxlength="40" placeholder="denní směna"></div>
-        </div>
-        <div class="fld"><label>Sledovaná zařízení u kamer</label><div class="row zarizeni" id="hlZarizeni"></div><div class="help">nezatržené zařízení dispečink neukazuje – dlaždice agendy v detailu kamery, štítky u kamer, jeho události ve frontě alertů a v kartě Směna; server měření dál ukládá a rodina ho ve své aplikaci vidí dál; platí pro všechny dispečery</div></div>
-        <div class="f2">
-          <div class="fld"><label for="hlZaloha">Záloha (jméno)</label><input type="text" id="hlZaloha" maxlength="80"></div>
-          <div class="fld"><label for="hlZalohaTelefon">Telefon zálohy</label><input type="tel" id="hlZalohaTelefon" maxlength="40"></div>
-        </div>
-        <div class="f3">
-          <div class="fld"><label for="hlVedouci">Vedoucí (eskalace)</label><input type="text" id="hlVedouci" maxlength="80"></div>
-          <div class="fld"><label for="hlVedouciTelefon">Telefon vedoucího</label><input type="tel" id="hlVedouciTelefon" maxlength="40"></div>
-          <div class="fld"><label for="hlEskalaceMin">Eskalace po (minut)</label><input type="number" id="hlEskalaceMin" min="1" max="60" step="1" required><div class="help">nepřevzatý kritický alert se po této době označí jako eskalovaný</div></div>
-          <div class="fld"><label for="hlNahravkaS">Nahrávka po události (sekund)</label><input type="number" id="hlNahravkaS" min="5" max="60" step="1" required><div class="help">server po události se zatrženým Nahrávat uloží tolik sekund obrazu (5–60)</div></div>
-          <div class="fld"><label for="hlNahravkaPredS">Obraz před událostí (sekund)</label><input type="number" id="hlNahravkaPredS" min="0" max="10" step="1" required><div class="help">server drží posledních pár sekund obrazu každé kamery, nahrávka po události tak začíná před ní (0 = vypnuto)</div></div>
-          <div class="fld"><label for="hlNahravkyUloziste">Úložiště nahrávek</label><select id="hlNahravkyUloziste"><option value="server">Na serveru (doporučeno)</option><option value="disk">Google Disk poskytovatele</option></select><div class="help">na serveru: šifrované, přehrání jen v aplikaci s auditem, mazání po době uchování; Google Disk: účet z Péče doma plus</div></div>
-          <div class="fld"><label for="hlNahravkyDisk">Google Disk</label><label class="small" style="display:flex;gap:8px;align-items:center;min-height:38px"><input type="checkbox" id="hlNahravkyDisk"> ukládat kopii každé nahrávky i na Google Disk poskytovatele</label><div class="help">vypnuto = na Google Disk se nic neposílá, i když je adresář zapojený; zapnuto = nahrávka je na serveru i na Disku</div></div>
-          <div class="fld"><label for="hlNahravkyDny">Uchovat nahrávky (dnů)</label><input type="number" id="hlNahravkyDny" min="1" max="365" step="1" required><div class="help">nahrávky na serveru se po této době samy smažou (např. 30 dnů podle právníka); na Google Disku zůstávají</div></div>
-          <div class="fld"><label for="hlNahravkyGB">Limit místa nahrávek (GB)</label><input type="number" id="hlNahravkyGB" min="0" max="500" step="0.5" required><div class="help">nad tento objem se nejstarší nahrávky poskytovatele mažou dřív než po době uchování; 0 = bez limitu</div></div>
-        </div>
-        <div class="sec">Zobrazení na tomto počítači</div>
-        <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi; neukládá se na server</div></div>
-        <div class="fld"><label>Barevné schéma dispečinku</label><div class="schemata" id="schemata"></div><div class="help">jen tento prohlížeč, projeví se hned; aplikace rodiny zůstává tmavě modrá, aby se obě daly rozeznat</div></div>
-        <div class="sec">SMS a e-mail ze serveru (pozvánky, žádosti o obraz, upozornění na události)</div>
-        <p class="gateerr hide" id="smsVarovani">Server má v SMS_WEBHOOK_URL stejnou adresu jako asistent: SMS i e-maily jdou do špatného scénáře Make a nedojdou. Správce spustí ./deploy/vps-env.sh a zadá adresu webhooku scénáře Famicura_Tapo_SMS_Pozvanka.</p>
-        <div class="f2">
-          <div class="fld" style="grid-column:1/-1"><label>Nahrávky na serveru</label><div class="help" id="diskUloziste"></div><div class="help" id="diskMisto"></div></div>
-          <div class="fld" style="grid-column:1/-1"><label>Nahrávky na Google Disku</label><div class="help" id="diskStav">Zjišťuji…</div><div class="row" style="margin-top:6px"><button class="btn" type="button" id="diskSlozkaBtn" disabled>Založit adresář na Google Disku</button><button class="btn sec hide" type="button" id="diskOdpojitBtn">Odpojit adresář</button><a class="small hide" id="diskSlozkaOdkaz" target="_blank" rel="noopener">Otevřít adresář</a></div></div>
-          <div class="fld"><label for="smsTestTel">Zkušební SMS na číslo</label><div class="row"><input type="tel" id="smsTestTel" maxlength="20" placeholder="777 123 456" autocomplete="tel" style="max-width:180px"><button class="btn" type="button" id="smsTestBtn">Poslat SMS</button></div></div>
-          <div class="fld"><label for="mailTestAdr">Zkušební e-mail na adresu</label><div class="row"><input type="email" id="mailTestAdr" maxlength="120" placeholder="jmeno@example.cz" autocomplete="email" style="max-width:220px"><button class="btn" type="button" id="mailTestBtn">Poslat e-mail</button></div></div>
-        </div>
-        <div class="help" id="smsStav" style="margin-top:-6px">Zjišťuji, jestli je SMS na serveru nastavená…</div>
-        <div class="sec">Hlavní aplikace (správce serveru)</div>
-        <div class="fld"><label>Správa kamer, diagnostika, živý obraz</label><div class="row" style="margin-top:4px"><a class="btn" id="hlavniAplikace" href="/" target="_blank" rel="noopener">Otevřít hlavní aplikaci</a></div><div class="help">otevře se v nové kartě; přihlášení heslem Famicura (správce serveru). Zavedení, převedení a smazání kamer, heslo TP-Link pro světlo, diagnostika spojení s kamerami.</div></div>
+      <div class="mbody nastaveni">
+        <section class="karta">
+          <h4><span class="ik">🏢</span><span><b>Poskytovatel</b><small>název a e-mail služby – záhlaví, detail kamery, aplikace rodiny</small></span></h4>
+          <div class="f2">
+            <div class="fld"><label for="hlNazev">Název služby</label><input type="text" id="hlNazev" maxlength="80" required></div>
+            <div class="fld"><label for="hlEmail">E-mail</label><input type="email" id="hlEmail" maxlength="80"></div>
+          </div>
+          <p class="pozn">Telefony poskytovatele (dispečink, služba, administrace) se zadávají v detailu kamery → Komunikace a kontakty → Poskytovatel a platí pro všechny kamery.</p>
+        </section>
+        <section class="karta">
+          <h4><span class="ik">🎧</span><span><b>Dispečink ve službě</b><small>kdo má službu a kdo ji zastoupí; jméno se zapisuje k převzetí alertů a k žádostem o obraz, které vidí rodina</small></span></h4>
+          <div class="f2">
+            <div class="fld"><label for="hlDispecer">Dispečer(ka) ve službě</label><input type="text" id="hlDispecer" maxlength="80" required></div>
+            <div class="fld"><label for="hlSmena">Směna</label><input type="text" id="hlSmena" maxlength="40" placeholder="denní směna"></div>
+            <div class="fld"><label for="hlZaloha">Záloha (jméno)</label><input type="text" id="hlZaloha" maxlength="80"></div>
+            <div class="fld"><label for="hlZalohaTelefon">Telefon zálohy</label><input type="tel" id="hlZalohaTelefon" maxlength="40"></div>
+          </div>
+        </section>
+        <section class="karta">
+          <h4><span class="ik">📟</span><span><b>Sledovaná zařízení u kamer</b><small>co dispečink u klientů sleduje vedle kamery; platí pro všechny dispečery</small></span></h4>
+          <div class="zarizeni" id="hlZarizeni"></div>
+          <p class="pozn">Nezatržené zařízení dispečink neukazuje: v detailu kamery chybí jeho agenda, u kamer jeho štítky a jeho události nejsou ve frontě alertů ani v kartě Směna. Server měření a události dál ukládá a rodina zařízení ve své aplikaci vidí dál.</p>
+        </section>
+        <section class="karta">
+          <h4><span class="ik">🚨</span><span><b>Eskalace</b><small>na koho se obrátit, když dispečink kritický alert včas nepřevezme</small></span></h4>
+          <div class="f3">
+            <div class="fld"><label for="hlVedouci">Vedoucí (eskalace)</label><input type="text" id="hlVedouci" maxlength="80"></div>
+            <div class="fld"><label for="hlVedouciTelefon">Telefon vedoucího</label><input type="tel" id="hlVedouciTelefon" maxlength="40"></div>
+            <div class="fld"><label for="hlEskalaceMin">Eskalace po (minut)</label><input type="number" id="hlEskalaceMin" min="1" max="60" step="1" required><div class="help">nepřevzatý kritický alert se po této době označí jako eskalovaný</div></div>
+          </div>
+        </section>
+        <section class="karta">
+          <h4><span class="ik">🎞️</span><span><b>Nahrávky</b><small>kolik obrazu se k události uloží, kam a na jak dlouho</small></span></h4>
+          <div class="f3">
+            <div class="fld"><label for="hlNahravkaS">Nahrávka po události (sekund)</label><input type="number" id="hlNahravkaS" min="5" max="60" step="1" required><div class="help">server po události se zatrženým Nahrávat uloží tolik sekund obrazu (5–60)</div></div>
+            <div class="fld"><label for="hlNahravkaPredS">Obraz před událostí (sekund)</label><input type="number" id="hlNahravkaPredS" min="0" max="10" step="1" required><div class="help">server drží posledních pár sekund obrazu každé kamery, nahrávka tak začíná před událostí (0 = vypnuto)</div></div>
+            <div class="fld"><label for="hlNahravkyUloziste">Úložiště nahrávek</label><select id="hlNahravkyUloziste"><option value="server">Na serveru (doporučeno)</option><option value="disk">Google Disk poskytovatele</option></select><div class="help">na serveru: šifrované, přehrání jen v aplikaci s auditem, mazání po době uchování; Google Disk: účet z Péče doma plus</div></div>
+            <div class="fld"><label for="hlNahravkyDny">Uchovat nahrávky (dnů)</label><input type="number" id="hlNahravkyDny" min="1" max="365" step="1" required><div class="help">nahrávky na serveru se po této době samy smažou (např. 30 dnů podle právníka); na Google Disku zůstávají</div></div>
+            <div class="fld"><label for="hlNahravkyGB">Limit místa nahrávek (GB)</label><input type="number" id="hlNahravkyGB" min="0" max="500" step="0.5" required><div class="help">nad tento objem se nejstarší nahrávky poskytovatele mažou dřív než po době uchování; 0 = bez limitu</div></div>
+            <div class="fld"><label for="hlNahravkyDisk">Kopie na Google Disk</label><label class="prepinac"><input type="checkbox" id="hlNahravkyDisk"> ukládat kopii každé nahrávky i na Google Disk poskytovatele</label><div class="help">vypnuto = na Disk se nic neposílá, i když je adresář zapojený; zapnuto = nahrávka je na serveru i na Disku</div></div>
+          </div>
+          <div class="stavy">
+            <div class="stav"><b>Nahrávky na serveru</b><div class="help" id="diskUloziste"></div><div class="help" id="diskMisto"></div></div>
+            <div class="stav"><b>Nahrávky na Google Disku</b><div class="help" id="diskStav">Zjišťuji…</div><div class="row" style="margin-top:6px"><button class="btn" type="button" id="diskSlozkaBtn" disabled>Založit adresář na Google Disku</button><button class="btn sec hide" type="button" id="diskOdpojitBtn">Odpojit adresář</button><a class="small hide" id="diskSlozkaOdkaz" target="_blank" rel="noopener">Otevřít adresář</a></div></div>
+          </div>
+        </section>
+        <section class="karta mistni">
+          <h4><span class="ik">🖥️</span><span><b>Zobrazení na tomto počítači</b><small>neukládá se na server, platí jen pro tento prohlížeč</small></span></h4>
+          <div class="f2 auto">
+            <div class="fld"><label>Které kamery ukazovat</label><div class="seg zdroj" id="zdrojNastaveni"><button type="button" data-z="real" aria-pressed="true">Jen skutečné kamery</button><button type="button" data-z="demo" aria-pressed="false">Demo (i fiktivní)</button></div><div class="help">totéž jako přepínač nad dlaždicemi</div></div>
+            <div class="fld"><label>Barevné schéma dispečinku</label><div class="schemata" id="schemata"></div><div class="help">projeví se hned; aplikace rodiny zůstává tmavě modrá, aby se obě daly rozeznat</div></div>
+          </div>
+        </section>
+        <section class="karta">
+          <h4><span class="ik">✉️</span><span><b>SMS a e-mail ze serveru</b><small>pozvánky, žádosti o obraz, upozornění na události – zkouška, že odesílání funguje</small></span></h4>
+          <p class="gateerr hide" id="smsVarovani">Server má v SMS_WEBHOOK_URL stejnou adresu jako asistent: SMS i e-maily jdou do špatného scénáře Make a nedojdou. Správce spustí ./deploy/vps-env.sh a zadá adresu webhooku scénáře Famicura_Tapo_SMS_Pozvanka.</p>
+          <div class="f2">
+            <div class="fld"><label for="smsTestTel">Zkušební SMS na číslo</label><div class="row"><input type="tel" id="smsTestTel" maxlength="20" placeholder="777 123 456" autocomplete="tel" style="max-width:180px"><button class="btn" type="button" id="smsTestBtn">Poslat SMS</button></div></div>
+            <div class="fld"><label for="mailTestAdr">Zkušební e-mail na adresu</label><div class="row"><input type="email" id="mailTestAdr" maxlength="120" placeholder="jmeno@example.cz" autocomplete="email" style="max-width:220px"><button class="btn" type="button" id="mailTestBtn">Poslat e-mail</button></div></div>
+          </div>
+          <div class="help" id="smsStav">Zjišťuji, jestli je SMS na serveru nastavená…</div>
+        </section>
+        <section class="karta mistni">
+          <h4><span class="ik">🔧</span><span><b>Hlavní aplikace</b><small>správce serveru: zavedení, převedení a smazání kamer, heslo TP-Link pro světlo, diagnostika spojení s kamerami, živý obraz</small></span></h4>
+          <div class="row"><a class="btn" id="hlavniAplikace" href="/" target="_blank" rel="noopener">Otevřít hlavní aplikaci</a><span class="help">otevře se v nové kartě, přihlášení heslem Famicura</span></div>
+        </section>
         <p class="gateerr hide" id="hlErr"></p>
       </div>
       <footer><button class="btn left" type="button" id="hlZrusit">Zavřít bez uložení</button><button class="btn pri" type="submit">Uložit</button></footer>

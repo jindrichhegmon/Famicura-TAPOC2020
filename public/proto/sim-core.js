@@ -295,8 +295,8 @@ export const POSKYTOVATEL_VYCHOZI = { nazev: 'Pečovatelská služba Kladno', te
  *  Nezatržené zařízení dispečink neukazuje (dlaždice agendy v detailu, štítky, jeho události ve frontě); server měření dál
  *  ukládá a rodina ho vidí. Budoucí zařízení se přidají sem: ID, název, ikona a zdroje událostí (KINDS[kind].source). */
 export const ZARIZENI = {
-  naramek: { nazev: 'Náramek / přívěsek SOS', ic: '⌚', zdroje: ['náramek'] },
-  prsten: { nazev: 'Prsten (QRing / Colmi)', ic: '💍', zdroje: ['prsten'] },
+  naramek: { nazev: 'Náramek / přívěsek SOS', ic: '⌚', popis: 'tlačítko SOS, pád, poloha, měření tepu, tlaku, kyslíku a teploty', zdroje: ['náramek'] },
+  prsten: { nazev: 'Prsten (QRing / Colmi)', ic: '💍', popis: 'tep, kyslík v krvi, spánek a kroky – přes aplikaci PéčeDoma u klienta', zdroje: ['prsten'] },
 };
 export const normZarizeni = (v) => [...new Set((Array.isArray(v) ? v : String(v ?? '').split(',')).map((x) => String(x).trim()).filter((id) => ZARIZENI[id]))].join(',');
 /** Zapnutá zařízení podle nastavení poskytovatele (Set ID). Starší nastavení bez klíče = všechna. */

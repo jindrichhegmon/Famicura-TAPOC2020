@@ -470,7 +470,7 @@ Dlaždice ukazují kamery přiřazené vašemu poskytovateli (tenantovi).
 ` },
   { id: 'poskytovatel', obrazky: [{ src: '/proto/napoveda/zahlavi.png', popis: 'Záhlaví: údaje poskytovatele vlevo, vpravo nahoře Nápověda a ozubené kolečko' }, { src: '/proto/napoveda/nastaveni.png', popis: 'Nastavení pod ozubeným kolečkem: poskytovatel, dispečink, zobrazení' }], nazev: 'Nastavení (ozubené kolečko)', klicova: ['nastaven', 'hlavni aplikac', 'sprava kamer', 'poskytovatel', 'zahlavi', 'dispecer', 'smena', 'zaloha', 'vedouci', 'eskalac', 'jmeno', 'upravit', 'nazev sluzby', 'kolecko'],
     obsah: `
-Ozubené kolečko vpravo nahoře otevře Nastavení. Ukládá se tlačítkem **Uložit** na server: stejné údaje vidí všichni dispečeři, záhlaví, karta Směna, detail kamery i aplikace rodiny (název a telefon dispečinku).
+Ozubené kolečko vpravo nahoře otevře Nastavení, rozdělené do karet (od 3.80): Poskytovatel, Dispečink ve službě, Sledovaná zařízení u kamer, Eskalace, Nahrávky, Zobrazení na tomto počítači, SMS a e-mail ze serveru, Hlavní aplikace. Ukládá se tlačítkem **Uložit** na server: stejné údaje vidí všichni dispečeři, záhlaví, karta Směna, detail kamery i aplikace rodiny (název a telefon dispečinku). Karty s tečkovaným okrajem (Zobrazení, Hlavní aplikace) platí jen pro tento počítač.
 
 ### Co se nastavuje
 - **Poskytovatel**: název služby a e-mail. Telefony dispečinku, služby a administrace se zadávají v detailu kamery → Komunikace a kontakty → Poskytovatel a platí pro všechny kamery.

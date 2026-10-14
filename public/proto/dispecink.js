@@ -39,7 +39,7 @@ const udalostSledovana = (e) => { const z = udalostZarizeni(e); return !z || zar
 function otevriNastaveni() {
   const h = sim.poskytovatel;
   for (const k of HL_POLE) { if (k === 'nahravkyDisk') hlPole(k).checked = !!h[k]; else hlPole(k).value = h[k] ?? ''; }
-  setHtml($('hlZarizeni'), Object.entries(ZARIZENI).map(([id, z]) => `<label class="small chip"><input type="checkbox" name="zarizeni" value="${id}"${zarizeniOn(id) ? ' checked' : ''}> ${z.ic} ${esc(z.nazev)}</label>`).join(''));
+  setHtml($('hlZarizeni'), Object.entries(ZARIZENI).map(([id, z]) => `<label class="zar"><input type="checkbox" name="zarizeni" value="${id}"${zarizeniOn(id) ? ' checked' : ''}><span class="zik">${z.ic}</span><span><b>${esc(z.nazev)}</b><small>${esc(z.popis || '')}</small></span></label>`).join(''));
   $('zdrojNastaveni').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.z === zdroj)));
   $('hlErr').classList.add('hide');
   $('nastaveni').classList.remove('hide'); $('hlNazev').focus();
