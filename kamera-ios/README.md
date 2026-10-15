@@ -33,3 +33,10 @@ Distribute App → App Store Connect → Upload). Pak App Store Connect → Test
 - `www/index.html` – úvodní stránka: spojení se serverem, přechod na aplikaci rodiny, parametry z odkazu.
 - `pripravit-ios.sh`, `vydat-testflight.sh` – příprava projektu a vydání; `ios/` a `vystup/` se generují, do gitu nepatří.
 - `ikona-1024.png` – ikona (z `public/proto/ikony/famicura-512.png`).
+
+## Grafika pro App Store (`appstore/`)
+
+Volitelný banner stránky aplikace v App Storu (App Store Connect → verze → Product Page Information → Header /
+Search Results): `header-5244x2950.png` a `search-3840x1646.png`, vygenerované z `ikona-1024.png` (modrý přechod
+v barvách ikony, ikona vlevo od středu, bez textu – název přes banner doplňuje Apple). Pro TestFlight nejsou potřeba.
+
