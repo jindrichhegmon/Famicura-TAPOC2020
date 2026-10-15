@@ -32,6 +32,7 @@ $PB -c "Add :LSApplicationQueriesSchemes:0 string pecedoma" "$P"
 # jen na výšku (jako web), ikona z ikona-1024.png
 $PB -c "Delete :UISupportedInterfaceOrientations" "$P" >/dev/null 2>&1 || true
 $PB -c "Add :UISupportedInterfaceOrientations array" "$P"; $PB -c "Add :UISupportedInterfaceOrientations:0 string UIInterfaceOrientationPortrait" "$P"
+./scena-ios.sh ios/App   # scene lifecycle: od SDK iOS 27 povinné, bez něj pád při startu na iOS 27 (opakovaně bez újmy)
 cp ikona-1024.png ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
 echo "== 3/4 Přenos úvodní stránky do aplikace"
 npx cap sync ios

@@ -14,6 +14,7 @@ command -v xcodebuild >/dev/null || { echo "Chybí Xcode – nainstalujte z App 
 VERZE=$(node -p "require('./package.json').version")
 SESTAVENI=$(date +%Y%m%d%H%M)   # číslo sestavení musí být pokaždé vyšší; čas to zaručí (Build 1 byl ručně z Xcode)
 [ -d ios/App ] || ./pripravit-ios.sh
+./scena-ios.sh ios/App >/dev/null   # scene lifecycle (SDK iOS 27)
 OUT=vystup; rm -rf "$OUT"; mkdir -p "$OUT"
 npm install --no-audit --no-fund >/dev/null
 echo "== 1/3 Přenos webu do aplikace (v$VERZE, sestavení $SESTAVENI)"; npx cap sync ios >/dev/null

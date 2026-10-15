@@ -40,3 +40,8 @@ Volitelný banner stránky aplikace v App Storu (App Store Connect → verze →
 Search Results): `header-5244x2950.png` a `search-3840x1646.png`, vygenerované z `ikona-1024.png` (modrý přechod
 v barvách ikony, ikona vlevo od středu, bez textu – název přes banner doplňuje Apple). Pro TestFlight nejsou potřeba.
 
+## Scene lifecycle (SDK iOS 27)
+
+Sestavení z Xcode 27 musí používat UIScene, jinak aplikace na iOS 27 spadne při startu (Apple zamítne podle 2.1).
+`pripravit-ios.sh` i `vydat-testflight.sh` proto volají `./scena-ios.sh ios/App`: doplní `SceneDelegate.swift`, zapojí ho do
+projektu, do `Info.plist` dá `UIApplicationSceneManifest` a do `AppDelegate.swift` konfiguraci scény. Jde spouštět opakovaně.
